@@ -1,8 +1,9 @@
 {
- "estado": "conectado",
- "canal": "curios",
- "pedido": "curios",
- "coincide": true,
+ "estado": "esperando",
+ "canal": "versus",
+ "codigo": "PLX-LFS-NPZX",
+ "url": "https://www.google.com/device",
+ "caduca": "2026-11-23T02:18:43Z",
  "quedan": 5,
- "actualizado": "2026-11-23T01:48:41Z"
+ "actualizado": "2026-11-23T01:48:43Z"
 }
