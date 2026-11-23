@@ -1,8 +1,9 @@
 {
- "estado": "faltan_secretos",
- "faltan": [
-  "YT_CLIENT_ID",
-  "YT_CLIENT_SECRET"
- ],
- "actualizado": "2026-11-23T01:33:41Z"
+ "estado": "esperando",
+ "canal": "gta",
+ "codigo": "CGB-SXW-TQTP",
+ "url": "https://www.google.com/device",
+ "caduca": "2026-11-23T02:13:39Z",
+ "quedan": 8,
+ "actualizado": "2026-11-23T01:43:39Z"
 }
