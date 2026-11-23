@@ -56,11 +56,12 @@ def _cuenta():
     return r, (hoy if hoy.get("dia") == _hoy() else {"dia": _hoy(), "jurados": 0})
 
 
-def deliberar(guion, canal, alegatos, comun):
-    """Los doce votan por separado. Devuelve el veredicto o None si hoy no hay jurado."""
+def deliberar(guion, canal, alegatos, comun, forzar=False):
+    """Los doce votan por separado. Devuelve el veredicto o None si hoy no hay jurado.
+    forzar=True (los vídeos que sube el dueño en «Juzga mi vídeo»): se reúne aunque hoy ya haya llegado a su tope."""
     a = ajustes()
     registro, hoy = _cuenta()
-    if not a.get("encendido", True) or int(hoy.get("jurados", 0)) >= int(a.get("por_dia", 12)):
+    if not a.get("encendido", True) or (not forzar and int(hoy.get("jurados", 0)) >= int(a.get("por_dia", 12))):
         return None
     narracion = (guion.get("narracion") or " ".join(str(e.get("voz", "")) if isinstance(e, dict) else str(e)
                                                     for e in guion.get("escenas") or []))[:1500]

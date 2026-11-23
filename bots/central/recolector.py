@@ -151,6 +151,16 @@ def _cortar(url, desde, segundos, salida):
     return salida
 
 
+def _portero(que, datos):
+    """El Portero de clips apunta en su cuaderno cada clip que limpia o descarta para la Videoteca."""
+    try:
+        c = privado.cuaderno("portero_clips")
+        c.apuntar(que, datos)
+        c.guardar()
+    except Exception as e:                       # el cuaderno nunca para la recogida
+        print(f"portero: no ha podido apuntar ({type(e).__name__})", flush=True)
+
+
 def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
     """Corta el trozo, lo limpia como el Portero y lo deja en la Videoteca (y, si es un momento, listo para su Short)."""
     desde, hasta = _num(x.get("desde")), _num(x.get("hasta"))
@@ -163,9 +173,12 @@ def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
     junto = clips.juntar_recortes(clips._recorte_valido(x.get("recorte")), quieto)
     recorte = clips._recorte_valido(junto) if junto else None
     if junto and recorte is None and (junto["ancho"] < 0.98 or junto["alto"] < 0.98):
+        _portero("descarta", {"motivo": "quitar lo del autor dejaría muy poca imagen", "origen": "archive.org"})
         return None                                      # quitar lo del autor dejaría muy poca imagen: fuera
     rev = {"bandas": franjas, "recorte": recorte, "sonido": x.get("habla_creador") is False and clips._tiene_audio(crudo)}
     limpio = videoteca.limpiar(crudo, rev, os.path.join(tmp, f"{nuevo}.mp4"))
+    _portero("limpia", {"toma": nuevo, "bandas_negras": bool(franjas), "marcas_del_autor": bool(quieto),
+                        "recortado": bool(recorte), "voz_del_autor_quitada": not rev["sonido"], "origen": "archive.org"})
     almacen.guardar(videoteca.ESTANTERIA, limpio, f"{nuevo}.mp4")
     juego = x.get("juego") if x.get("juego") in videoteca.JUEGOS else origen["juego"]
     que = str(x.get("que_se_ve") or x.get("que_pasa") or "")[:300]

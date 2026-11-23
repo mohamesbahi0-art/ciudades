@@ -1,0 +1,53 @@
+# La Ventanilla del Juzgado («Juzga mi vídeo»): juzga los vídeos que sube el dueño desde la app.
+# La ronda de Claude deja cada vídeo en una rama temporal del repositorio privado (juicio/<codigo>) y escribe
+# peticiones/juicio.json (solo el código) para que esto arranque al momento. Por si acaso, también mira cada 3 horas.
+# Cada vídeo pasa por el Jurado popular, el Juzgado completo y, si aprueba, por el Coliseo; si no, vuelve con los fallos.
+name: Juzga mi vídeo
+on:
+  schedule:
+    - cron: "29 */3 * * *"
+  push:
+    paths:
+      - "peticiones/juicio.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ventanilla
+  cancel-in-progress: false
+jobs:
+  juzgar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Juzgar los vídeos del dueño
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python bots/juzgado/ventanilla.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('ventanilla: vídeos del dueño juzgados') else 1)"

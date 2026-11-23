@@ -52,3 +52,5 @@ jobs:
         run: python pruebas/simulacro_videoteca.py
       - name: Recolector de clips (Internet Archive de mentira, licencias, tomas y momento hasta su Short)
         run: python pruebas/simulacro_recolector.py
+      - name: Juzga mi vídeo (vídeo del dueño por el Jurado, el Juzgado y el Coliseo, o con sus arreglos)
+        run: python pruebas/simulacro_ventanilla.py

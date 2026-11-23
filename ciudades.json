@@ -801,6 +801,18 @@
    "lote": 2,
    "codigo": "nuevo",
    "tipo": "bot"
+  },
+  {
+   "id": "ventanilla",
+   "nombre": "Ventanilla del Juzgado",
+   "ciudad": "juzgado",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Recibe los vídeos que sube el dueño en «Juzga mi vídeo»: los pasa por el Jurado popular, el Juzgado completo y, si aprueban, por el Coliseo. Si no, le devuelve los fallos y cómo arreglarlos.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
   }
  ]
 }

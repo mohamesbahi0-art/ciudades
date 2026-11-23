@@ -127,13 +127,14 @@ def _texto_salida(s):
     return json.dumps({k: s.get(k) for k in ("titulo", "texto", "hashtags")}, ensure_ascii=False)
 
 
-def luchar(clave, canal, g, juicio, paso=print, prueba=False):
-    """Torneo para la salida de un vídeo aprobado. Devuelve el guion con la salida campeona (o el de siempre)."""
+def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
+    """Torneo para la salida de un vídeo aprobado. Devuelve el guion con la salida campeona (o el de siempre).
+    forzar=True (los vídeos que sube el dueño en «Juzga mi vídeo»): hay torneo aunque hoy ya se hayan hecho todos."""
     a = ajustes()
     alias = privado.alias(clave)
     if juicio.get("veredicto") != "aprobado":
         return g
-    if not hay_sitio():
+    if not forzar and not hay_sitio():
         paso("coliseo", "hoy el Coliseo ya ha hecho todos sus torneos: sale con su salida de siempre")
         return g
     youtube = canal.get("destino", "youtube") == "youtube"
