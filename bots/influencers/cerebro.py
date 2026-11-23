@@ -29,6 +29,7 @@ def medir(ahora=None):
     mediciones = privado.leer(MEDICIONES, {}) or {}
     escritores = {r: privado.cuaderno(r) for r in ESCRITORES}
     juez = privado.cuaderno("juez_guardia")
+    antes = _titulos_coliseo()
     nuevas = []
     for sub in registro:
         vid = sub.get("id")
@@ -42,9 +43,10 @@ def medir(ahora=None):
         if not 48 <= horas <= 96:
             continue
         id_guion, nota_juez, quien = None, None, None
+        titulo = antes.get((sub["canal"], sub["titulo"]), sub["titulo"])     # el del guion, si el Coliseo lo cambió
         for nombre, c in escritores.items():
             for e in reversed(c.datos["diario"]):
-                if e.get("accion") == "guion" and e["detalle"].get("titulo") == sub["titulo"]:
+                if e.get("accion") == "guion" and e["detalle"].get("titulo") == titulo:
                     id_guion, quien = e["id"], nombre
                     break
             if id_guion:
@@ -61,9 +63,11 @@ def medir(ahora=None):
         carpeta = os.path.join(privado.carpeta(), "estado", "juzgado", "juicios")
         for n in sorted(os.listdir(carpeta)) if os.path.isdir(carpeta) else []:
             j = privado.leer(os.path.join("estado", "juzgado", "juicios", n), {}) or {}
-            if j.get("tipo") == "video" and j.get("canal") == sub["canal"] and j.get("titulo") == sub["titulo"]:
+            if j.get("tipo") == "video" and j.get("canal") == sub["canal"] and j.get("titulo") == titulo:
                 votos = {x["juez"]: x["nota"] for x in j.get("votos", [])}
-        mediciones[vid] = {"canal": sub["canal"], "titulo": sub["titulo"], "horas": round(horas, 1),
+                if (j.get("jurado") or {}).get("nota_media") is not None:      # el Jurado popular también juega la Liga
+                    votos["Jurado popular"] = j["jurado"]["nota_media"]
+        mediciones[vid] = {"canal": sub["canal"], "titulo": sub["titulo"], "titulo_guion": titulo, "horas": round(horas, 1),
                            "visitas": video["visitas"], "megusta": video.get("megusta"), "nota_juez": nota_juez,
                            "votos": votos, "escritor": quien, "medido": privado.ahora()}
         nuevas.append(vid)
@@ -75,6 +79,19 @@ def medir(ahora=None):
         cerebro.apuntar("notas_reales", {"videos": len(nuevas)})
         cerebro.guardar()
     return [mediciones[v] for v in nuevas]
+
+
+def _titulos_coliseo():
+    """{(canal, título campeón del Coliseo): título que tenía el guion}: los vídeos se suben con el título del Coliseo,
+    pero el guion, el juicio y el cuaderno del escritor guardan el de antes."""
+    mapa = {}
+    carpeta = os.path.join(privado.carpeta(), "estado", "coliseo", "torneos")
+    for n in sorted(os.listdir(carpeta)) if os.path.isdir(carpeta) else []:
+        t = privado.leer(os.path.join("estado", "coliseo", "torneos", n), {}) or {}
+        nuevo = ((t.get("campeon") or {}).get("salida") or {}).get("titulo")
+        if nuevo and t.get("clave") and t.get("video"):
+            mapa[(t["clave"], nuevo)] = t["video"]
+    return mapa
 
 
 def _aciertos(pares):
@@ -97,7 +114,8 @@ def liga():
     pares = [(m["canal"], m["nota_juez"], m["visitas"]) for m in mediciones if m.get("nota_juez") is not None]
     aciertos, total = _aciertos(pares)
     tabla["juez_guardia"] = {"nombre": "Juez de guardia", "aciertos": aciertos, "comparaciones": total}
-    for clave, nombre in (("gancho", "Jueza Carmen Gancho"), ("reloj", "Juez Ramón Reloj"), ("calle", "Jueza Lola Calle")):
+    for clave, nombre in (("gancho", "Jueza Carmen Gancho"), ("reloj", "Juez Ramón Reloj"), ("calle", "Jueza Lola Calle"),
+                          ("jurado", "Jurado popular")):
         pares = [(m["canal"], m["votos"][nombre], m["visitas"]) for m in mediciones if nombre in (m.get("votos") or {})]
         aciertos, total = _aciertos(pares)
         tabla[clave] = {"nombre": nombre, "aciertos": aciertos, "comparaciones": total}

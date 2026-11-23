@@ -7,8 +7,7 @@ menos llamadas a la IA (2 en vez de 10), para que quepa en el cupo gratis.
    mirando los fotogramas).
 3. Salas: la jueza Carmen Gancho (los 2 primeros segundos), el juez Ramón Reloj (que se vea entero) y la jueza Lola Calle
    (si a la gente le importa) votan sube o no, con nota de 0 a 100 (1 llamada).
-4. Jurado popular (jurado.py): si los jueces lo suben, doce jurados con pieles distintas leen los dos alegatos y votan
-   por separado, sin ver a los demás; si 9 o más dicen «culpable», no sube.
+4. (El Jurado popular, jurado.py, ya votó el guion antes de grabarlo: su veredicto se guarda con el juicio.)
 5. Juez Mayor: el juez que más acierta en la Liga (al principio, Ramón Reloj) dicta la sentencia: manda la mayoría y, si
    hay empate, su voto. Fallo grave (pantalla negra, sin voz…) = no sube.
 
@@ -23,7 +22,7 @@ import subprocess
 import sys
 
 from bots.comun import gemini, ia, privado
-from bots.juzgado import juez_guardia, jurado
+from bots.juzgado import juez_guardia
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 JUECES = {
@@ -173,17 +172,8 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     sube = (a_favor * 2 > len(votos)) or (a_favor * 2 == len(votos) and voto_jefe == "sube")
     if fallos or total < minima(canal):
         sube = False
-    jurado_v, consejo_jurado = None, ""
-    if sube:                       # el jurado popular solo se reúne si los jueces lo suben (así no se gasta IA de más)
-        try:
-            jurado_v = jurado.deliberar(guion, canal, alegatos, comun)
-        except Exception:
-            jurado_v = None
-        if jurado_v and jurado_v["rechaza"]:
-            sube = False
-            razones = "; ".join(x["porque"] for x in jurado_v["votos"] if x["voto"] == "culpable")[:400]
-            consejo_jurado = (f"El jurado popular lo rechaza ({jurado_v['culpable']} de {len(jurado_v['votos'])} votan "
-                              f"culpable): {razones}")
+    # El Jurado popular ya votó el guion antes de grabarlo (turno.py): su veredicto va con el juicio para la app y la Liga
+    jurado_v, consejo_jurado = guion.get("jurado"), ""
     veredicto = "aprobado" if sube else "suspendido"
     resultado = {"veredicto": veredicto, "total": total, "fallos_graves": fallos,
                  "consejo": " · ".join(x for x in (sala.get("consejo", ""), consejo_jurado) if x), "jurado": jurado_v,

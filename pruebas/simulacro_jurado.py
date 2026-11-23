@@ -1,5 +1,5 @@
-"""Simulacro del Jurado popular con una IA de mentira: los 12 votan por separado (cada uno con su piel), si 9 o más dicen
-«culpable» el vídeo no sube aunque los jueces le den 90, y si no se puede formar el jurado deciden los jueces.
+"""Simulacro del Jurado popular con una IA de mentira: los 12 votan el guion por separado (cada uno con su piel) antes de
+grabarlo; si 9 o más dicen «culpable» lo rechazan, y si no se puede formar el jurado el guion sigue.
 
     python pruebas/simulacro_jurado.py
 """
@@ -52,6 +52,8 @@ comun = {"donde": "un canal de YouTube Shorts", "idioma": "español", "gancho": 
 r = jurado.deliberar(guion, canal, alegatos, comun)
 comprobar(len(r["votos"]) == 12 and len({v["piel"] for v in r["votos"]}) == 12, "12 jurados, cada uno con su piel")
 comprobar(len(VISTOS) == 12, "votan por separado: una pregunta por jurado")
+comprobar(any(n.endswith("-jurado.json") for n in os.listdir(os.path.join(TMP, "privado", "estado", "juzgado", "juicios"))),
+          "cada reunión queda como un juicio del guion para la app")
 comprobar(r["inocente"] == 12 and not r["rechaza"], "todos inocentes: no lo rechaza")
 MODO["culpables"] = 9
 VISTOS.clear()
@@ -66,9 +68,33 @@ comprobar(jurado.deliberar(guion, canal, alegatos, comun) is None, "sin IA no ha
 MODO["falla"] = False
 ruta = os.path.join(TMP, "privado", "config", "fabrica.json")
 f = json.load(open(ruta, encoding="utf-8"))
-f["juzgado"] = {"jurado": {"por_dia": 3}}
+f["juzgado"] = {"jurado": {"por_dia": 3}}             # ya se han reunido 3 veces
 json.dump(f, open(ruta, "w", encoding="utf-8"))
 comprobar(jurado.deliberar(guion, canal, alegatos, comun) is None, "tope del día: deciden los jueces")
 comprobar(privado.leer("estado/juzgado/jurado.json")["hoy"]["jurados"] == 3, "se cuentan los jurados del día")
+# En el turno: si el jurado rechaza el guion, se reescribe (hasta 2 veces) antes de gastar en voz y dibujos
+f["juzgado"] = {"jurado": {"por_dia": 50}}
+json.dump(f, open(ruta, "w", encoding="utf-8"))
+from types import SimpleNamespace  # noqa: E402
+from bots.central import turno  # noqa: E402
+pasos, reescritos = [], []
+
+
+def reescribir(extra):
+    reescritos.append(extra)
+    return dict(guion, titulo=f"Versión {len(reescritos) + 1}")
+
+
+MODO["culpables"] = 10
+VISTOS.clear()
+g, vale = turno._jurado_guion("gta", canal, dict(guion), lambda r, t, p=None: pasos.append(t), SimpleNamespace(prueba=True),
+                              reescribir=reescribir)
+comprobar(not vale and len(reescritos) == 2 and "rechazado" in reescritos[0],
+          "jurado en contra siempre: se reescribe 2 veces y ese guion no se graba")
+MODO["culpables"] = 0
+reescritos.clear()
+g, vale = turno._jurado_guion("gta", canal, dict(guion), lambda r, t, p=None: pasos.append(t), SimpleNamespace(prueba=True),
+                              reescribir=reescribir)
+comprobar(vale and not reescritos and g["jurado"]["inocente"] == 12, "jurado a favor: el guion sigue a la voz y los dibujos")
 shutil.rmtree(TMP, ignore_errors=True)
 print("Simulacro del Jurado popular: todo bien")

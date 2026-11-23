@@ -86,7 +86,8 @@ def hay_sitio():
 
 
 def _narracion(g):
-    texto = g.get("narracion") or " ".join(str(e.get("voz", "")) for e in g.get("escenas") or [])
+    texto = g.get("narracion") or " ".join(str(e.get("voz", "")) if isinstance(e, dict) else str(e)
+                                           for e in g.get("escenas") or [])
     return texto.strip()[:1500]
 
 
@@ -139,7 +140,8 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False):
     nicho = {p: {k: (receta.get(p) or {}).get(k) for k in ("lo_que_funciona", "ganchos", "temas", "sonidos")
                  if (receta.get(p) or {}).get(k)} for p in ("radar", "ojeador") if receta.get(p)}
     comun = {"cuenta": canal.get("nombre", clave), "donde": donde, "idioma": idioma,
-             "gancho": g.get("texto_pantalla") or (g.get("escenas") or [{}])[0].get("texto", "") or "",
+             "gancho": g.get("texto_pantalla") or next((e.get("texto", "") for e in (g.get("escenas") or [])[:1]
+                                                        if isinstance(e, dict)), ""),
              "narracion": _narracion(g)}
     reglas = (f"Reglas: todo en {idioma}; título de 30 a 90 caracteres"
               + (", con 1 o 2 emojis (#shorts lo añade la fábrica)" if youtube else "")

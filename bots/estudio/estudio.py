@@ -393,7 +393,11 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     nombre, m = formato_de(canal, formato or (guion or {}).get("formato"))
     avisar(f"estudio: guion «{nombre}»")
     g = m.limpiar(json.loads(json.dumps(guion))) if guion else m.guionizar(canal, lecciones)
-    g["cerebro"] = "a mano" if guion else ia.quien().get("motor", "gemini")   # quién escribió el guion
+    if guion:                                  # un guion que ya viene hecho (del turno, tras el Jurado) guarda lo suyo
+        for campo in ("cerebro", "jurado"):
+            if guion.get(campo) is not None:
+                g[campo] = guion[campo]
+    g.setdefault("cerebro", "a mano" if guion else ia.quien().get("motor", "gemini"))   # quién escribió el guion
     avisar("estudio: voz escena a escena")
     voz = voz_por_escenas(g, carpeta, canal)
     g["voz_motor"] = locutor.MOTOR.get("motor", "edge")

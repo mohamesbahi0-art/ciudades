@@ -1,20 +1,19 @@
-"""El Jurado popular del Juzgado (lo pidió el dueño el 23 nov): doce jurados, cada uno con su «piel», leen los dos alegatos
-(la defensa dice que el vídeo va a funcionar y la fiscalía que va a fracasar) y votan por separado, sin ver el voto de
-los demás: «inocente» (que se suba) o «culpable» (que no). Así la respuesta es honesta y no un aplauso.
+"""El Jurado popular del Juzgado (lo pidió el dueño el 23 nov): doce jurados, cada uno con su «piel», leen el GUION antes
+de que se grabe (y, si los hay, los alegatos de la Sala de Ideas) y votan por separado, sin ver el voto de los demás:
+«inocente» (que se haga) o «culpable» (que no). Así la respuesta es honesta y no un aplauso.
 
-Después el Juez Mayor lee el veredicto junto a las notas de los tres jueces: si 9 o más jurados lo declaran culpable, el
-vídeo no se sube aunque los jueces le hayan dado 90 (la gente de la calle lo ha rechazado). Si el jurado no se puede
-formar (la IA no contesta o se ha llegado al tope del día), deciden los jueces como siempre.
-
-Los jurados no ven el vídeo: leen el título, lo que se ve al empezar, lo que cuenta y los dos alegatos (que sí lo
-vieron). Piensan con el cerebro de los jueces (Gemini gratis, el ligero, que basta para leer; Claude de reserva).
+Va antes de gastar en voz, dibujos y montaje (lo barato filtra primero): si 9 o más lo declaran culpable, el Escritor lo
+reescribe con lo que han dicho (hasta 2 veces) y, si aún no les convence, ese guion no se graba. Si el jurado no se
+puede formar (la IA no contesta o se ha llegado al tope del día), el guion sigue y deciden los jueces del vídeo.
+Cada reunión queda como un juicio de tipo «guion» para la app, y su nota media entra en la Liga de los Jueces.
+Piensan con el cerebro de los jueces (Gemini gratis, el ligero, que basta para leer; Claude de reserva).
 """
 import datetime as dt
 import os
 
 from bots.comun import gemini, ia, privado
 
-DEFECTO = {"encendido": True, "por_dia": 12, "rechazo": 9, "minimo_votos": 7}
+DEFECTO = {"encendido": True, "por_dia": 15, "rechazo": 9, "minimo_votos": 7}
 PIELES = [
     ("Nacho Madrugada", "el del scroll a las 2 de la mañana", "pasa vídeos sin parar y aburrido: ¿se pararía en este?"),
     ("Marta Fan", "fan del tema", "sabe mucho de este nicho: ¿aporta algo nuevo o es más de lo mismo?"),
@@ -32,13 +31,11 @@ PIELES = [
 
 JURADO = """Eres {nombre}, miembro del jurado popular del Juzgado de una fábrica de vídeos cortos. Tu piel: {piel}. Lo que
 miras: {mira}
-Se juzga este vídeo de {donde} (en {idioma}):
+Se juzga este guion de {donde} (en {idioma}), ANTES de grabarlo:
 - Título: {titulo}
-- Lo que se ve y se lee al empezar: {gancho}
-- Lo que cuenta: {narracion}
-Alegato de la defensa (dice que va a funcionar): {defensa}
-Alegato de la fiscalía (dice que va a fracasar): {fiscalia}
-Vota tú solo, desde tu piel y con sinceridad (no le des la razón a nadie por quedar bien). El dueño solo quiere vídeos
+- Lo que se verá y se leerá al empezar: {gancho}
+- Lo que contará: {narracion}
+{alegatos}Vota tú solo, desde tu piel y con sinceridad (no le des la razón a nadie por quedar bien). El dueño solo quiere vídeos
 excelentes, que la gente vea enteros y comparta. Un tema duro u oscuro no es motivo para votar culpable.
 Devuelve SOLO un JSON: {{"voto": "inocente" (que se suba) o "culpable" (que no), "nota": 0-100, "porque": "una frase desde tu piel"}}"""
 
@@ -65,14 +62,18 @@ def deliberar(guion, canal, alegatos, comun):
     registro, hoy = _cuenta()
     if not a.get("encendido", True) or int(hoy.get("jurados", 0)) >= int(a.get("por_dia", 12)):
         return None
-    narracion = (guion.get("narracion") or " ".join(str(e.get("voz", "")) for e in guion.get("escenas") or []))[:1500]
+    narracion = (guion.get("narracion") or " ".join(str(e.get("voz", "")) if isinstance(e, dict) else str(e)
+                                                    for e in guion.get("escenas") or []))[:1500]
+    texto_alegatos = ""
+    if alegatos.get("defensa") or alegatos.get("fiscalia"):
+        texto_alegatos = (f"Alegato de la defensa (dice que va a funcionar): {alegatos.get('defensa', '')}\n"
+                          f"Alegato de la fiscalía (dice que va a fracasar): {alegatos.get('fiscalia', '')}\n")
     votos = []
     for nombre, piel, mira in PIELES:
         try:
             v = ia.preguntar(JURADO.format(nombre=nombre, piel=piel, mira=mira, donde=comun["donde"], idioma=comun["idioma"],
                                            titulo=guion.get("titulo", ""), gancho=comun.get("gancho") or "(sin texto)",
-                                           narracion=narracion, defensa=alegatos.get("defensa", ""),
-                                           fiscalia=alegatos.get("fiscalia", "")),
+                                           narracion=narracion, alegatos=texto_alegatos),
                              papel="juez", temperatura=0.6, ligero_primero=True)
         except gemini.SinIA:
             continue
@@ -98,6 +99,15 @@ def deliberar(guion, canal, alegatos, comun):
     hoy["jurados"] = int(hoy.get("jurados", 0)) + 1
     privado.guardar_estado(os.path.join("juzgado", "jurado.json"), {"hoy": hoy, "ultimo": {
         "titulo": guion.get("titulo"), "inocente": inocente, "culpable": culpable, "fecha": privado.ahora()}})
+    ahora = dt.datetime.now(dt.timezone.utc)
+    id_juicio = f"{ahora.strftime('%Y%m%d-%H%M%S')}-{canal.get('clave', 'x')}-jurado".replace(".", "-")
+    privado.guardar_estado(os.path.join("juzgado", "juicios", f"{id_juicio}.json"), {
+        "canal": canal.get("clave"), "tipo": "guion", "titulo": guion.get("titulo"), "jurado": resultado,
+        "sentencia": "no_sube" if resultado["rechaza"] else "sube", "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "resumen": (f"Jurado popular: {inocente} inocente y {culpable} culpable. "
+                    + ("Lo rechaza: el guion se reescribe." if resultado["rechaza"] else "El guion sigue: se graba.")),
+        "prueba": bool(comun.get("prueba"))})
+    resultado["juicio_app"] = id_juicio
     c = privado.cuaderno("jurado_popular")
     c.apuntar("veredicto", {"canal": canal.get("clave"), "inocente": inocente, "culpable": culpable,
                             "rechaza": resultado["rechaza"]})
