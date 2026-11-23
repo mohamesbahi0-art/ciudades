@@ -40,6 +40,14 @@ jobs:
           print("AIHORDE", c, b[:400].decode(errors="replace"))
           c, b = pedir("https://aihorde.net/api/v2/status/heartbeat")
           print("AIHORDE heartbeat", c, b[:100])
+          # 1b) lo mismo, presentándose con un nombre de programa propio (el de Python lo bloquea Cloudflare)
+          ua = {"User-Agent": "ciudades-bot/1.0 (cliente de AI Horde)"}
+          c, b = pedir("https://aihorde.net/api/v2/status/heartbeat", cabeceras=ua)
+          print("AIHORDE heartbeat con nombre", c, b[:100])
+          c, b = pedir("https://aihorde.net/api/v2/generate/async",
+                       {"prompt": "a lighthouse at night", "models": ["AlbedoBase XL (SDXL)"], "params": {"width": 512, "height": 512, "steps": 10, "n": 1}},
+                       dict(ua, apikey="0000000000", **{"Client-Agent": "ciudades:1:anon"}))
+          print("AIHORDE con nombre", c, b[:300].decode(errors="replace"))
           # 2) Gemini: qué modelos de imagen hay con la clave gratis
           clave = os.environ.get("GEMINI_API_KEY", "")
           c, b = pedir("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", cabeceras={"x-goog-api-key": clave})
