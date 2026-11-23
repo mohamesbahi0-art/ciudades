@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><title>Wist je dat</title>
+<!-- «Ciencia» (Wist je dat): dibuja cada fotograma de los vídeos de curiosidades en neerlandés. Fondo oscuro con un
+     resplandor de color, ilustración científica brillante, gráficas que se dibujan solas, etiquetas con línea y el texto
+     arriba palabra a palabra con la palabra clave en recuadro. Lo usa render.js: window.GUION = guion;
+     await window.listo; window.pintar(t) para cada fotograma. -->
+<style>
+@font-face{font-family:"Poppins";font-weight:300;src:url("fuentes/poppins-300.woff2") format("woff2")}
+@font-face{font-family:"Poppins";font-weight:400;src:url("fuentes/poppins-400.woff2") format("woff2")}
+@font-face{font-family:"Poppins";font-weight:600;src:url("fuentes/poppins-600.woff2") format("woff2")}
+@font-face{font-family:"Poppins";font-weight:700;src:url("fuentes/poppins-700.woff2") format("woff2")}
+@font-face{font-family:"Poppins";font-weight:800;src:url("fuentes/poppins-800.woff2") format("woff2")}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#05070C}
+svg{display:block;font-family:"Poppins",sans-serif}
+</style></head><body>
+<svg id="v" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+<defs>
+  <radialGradient id="gPiel" cx="0.42" cy="0.36" r="0.75"><stop offset="0" stop-color="#FFE4D2"/><stop offset="0.55" stop-color="#F2B597"/><stop offset="1" stop-color="#C67F66"/></radialGradient>
+  <radialGradient id="gBrein" cx="0.4" cy="0.32" r="0.78"><stop offset="0" stop-color="#FBCAD5"/><stop offset="0.6" stop-color="#E28AA0"/><stop offset="1" stop-color="#A44E68"/></radialGradient>
+  <linearGradient id="gMaag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFA9BB"/><stop offset="1" stop-color="#C24E6D"/></linearGradient>
+  <linearGradient id="gZuur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0FF9E"/><stop offset="1" stop-color="#8FCB33"/></linearGradient>
+  <radialGradient id="gHart" cx="0.38" cy="0.35" r="0.8"><stop offset="0" stop-color="#FF8F8F"/><stop offset="0.55" stop-color="#D93249"/><stop offset="1" stop-color="#83142D"/></radialGradient>
+  <radialGradient id="gIris" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#0B1B2E"/><stop offset="0.35" stop-color="#2E8BC9"/><stop offset="0.8" stop-color="#7FD3F7"/><stop offset="1" stop-color="#1D4E7A"/></radialGradient>
+  <radialGradient id="gSclera" cx="0.42" cy="0.38" r="0.7"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.75" stop-color="#E9EAF1"/><stop offset="1" stop-color="#B9BBCB"/></radialGradient>
+  <radialGradient id="gLong" cx="0.4" cy="0.35" r="0.8"><stop offset="0" stop-color="#FFC0CA"/><stop offset="0.6" stop-color="#E5768C"/><stop offset="1" stop-color="#A3405A"/></radialGradient>
+  <radialGradient id="gTand" cx="0.38" cy="0.3" r="0.8"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.6" stop-color="#F2ECDF"/><stop offset="1" stop-color="#CFC2A6"/></radialGradient>
+  <radialGradient id="gCel" cx="0.4" cy="0.38" r="0.7"><stop offset="0" stop-color="#9FF0E3" stop-opacity="0.5"/><stop offset="1" stop-color="#1E8F86" stop-opacity="0.22"/></radialGradient>
+  <radialGradient id="gKern" cx="0.38" cy="0.35" r="0.75"><stop offset="0" stop-color="#C8B1FF"/><stop offset="1" stop-color="#5A2FC2"/></radialGradient>
+  <radialGradient id="gOceaan" cx="0.38" cy="0.35" r="0.75"><stop offset="0" stop-color="#63B8FF"/><stop offset="0.6" stop-color="#1F5FC4"/><stop offset="1" stop-color="#0A2558"/></radialGradient>
+  <radialGradient id="gMaan" cx="0.38" cy="0.35" r="0.75"><stop offset="0" stop-color="#F1F1F5"/><stop offset="0.65" stop-color="#A9ABB8"/><stop offset="1" stop-color="#5B5D6C"/></radialGradient>
+  <radialGradient id="gZon" cx="0.45" cy="0.42" r="0.6"><stop offset="0" stop-color="#FFFBD6"/><stop offset="0.45" stop-color="#FFD24D"/><stop offset="1" stop-color="#FF7A1A"/></radialGradient>
+  <linearGradient id="gWater" x1="0.2" y1="0" x2="0.8" y2="1"><stop offset="0" stop-color="#B5EEFF"/><stop offset="0.5" stop-color="#3399EE"/><stop offset="1" stop-color="#0D4AA3"/></linearGradient>
+  <linearGradient id="gBlad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9BEA8E"/><stop offset="1" stop-color="#2A8E48"/></linearGradient>
+  <linearGradient id="gPot" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E9875A"/><stop offset="1" stop-color="#9E4126"/></linearGradient>
+  <linearGradient id="gMetaal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E3E8F2"/><stop offset="1" stop-color="#7A859D"/></linearGradient>
+  <linearGradient id="gKaart" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#151B2A"/><stop offset="1" stop-color="#0A0E18"/></linearGradient>
+  <radialGradient id="gKat" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#F3A85E"/><stop offset="0.7" stop-color="#C66F2B"/><stop offset="1" stop-color="#7E3F14"/></radialGradient>
+  <radialGradient id="gVirus" cx="0.38" cy="0.34" r="0.75"><stop offset="0" stop-color="#FF9EAD"/><stop offset="0.65" stop-color="#D2405A"/><stop offset="1" stop-color="#7A1830"/></radialGradient>
+  <linearGradient id="gPh" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF4D4D"/><stop offset="0.2" stop-color="#FF9F43"/><stop offset="0.36" stop-color="#FACC15"/><stop offset="0.5" stop-color="#4ADE80"/><stop offset="0.68" stop-color="#38BDF8"/><stop offset="0.85" stop-color="#6366F1"/><stop offset="1" stop-color="#A855F7"/></linearGradient>
+  <linearGradient id="gMeter" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4ADE80"/><stop offset="0.5" stop-color="#FACC15"/><stop offset="1" stop-color="#FF5A5F"/></linearGradient>
+  <radialGradient id="gStip"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gVignet" cx="0.5" cy="0.48" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.7"/></radialGradient>
+  <filter id="gloed" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="gloedSterk" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="16" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="b6" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  <filter id="b18" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+  <filter id="b40" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="40"/></filter>
+  <filter id="schaduw" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#000" flood-opacity="0.6"/></filter>
+</defs>
+<g id="scene"></g>
+</svg>
+<script>
+"use strict";
+const W = 1080, H = 1920, R = Math.PI / 180;
+const lim = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const tramo = (t, a, d) => lim((t - a) / d);
+const suave = x => x * x * (3 - 2 * x);
+const salida = x => 1 - Math.pow(1 - x, 3);
+const muelle = x => { if (x <= 0) return 0; if (x >= 1) return 1; return 1 - Math.exp(-6 * x) * Math.cos(9 * x); };
+const azar = i => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const f1 = n => Math.round(n * 10) / 10;
+const f2 = n => Math.round(n * 100) / 100;
+const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const KLEUR = { blauw: "#4FC3F7", roze: "#FF6FA3", oranje: "#FF9F43", groen: "#4ADE80", paars: "#A78BFA", rood: "#FF5A5F",
+  geel: "#FACC15", wit: "#FFFFFF", cyaan: "#5ED3F3" };
+const kleur = n => KLEUR[n] || (typeof n === "string" && /^#[0-9a-f]{6}$/i.test(n) ? n : KLEUR.blauw);
+let DEFS = {};
+function gloedVan(c) {
+  const k = "gl" + c.replace("#", "");
+  if (!DEFS[k]) DEFS[k] = `<radialGradient id="${k}"><stop offset="0" stop-color="${c}" stop-opacity="0.42"/><stop offset="0.45" stop-color="${c}" stop-opacity="0.16"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`;
+  return `url(#${k})`;
+}
+const lienzo = document.createElement("canvas").getContext("2d");
+function ancho(texto, peso, tam) { lienzo.font = `${peso} ${tam}px Poppins`; return lienzo.measureText(texto).width; }
+const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+
+// =============================== ILUSTRACIONES (centradas en 0,0; unos ±300) ===============================
+const ILU = {};
+
+ILU.pie = (T) => {
+  let s = `<g filter="url(#schaduw)"><path d="M -92 -150 C -152 -140 -176 -40 -162 52 C -150 132 -152 214 -82 254 C -12 290 70 256 88 182 C 100 122 106 70 122 2 C 142 -78 150 -150 96 -178 C 40 -200 -28 -166 -92 -150 Z" fill="url(#gPiel)"/></g>`;
+  s += `<path d="M -70 -70 C -118 -14 -112 96 -62 170" stroke="#B26C55" stroke-width="44" fill="none" opacity="0.16" filter="url(#b18)"/>`;
+  s += `<ellipse cx="-22" cy="196" rx="78" ry="48" fill="#FFF0E4" opacity="0.32" filter="url(#b18)"/>`;
+  s += `<path d="M -112 -96 C -42 -116 38 -121 104 -106" stroke="#B26C55" stroke-width="3" fill="none" opacity="0.34"/>`;
+  s += `<path d="M -104 -70 C -34 -86 30 -90 96 -80" stroke="#B26C55" stroke-width="2" fill="none" opacity="0.22"/>`;
+  [[-90, -196, 43, 50], [-22, -222, 29, 33], [30, -218, 25, 29], [74, -202, 22, 25], [106, -176, 18, 21]].forEach(([x, y, rx, ry], i) => {
+    s += `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="url(#gPiel)" filter="url(#schaduw)"/>`;
+    s += `<ellipse cx="${x - rx * 0.25}" cy="${y - ry * 0.3}" rx="${f1(rx * 0.42)}" ry="${f1(ry * 0.3)}" fill="#FFF4EC" opacity="0.55"/>`;
+  });
+  return s;
+};
+
+ILU.pluma = (T) => {
+  const g = Math.sin(T * 7) * 6;
+  let s = `<g transform="rotate(${f1(-32 + g)})"><path d="M 0 175 C 6 60 4 -60 -6 -180" stroke="#F4F6FB" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+  for (let i = 0; i < 38; i++) {
+    const y = -165 + i * 8.6, f = Math.sin(Math.PI * (i + 2) / 41), L = 18 + 72 * f;
+    s += `<path d="M 0 ${f1(y)} Q ${f1(-L * 0.6)} ${f1(y - L * 0.2)} ${f1(-L)} ${f1(y - L * 0.55)}" stroke="#E9EDF5" stroke-width="2.6" fill="none" opacity="0.92"/>`;
+    s += `<path d="M 0 ${f1(y)} Q ${f1(L * 0.6)} ${f1(y - L * 0.2)} ${f1(L)} ${f1(y - L * 0.55)}" stroke="#E9EDF5" stroke-width="2.6" fill="none" opacity="0.92"/>`;
+  }
+  return s + `</g>`;
+};
+
+ILU.cerebro = (T, p = {}) => {
+  const zona = p.resalta;
+  const cb = zona === "cerebelo";
+  let s = `<path d="M 30 92 C 40 150 46 196 58 238" stroke="#C9768D" stroke-width="44" stroke-linecap="round" fill="none"/>`;
+  s += `<g${cb ? ' filter="url(#gloedSterk)"' : ""}><ellipse cx="118" cy="106" rx="72" ry="44" fill="${cb ? "#6FD8FF" : "#D9879D"}"/>`;
+  for (let i = 0; i < 5; i++) s += `<path d="M ${58 + i * 5} ${96 + i * 9} Q 118 ${86 + i * 13} ${182 - i * 5} ${98 + i * 9}" stroke="${cb ? "#E6FAFF" : "#A9506B"}" stroke-width="3" fill="none" opacity="0.65"/>`;
+  s += `</g><g filter="url(#schaduw)"><path d="M -196 22 C -214 -82 -142 -172 -32 -184 C 82 -198 194 -142 208 -40 C 218 30 178 82 112 92 C 62 100 22 88 -18 98 C -80 112 -174 102 -196 22 Z" fill="url(#gBrein)"/></g>`;
+  [["M -150 -40 C -120 -82 -90 -20 -60 -62 C -30 -104 0 -42 30 -84 C 60 -126 100 -62 132 -104"],
+   ["M -164 18 C -132 -14 -100 42 -70 0 C -40 -42 -8 22 22 -20 C 52 -62 92 2 154 -32"],
+   ["M -122 70 C -92 38 -60 82 -28 50 C 2 18 32 70 72 40"],
+   ["M -64 -144 C -32 -112 0 -164 40 -132 C 80 -102 112 -154 152 -112"],
+   ["M -176 -18 C -160 -60 -128 -96 -100 -120"]].forEach(([d]) => {
+    s += `<path d="${d}" stroke="#A9506B" stroke-width="7" fill="none" opacity="0.5" stroke-linecap="round"/><path d="${d}" stroke="#FFE0E8" stroke-width="2.5" fill="none" opacity="0.35" transform="translate(-3 -4)" stroke-linecap="round"/>`;
+  });
+  s += `<ellipse cx="-70" cy="-110" rx="80" ry="34" fill="#FFFFFF" opacity="0.16" filter="url(#b18)"/>`;
+  if (zona === "voorkant" || zona === "achterkant") {
+    const x = zona === "voorkant" ? -130 : 120;
+    s += `<circle cx="${x}" cy="-40" r="${f1(78 + 6 * Math.sin(T * 3))}" fill="#7FDFFF" opacity="0.5" filter="url(#b18)"/>`;
+  }
+  return s;
+};
+
+ILU.estomago = (T, p = {}) => {
+  const forma = "M -60 -168 C -178 -160 -226 -52 -204 52 C -180 162 -48 236 70 198 C 152 172 196 112 224 54 L 254 34 C 276 24 296 2 296 -30 L 246 -64 C 226 -30 196 -2 160 14 C 118 34 62 40 32 4 C 4 -32 10 -116 -6 -162 Z";
+  const k = "clipMaag";
+  if (!DEFS[k]) DEFS[k] = `<clipPath id="${k}"><path d="${forma}"/></clipPath>`;
+  let s = `<path d="M -40 -300 C -46 -250 -44 -205 -34 -160" stroke="url(#gMaag)" stroke-width="64" stroke-linecap="round" fill="none" opacity="0.9"/>`;
+  s += `<g filter="url(#schaduw)"><path d="${forma}" fill="url(#gMaag)" opacity="0.92"/></g>`;
+  const golf = Array.from({ length: 13 }, (_, i) => { const x = -240 + i * 45; return `${i ? "L" : "M"} ${x} ${f1(36 + Math.sin(T * 2.2 + i * 0.9) * 7)}`; }).join(" ");
+  s += `<g clip-path="url(#${k})"><path d="${golf} L 320 260 L -240 260 Z" fill="url(#gZuur)" opacity="0.95"/>`;
+  for (let i = 0; i < 14; i++) {
+    const x = -170 + azar(i) * 330, y = 200 - ((T * (26 + azar(i + 9) * 30) + azar(i + 4) * 160) % 160), r = 5 + azar(i + 2) * 8;
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="none" stroke="#FAFFD8" stroke-width="2.4" opacity="0.7"/>`;
+  }
+  s += `</g>`;
+  [-110, -78, -46].forEach((y, i) => { s += `<path d="M -180 ${y} C -140 ${y - 16} -110 ${y + 14} -70 ${y - 4} C -40 ${y - 18} -20 ${y + 8} 0 ${y - 8}" stroke="#B5435F" stroke-width="5" fill="none" opacity="0.55"/>`; });
+  s += `<path d="${forma}" fill="none" stroke="#FFC6D3" stroke-width="4" opacity="0.6"/>`;
+  s += `<ellipse cx="-120" cy="-90" rx="60" ry="26" fill="#FFFFFF" opacity="0.18" filter="url(#b18)"/>`;
+  if (p.objeto === "clavo") {
+    const d = lim((p.__tl ?? 0) / 5) * 0.75;
+    s += `<g transform="translate(60 110) rotate(-35)" opacity="${f2(1 - d)}"><rect x="-70" y="-6" width="140" height="12" rx="4" fill="url(#gMetaal)"/><rect x="62" y="-16" width="12" height="32" rx="3" fill="#C7CEDC"/></g>`;
+  }
+  return s;
+};
+
+ILU.corazon = (T) => {
+  const b = 1 + 0.04 * Math.pow(Math.max(0, Math.sin(T * 2 * Math.PI * 1.15)), 6);
+  let s = `<g transform="scale(${f2(b)})">`;
+  s += `<path d="M 6 -96 C 6 -206 128 -236 156 -170" stroke="#B3223B" stroke-width="54" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M -40 -112 C -62 -192 -144 -204 -164 -150" stroke="#4A78D6" stroke-width="42" fill="none" stroke-linecap="round"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M 0 214 C -122 144 -192 60 -186 -30 C -180 -112 -110 -152 -50 -126 C -20 -112 0 -90 10 -70 C 30 -110 92 -142 142 -110 C 202 -70 202 22 160 92 C 120 152 60 192 0 214 Z" fill="url(#gHart)"/></g>`;
+  s += `<path d="M -20 -60 C -40 0 -30 80 10 150" stroke="#7A1027" stroke-width="5" fill="none" opacity="0.6"/>`;
+  s += `<path d="M 40 -70 C 70 -20 90 40 80 110" stroke="#7A1027" stroke-width="4" fill="none" opacity="0.5"/>`;
+  s += `<ellipse cx="-90" cy="-50" rx="50" ry="32" fill="#FFFFFF" opacity="0.2" filter="url(#b18)"/></g>`;
+  return s;
+};
+
+ILU.ojo = (T) => {
+  const pupila = 30 + 9 * Math.sin(T * 1.3);
+  let s = `<g filter="url(#schaduw)"><circle r="175" fill="url(#gSclera)"/></g>`;
+  for (let i = 0; i < 6; i++) { const a = i * 60 + 20; s += `<path d="M ${f1(Math.cos(a * R) * 172)} ${f1(Math.sin(a * R) * 172)} Q ${f1(Math.cos((a + 8) * R) * 130)} ${f1(Math.sin((a + 8) * R) * 130)} ${f1(Math.cos((a + 3) * R) * 105)} ${f1(Math.sin((a + 3) * R) * 105)}" stroke="#D9485C" stroke-width="1.8" fill="none" opacity="0.4"/>`; }
+  s += `<circle r="84" fill="url(#gIris)"/>`;
+  for (let i = 0; i < 48; i++) { const a = i * 7.5 * R; s += `<line x1="${f1(Math.cos(a) * 36)}" y1="${f1(Math.sin(a) * 36)}" x2="${f1(Math.cos(a) * 80)}" y2="${f1(Math.sin(a) * 80)}" stroke="#BDEBFF" stroke-width="1.4" opacity="0.32"/>`; }
+  s += `<circle r="84" fill="none" stroke="#0C2C48" stroke-width="5"/><circle r="${f1(pupila)}" fill="#05070C"/>`;
+  s += `<ellipse cx="-30" cy="-36" rx="22" ry="15" fill="#FFFFFF" opacity="0.9"/><circle cx="26" cy="22" r="7" fill="#FFFFFF" opacity="0.6"/>`;
+  return s;
+};
+
+ILU.mano = (T) => {
+  let s = `<g filter="url(#schaduw)"><g fill="url(#gPiel)">`;
+  [[-80, -66, 170], [-27, -76, 202], [27, -72, 190], [78, -60, 150]].forEach(([x, y, h]) => { s += `<rect x="${x - 24}" y="${y - h}" width="48" height="${h + 40}" rx="24"/>`; });
+  s += `<path d="M -112 40 C -118 -20 -106 -62 -96 -72 L 98 -72 C 112 -62 120 -20 114 40 C 106 132 62 196 0 200 C -62 196 -106 132 -112 40 Z"/>`;
+  s += `<rect x="-27" y="-150" width="54" height="170" rx="27" transform="translate(-96 70) rotate(-42)"/></g></g>`;
+  s += `<path d="M -80 30 C -30 10 30 20 80 -10" stroke="#B26C55" stroke-width="3" fill="none" opacity="0.4"/><path d="M -70 80 C -20 60 20 90 60 50" stroke="#B26C55" stroke-width="3" fill="none" opacity="0.35"/>`;
+  return s;
+};
+
+ILU.pulmones = (T) => {
+  const a = 1 + 0.045 * Math.sin(T * 1.6);
+  let s = `<rect x="-20" y="-260" width="40" height="150" rx="16" fill="#E9B6C1"/>`;
+  for (let i = 0; i < 6; i++) s += `<rect x="-24" y="${-250 + i * 24}" width="48" height="9" rx="4" fill="#F7D6DE" opacity="0.8"/>`;
+  s += `<path d="M 0 -112 C -20 -90 -50 -80 -78 -70 M 0 -112 C 20 -90 50 -80 78 -70" stroke="#E9B6C1" stroke-width="22" fill="none" stroke-linecap="round"/>`;
+  s += `<g transform="scale(${f2(a)} ${f2(a)})"><g filter="url(#schaduw)">`;
+  s += `<path d="M -36 -96 C -122 -148 -232 -40 -222 92 C -216 194 -150 234 -70 214 C -28 204 -20 124 -26 40 Z" fill="url(#gLong)"/>`;
+  s += `<path d="M 36 -96 C 122 -148 228 -40 218 92 C 212 194 150 234 74 214 C 40 204 52 160 30 130 C 52 100 34 60 28 40 Z" fill="url(#gLong)"/></g>`;
+  for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) s += `<path d="M ${sx * 70} -60 C ${sx * (90 + i * 20)} ${-20 + i * 30} ${sx * (120 + i * 14)} ${40 + i * 30} ${sx * (130 + i * 10)} ${80 + i * 28}" stroke="#B04A62" stroke-width="3" fill="none" opacity="0.45"/>`;
+  s += `<ellipse cx="-140" cy="0" rx="40" ry="60" fill="#FFFFFF" opacity="0.16" filter="url(#b18)"/></g>`;
+  return s;
+};
+
+ILU.diente = () => {
+  let s = `<g filter="url(#schaduw)"><path d="M -96 22 C -92 110 -86 190 -50 232 C -30 250 -18 200 -16 150 C -12 110 12 110 16 150 C 18 200 30 250 50 232 C 86 190 92 110 96 22 Z" fill="url(#gTand)"/>`;
+  s += `<path d="M -122 -40 C -132 -122 -82 -152 -42 -132 C -20 -152 20 -152 42 -132 C 82 -152 132 -122 122 -40 C 116 0 102 22 92 32 L -92 32 C -102 22 -116 0 -122 -40 Z" fill="url(#gTand)"/></g>`;
+  s += `<path d="M -96 -90 C -80 -120 -50 -118 -40 -100" stroke="#FFFFFF" stroke-width="10" fill="none" opacity="0.8" stroke-linecap="round"/>`;
+  return s;
+};
+
+ILU.celula = (T) => {
+  const wob = i => 196 + 7 * Math.sin(T * 1.4 + i * 0.7);
+  const pts = Array.from({ length: 24 }, (_, i) => { const a = i * 15 * R, r = wob(i); return `${f1(Math.cos(a) * r)},${f1(Math.sin(a) * r)}`; });
+  let s = `<polygon points="${pts.join(" ")}" fill="url(#gCel)" stroke="#8FF0E1" stroke-width="6" stroke-linejoin="round" opacity="0.95" filter="url(#gloed)"/>`;
+  s += `<polygon points="${pts.join(" ")}" fill="none" stroke="#CFFBF4" stroke-width="2" opacity="0.6" transform="scale(0.95)"/>`;
+  for (let i = 0; i < 4; i++) s += `<path d="M ${-40 + i * 10} ${-90 - i * 12} C ${20 + i * 8} ${-120 - i * 6} ${60} ${-70 - i * 10} ${110} ${-90 - i * 4}" stroke="#BDF5EC" stroke-width="3" fill="none" opacity="0.45"/>`;
+  [[90, 60, 25], [-110, 90, -20], [40, 130, 60]].forEach(([x, y, a]) => { s += `<g transform="translate(${x} ${y}) rotate(${a})"><rect x="-38" y="-17" width="76" height="34" rx="17" fill="#FFAF5F"/><path d="M -26 0 Q -18 -10 -10 0 T 6 0 T 22 0" stroke="#FFE2BE" stroke-width="3" fill="none"/></g>`; });
+  for (let i = 0; i < 26; i++) s += `<circle cx="${f1((azar(i) - 0.5) * 300)}" cy="${f1((azar(i + 40) - 0.5) * 300)}" r="3.5" fill="#E3FFF9" opacity="0.6"/>`;
+  s += `<g filter="url(#schaduw)"><circle cx="-24" cy="-12" r="74" fill="url(#gKern)"/></g><circle cx="-34" cy="-22" r="24" fill="#3E1C99" opacity="0.8"/>`;
+  return s;
+};
+
+ILU.tejido = (T) => {   // franja a todo lo ancho: ácido, capa de moco y células
+  let s = `<rect x="-560" y="-300" width="1120" height="250" fill="#3E9B2F" opacity="0.85"/><rect x="-560" y="-300" width="1120" height="250" fill="url(#gZuur)" opacity="0.55"/>`;
+  for (let i = 0; i < 22; i++) {
+    const x = -520 + azar(i) * 1040, y = -280 + ((azar(i + 5) * 220 + T * (20 + azar(i + 2) * 30)) % 220);
+    s += `<g transform="translate(${f1(x)} ${f1(y)})"><circle r="15" fill="#E2405A"/><text y="5" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">H⁺</text></g>`;
+  }
+  const golf = Array.from({ length: 25 }, (_, i) => `${i ? "L" : "M"} ${-560 + i * 47} ${f1(-50 + Math.sin(T * 1.5 + i * 0.8) * 6)}`).join(" ");
+  s += `<path d="${golf} L 560 40 L -560 40 Z" fill="#9CC9E6" opacity="0.9"/>`;
+  for (let i = 0; i < 16; i++) {
+    const x = -540 + i * 70;
+    s += `<rect x="${x}" y="44" width="64" height="150" rx="16" fill="#F08A9C"/><rect x="${x + 6}" y="50" width="20" height="138" rx="10" fill="#FFFFFF" opacity="0.12"/><ellipse cx="${x + 32}" cy="122" rx="12" ry="16" fill="#8E2245"/>`;
+  }
+  return s + `<rect x="-560" y="196" width="1120" height="200" fill="#5A1526"/>`;
+};
+
+ILU.tierra = (T) => {
+  const k = "clipAarde";
+  if (!DEFS[k]) DEFS[k] = `<clipPath id="${k}"><circle r="200"/></clipPath>`;
+  const dx = ((T * 22) % 400);
+  let s = `<circle r="214" fill="none" stroke="#7CC8FF" stroke-width="16" opacity="0.35" filter="url(#b6)"/><g filter="url(#schaduw)"><circle r="200" fill="url(#gOceaan)"/></g><g clip-path="url(#${k})">`;
+  for (const off of [-400, 0, 400]) {
+    s += `<g transform="translate(${f1(off + dx - 200)} 0)" fill="#4FAF6C"><path d="M -60 -120 C -20 -150 60 -130 70 -80 C 80 -30 30 -10 0 20 C -30 50 -80 30 -90 -20 C -100 -70 -90 -100 -60 -120 Z"/><path d="M 90 30 C 130 10 180 40 170 90 C 160 140 110 150 90 120 C 70 90 60 50 90 30 Z"/><path d="M -150 60 C -120 50 -90 80 -100 120 C -110 150 -150 150 -160 120 C -170 90 -170 70 -150 60 Z"/></g>`;
+  }
+  for (let i = 0; i < 6; i++) s += `<ellipse cx="${f1(((azar(i) * 520 + T * 30) % 520) - 260)}" cy="${f1((azar(i + 3) - 0.5) * 300)}" rx="${f1(40 + azar(i + 6) * 50)}" ry="12" fill="#FFFFFF" opacity="0.32" filter="url(#b6)"/>`;
+  s += `<rect x="-200" y="-200" width="400" height="400" fill="url(#gNacht)"/></g>`;
+  if (!DEFS.gNacht) DEFS.gNacht = `<linearGradient id="gNacht" x1="0" y1="0" x2="1" y2="0"><stop offset="0.45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.6"/></linearGradient>`;
+  return s;
+};
+
+ILU.luna = () => {
+  let s = `<g filter="url(#schaduw)"><circle r="180" fill="url(#gMaan)"/></g>`;
+  [[-60, -50, 34], [50, 40, 24], [-30, 90, 18], [80, -70, 16], [-110, 30, 14], [20, -110, 12], [110, 90, 10]].forEach(([x, y, r]) => {
+    s += `<circle cx="${x}" cy="${y}" r="${r}" fill="#7E8190" opacity="0.65"/><path d="M ${x - r * 0.8} ${y + r * 0.35} A ${r} ${r} 0 0 0 ${x + r * 0.8} ${y + r * 0.35}" stroke="#F3F3F7" stroke-width="2.5" fill="none" opacity="0.55"/>`;
+  });
+  if (!DEFS.gNacht) DEFS.gNacht = `<linearGradient id="gNacht" x1="0" y1="0" x2="1" y2="0"><stop offset="0.45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.6"/></linearGradient>`;
+  return s + `<circle r="180" fill="url(#gNacht)"/>`;
+};
+
+ILU.sol = (T) => {
+  let s = `<circle r="290" fill="#FFB020" opacity="0.18" filter="url(#b40)"/><g transform="rotate(${f1(T * 8)})">`;
+  for (let i = 0; i < 16; i++) s += `<path d="M -16 -200 L 0 -${f1(270 + 20 * Math.sin(T * 2 + i))} L 16 -200 Z" fill="#FFC23D" opacity="0.55" transform="rotate(${i * 22.5})" filter="url(#b6)"/>`;
+  s += `</g><g filter="url(#gloedSterk)"><circle r="180" fill="url(#gZon)"/></g>`;
+  for (let i = 0; i < 16; i++) s += `<circle cx="${f1((azar(i) - 0.5) * 240)}" cy="${f1((azar(i + 8) - 0.5) * 240)}" r="${f1(8 + azar(i + 3) * 10)}" fill="#FFE98A" opacity="0.35"/>`;
+  return s;
+};
+
+ILU.gota = (T) => {
+  const r = (T * 0.7) % 1;
+  let s = `<ellipse cx="0" cy="240" rx="${f1(60 + r * 160)}" ry="${f1(12 + r * 26)}" fill="none" stroke="#7FD3FF" stroke-width="3" opacity="${f2(0.7 * (1 - r))}"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M 0 -214 C 42 -142 142 -42 142 50 C 142 142 76 202 0 202 C -76 202 -142 142 -142 50 C -142 -42 -42 -142 0 -214 Z" fill="url(#gWater)"/></g>`;
+  return s + `<ellipse cx="-58" cy="26" rx="22" ry="56" fill="#FFFFFF" opacity="0.6" transform="rotate(18 -58 26)"/><circle cx="-40" cy="-60" r="10" fill="#FFFFFF" opacity="0.55"/>`;
+};
+
+ILU.rayo = (T) => {
+  const flick = 0.75 + 0.25 * Math.max(Math.sin(T * 13), Math.sin(T * 7.3 + 1));
+  let s = `<g fill="#3B4A66">${[[-90, -160, 80], [0, -190, 100], [100, -160, 80], [-160, -120, 60], [160, -120, 60]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join("")}</g>`;
+  s += `<rect x="-220" y="-140" width="440" height="80" rx="40" fill="#3B4A66"/><ellipse cx="-40" cy="-220" rx="90" ry="30" fill="#6C7FA3" opacity="0.5" filter="url(#b18)"/>`;
+  return s + `<g opacity="${f2(flick)}" filter="url(#gloedSterk)"><path d="M 20 -70 L -60 70 L 0 70 L -40 230 L 96 30 L 30 30 L 76 -70 Z" fill="#FFF3A6"/></g>`;
+};
+
+ILU.planta = (T) => {
+  const g = Math.sin(T * 1.2) * 3;
+  let s = `<g transform="rotate(${f1(g)} 0 120)"><path d="M 0 120 C -10 40 12 -60 -6 -190" stroke="#3E9C55" stroke-width="12" fill="none" stroke-linecap="round"/>`;
+  [[-4, 40, -150, 1.1], [2, -10, -30, 1.0], [-4, -70, -140, 0.95], [-2, -130, -40, 0.85], [-6, -186, -95, 0.7]].forEach(([x, y, a, k]) => {
+    s += `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})"><path d="M 0 0 C 30 -46 96 -46 128 0 C 96 46 30 46 0 0 Z" fill="url(#gBlad)"/><path d="M 4 0 L 120 0" stroke="#D8F7CF" stroke-width="3" opacity="0.6"/></g>`;
+  });
+  s += `</g><g filter="url(#schaduw)"><path d="M -96 120 L 96 120 L 76 262 L -76 262 Z" fill="url(#gPot)"/></g><rect x="-108" y="108" width="216" height="30" rx="8" fill="#F09A6E"/>`;
+  return s;
+};
+
+ILU.gato = (T) => {
+  const parp = (T % 3.4) < 0.12 ? 0.12 : 1, cola = Math.sin(T * 1.5) * 10;
+  let s = `<path d="M 110 200 C 220 190 230 80 180 ${f1(40 + cola)}" stroke="#A85A22" stroke-width="30" fill="none" stroke-linecap="round"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M -120 230 C -150 120 -110 -10 0 -20 C 110 -10 150 120 120 230 Z" fill="url(#gKat)"/>`;
+  s += `<path d="M -92 -150 L -110 -250 L -36 -196 Z M 92 -150 L 110 -250 L 36 -196 Z" fill="#C66F2B"/><circle cx="0" cy="-130" r="104" fill="url(#gKat)"/></g>`;
+  s += `<path d="M -92 -160 L -100 -226 L -52 -192 Z M 92 -160 L 100 -226 L 52 -192 Z" fill="#F7B7A3" opacity="0.7"/>`;
+  s += `<ellipse cx="0" cy="110" rx="60" ry="90" fill="#FBE3C8" opacity="0.85"/>`;
+  for (const sx of [-1, 1]) s += `<ellipse cx="${sx * 38}" cy="-140" rx="20" ry="${f1(24 * parp)}" fill="#B7E36A"/><ellipse cx="${sx * 38}" cy="-140" rx="5" ry="${f1(20 * parp)}" fill="#111"/>`;
+  s += `<path d="M -10 -100 L 10 -100 L 0 -88 Z" fill="#F08AA0"/><path d="M 0 -88 Q -14 -72 -26 -80 M 0 -88 Q 14 -72 26 -80" stroke="#5A2A0E" stroke-width="3" fill="none"/>`;
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) s += `<line x1="${sx * 40}" y1="${-92 + i * 9}" x2="${sx * 120}" y2="${-104 + i * 16}" stroke="#FFF" stroke-width="2" opacity="0.7"/>`;
+  return s;
+};
+
+ILU.reloj = (T, p = {}) => {
+  const v = p.rapido ? 12 : 1;
+  let s = `<g filter="url(#schaduw)"><circle r="190" fill="url(#gKaart)"/></g><circle r="190" fill="none" stroke="url(#gMetaal)" stroke-width="16"/>`;
+  for (let i = 0; i < 60; i++) { const a = i * 6 * R, l = i % 5 ? 10 : 24; s += `<line x1="${f1(Math.sin(a) * 160)}" y1="${f1(-Math.cos(a) * 160)}" x2="${f1(Math.sin(a) * (160 - l))}" y2="${f1(-Math.cos(a) * (160 - l))}" stroke="#E6EAF3" stroke-width="${i % 5 ? 2 : 5}" opacity="${i % 5 ? 0.45 : 0.9}"/>`; }
+  const m = T * 6 * v, h = m / 12;
+  s += `<line x1="0" y1="0" x2="${f1(Math.sin(h * R) * 90)}" y2="${f1(-Math.cos(h * R) * 90)}" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round"/>`;
+  s += `<line x1="0" y1="0" x2="${f1(Math.sin(m * R) * 135)}" y2="${f1(-Math.cos(m * R) * 135)}" stroke="#5ED3F3" stroke-width="7" stroke-linecap="round" filter="url(#gloed)"/>`;
+  return s + `<circle r="12" fill="#FFFFFF"/>`;
+};
+
+ILU.bateria = (T, p = {}) => {
+  const n = lim(p.nivel ?? 0.8), c = n < 0.25 ? "#FF5A5F" : n < 0.6 ? "#FACC15" : "#4ADE80";
+  const vul = (300 - 24) * n * salida(lim((p.__tl ?? 9) / 1.4));
+  let s = `<rect x="-40" y="-196" width="80" height="34" rx="10" fill="#E5E9F2"/><g filter="url(#schaduw)"><rect x="-100" y="-170" width="200" height="340" rx="30" fill="url(#gKaart)" stroke="#E5E9F2" stroke-width="12"/></g>`;
+  s += `<rect x="-76" y="${f1(158 - vul)}" width="152" height="${f1(vul)}" rx="16" fill="${c}" filter="url(#gloed)"/>`;
+  return s + `<path d="M 14 -70 L -30 18 L 4 18 L -14 92 L 34 -6 L 2 -6 Z" fill="#FFFFFF" opacity="0.85"/>`;
+};
+
+ILU.virus = (T) => {
+  let s = `<g transform="rotate(${f1(T * 10)})">`;
+  for (let i = 0; i < 16; i++) { const a = i * 22.5 * R; s += `<line x1="${f1(Math.cos(a) * 120)}" y1="${f1(Math.sin(a) * 120)}" x2="${f1(Math.cos(a) * 168)}" y2="${f1(Math.sin(a) * 168)}" stroke="#E36A80" stroke-width="10"/><circle cx="${f1(Math.cos(a) * 176)}" cy="${f1(Math.sin(a) * 176)}" r="16" fill="#FF8FA3"/>`; }
+  s += `</g><g filter="url(#schaduw)"><circle r="132" fill="url(#gVirus)"/></g>`;
+  for (let i = 0; i < 12; i++) s += `<circle cx="${f1((azar(i) - 0.5) * 180)}" cy="${f1((azar(i + 5) - 0.5) * 180)}" r="${f1(6 + azar(i + 2) * 8)}" fill="#FFC2CC" opacity="0.4"/>`;
+  return s;
+};
+
+ILU.adn = (T) => {
+  let s = "", a = [], b = [];
+  for (let i = 0; i <= 40; i++) { const y = -230 + i * 11.5, f = y / 58 + T * 2; a.push(`${f1(Math.sin(f) * 96)},${f1(y)}`); b.push(`${f1(-Math.sin(f) * 96)},${f1(y)}`); }
+  for (let i = 0; i <= 20; i++) {
+    const y = -230 + i * 23, f = y / 58 + T * 2, x = Math.sin(f) * 96, z = Math.cos(f);
+    const cs = [["#4FC3F7", "#FACC15"], ["#FF5A5F", "#4ADE80"]][i % 2];
+    s += `<line x1="${f1(x)}" y1="${y}" x2="0" y2="${y}" stroke="${cs[0]}" stroke-width="8" opacity="${f2(0.55 + 0.4 * z)}"/><line x1="0" y1="${y}" x2="${f1(-x)}" y2="${y}" stroke="${cs[1]}" stroke-width="8" opacity="${f2(0.55 - 0.4 * z)}"/>`;
+  }
+  return s + `<polyline points="${a.join(" ")}" fill="none" stroke="#C9D7F2" stroke-width="12" stroke-linecap="round"/><polyline points="${b.join(" ")}" fill="none" stroke="#8EA3CC" stroke-width="12" stroke-linecap="round"/>`;
+};
+
+ILU.atomo = (T) => {
+  let s = "";
+  [0, 60, 120].forEach((g, k) => {
+    s += `<ellipse rx="230" ry="80" fill="none" stroke="#7FD3FF" stroke-width="3" opacity="0.6" transform="rotate(${g})"/>`;
+    const a = T * (2 + k * 0.4) + k;
+    const x = Math.cos(a) * 230, y = Math.sin(a) * 80;
+    s += `<g transform="rotate(${g})"><circle cx="${f1(x)}" cy="${f1(y)}" r="14" fill="#E6FAFF" filter="url(#gloed)"/></g>`;
+  });
+  const kern = [[0, 0, "#FF5A5F"], [22, 8, "#9AA3B5"], [-18, 14, "#FF5A5F"], [6, -22, "#9AA3B5"], [-12, -16, "#FF5A5F"], [18, -10, "#9AA3B5"], [-4, 24, "#FF5A5F"]];
+  return s + `<g filter="url(#gloed)">${kern.map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="20" fill="${c}"/>`).join("")}</g>`;
+};
+
+ILU.termometro = (T, p = {}) => {
+  const n = lim(p.nivel ?? 0.7) * salida(lim((p.__tl ?? 9) / 1.6));
+  let s = `<g filter="url(#schaduw)"><rect x="-34" y="-230" width="68" height="410" rx="34" fill="#DCE6F5" opacity="0.25" stroke="#E6EEF9" stroke-width="5"/><circle cx="0" cy="192" r="62" fill="#FF5A5F"/></g>`;
+  s += `<rect x="-16" y="${f1(170 - 360 * n)}" width="32" height="${f1(360 * n + 20)}" rx="16" fill="#FF5A5F" filter="url(#gloed)"/>`;
+  for (let i = 0; i < 9; i++) s += `<line x1="40" y1="${-190 + i * 42}" x2="${i % 2 ? 56 : 70}" y2="${-190 + i * 42}" stroke="#E6EEF9" stroke-width="3" opacity="0.7"/>`;
+  return s;
+};
+
+
+ILU.planeta = (T) => {
+  let s = `<g transform="rotate(-18)"><ellipse rx="300" ry="70" fill="none" stroke="#E8C98F" stroke-width="26" opacity="0.55"/><ellipse rx="262" ry="58" fill="none" stroke="#C9A46A" stroke-width="10" opacity="0.6"/></g>`;
+  if (!DEFS.gSaturn) DEFS.gSaturn = `<radialGradient id="gSaturn" cx="0.38" cy="0.32" r="0.8"><stop offset="0" stop-color="#FCE7B6"/><stop offset="0.6" stop-color="#D9A75E"/><stop offset="1" stop-color="#7A4E1E"/></radialGradient>`;
+  s += `<g filter="url(#schaduw)"><circle r="170" fill="url(#gSaturn)"/></g>`;
+  for (let i = 0; i < 5; i++) s += `<ellipse cx="0" cy="${-90 + i * 42}" rx="${f1(Math.sqrt(170 * 170 - Math.pow(-90 + i * 42, 2)))}" ry="9" fill="#B88544" opacity="0.35"/>`;
+  return s + `<g transform="rotate(-18)"><path d="M -300 0 A 300 70 0 0 0 300 0" fill="none" stroke="#F3DCA8" stroke-width="26" opacity="0.75"/></g>`;
+};
+ILU.cohete = (T) => {
+  const v = Math.sin(T * 30) * 6;
+  let s = `<g transform="translate(0 ${f1(Math.sin(T * 2) * 8)})"><path d="M -40 170 Q 0 ${f1(330 + v)} 40 170 Z" fill="#FFB020" filter="url(#gloedSterk)"/><path d="M -22 170 Q 0 ${f1(270 + v)} 22 170 Z" fill="#FFF3B0"/>`;
+  s += `<path d="M -70 120 L -130 200 L -70 180 Z M 70 120 L 130 200 L 70 180 Z" fill="#FF5A5F"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M 0 -250 C 70 -170 78 -40 70 170 L -70 170 C -78 -40 -70 -170 0 -250 Z" fill="url(#gMetaal)"/></g>`;
+  s += `<path d="M 0 -250 C 34 -212 52 -170 60 -130 L -60 -130 C -52 -170 -34 -212 0 -250 Z" fill="#FF5A5F"/>`;
+  return s + `<circle cx="0" cy="-40" r="38" fill="#0E2A4A" stroke="#E3E8F2" stroke-width="10"/><circle cx="-12" cy="-52" r="10" fill="#7FD3FF" opacity="0.8"/></g>`;
+};
+ILU.bombilla = (T) => {
+  const brillo = 0.75 + 0.25 * Math.sin(T * 3);
+  let s = `<circle cx="0" cy="-60" r="230" fill="#FFD24D" opacity="${f2(0.22 * brillo)}" filter="url(#b40)"/>`;
+  s += `<g filter="url(#gloed)"><path d="M -120 -60 C -120 -170 -60 -230 0 -230 C 60 -230 120 -170 120 -60 C 120 10 70 50 58 110 L -58 110 C -70 50 -120 10 -120 -60 Z" fill="#FFE68A" opacity="0.92"/></g>`;
+  s += `<path d="M -30 100 L -30 0 C -30 -40 30 -40 30 0 L 30 100" stroke="#B86E00" stroke-width="7" fill="none"/>`;
+  for (let i = 0; i < 4; i++) s += `<rect x="-62" y="${116 + i * 26}" width="124" height="20" rx="10" fill="url(#gMetaal)"/>`;
+  return s + `<path d="M -30 222 L 30 222 L 12 244 L -12 244 Z" fill="#7A859D"/><ellipse cx="-56" cy="-120" rx="22" ry="44" fill="#FFFFFF" opacity="0.55" transform="rotate(25 -56 -120)"/>`;
+};
+ILU.trofeo = (T) => {
+  if (!DEFS.gGoud) DEFS.gGoud = `<linearGradient id="gGoud" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF0A8"/><stop offset="0.5" stop-color="#F5B827"/><stop offset="1" stop-color="#A96A05"/></linearGradient>`;
+  let s = `<path d="M -110 -160 Q -230 -150 -200 -60 Q -180 0 -100 10 M 110 -160 Q 230 -150 200 -60 Q 180 0 100 10" stroke="url(#gGoud)" stroke-width="22" fill="none"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M -130 -200 L 130 -200 C 130 -40 70 40 0 50 C -70 40 -130 -40 -130 -200 Z" fill="url(#gGoud)"/></g>`;
+  s += `<rect x="-22" y="44" width="44" height="80" fill="#D89A12"/><rect x="-100" y="124" width="200" height="40" rx="10" fill="url(#gGoud)"/><rect x="-130" y="164" width="260" height="70" rx="12" fill="#3B2A16"/>`;
+  s += `<path d="M -80 -180 C -84 -100 -60 -40 -20 -6" stroke="#FFFBE0" stroke-width="14" fill="none" opacity="0.6" stroke-linecap="round"/>`;
+  return s + `<path d="M 0 -150 L 14 -112 L 54 -112 L 22 -88 L 34 -50 L 0 -72 L -34 -50 L -22 -88 L -54 -112 L -14 -112 Z" fill="#FFFBE0" opacity="0.85"/>`;
+};
+ILU.piramide = (T) => {
+  let s = `<circle cx="210" cy="-210" r="60" fill="#FFD24D" filter="url(#gloedSterk)" opacity="0.9"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M -280 200 L 0 -220 L 60 200 Z" fill="#E8B96A"/><path d="M 0 -220 L 280 200 L 60 200 Z" fill="#A9773A"/></g>`;
+  for (let i = 1; i < 9; i++) { const y = -220 + i * 46.7, xl = -280 * (i / 9), xr = 280 * (i / 9); s += `<line x1="${f1(xl)}" y1="${f1(y)}" x2="${f1(60 * (i / 9))}" y2="${f1(y)}" stroke="#C99A52" stroke-width="2.5" opacity="0.7"/><line x1="${f1(60 * (i / 9))}" y1="${f1(y)}" x2="${f1(xr)}" y2="${f1(y)}" stroke="#8C5F2A" stroke-width="2.5" opacity="0.7"/>`; }
+  return s + `<rect x="-330" y="200" width="660" height="34" rx="12" fill="#D9A867" opacity="0.6"/>`;
+};
+ILU.telefono = (T) => {
+  let s = `<g filter="url(#schaduw)"><rect x="-120" y="-240" width="240" height="480" rx="40" fill="#11151F" stroke="url(#gMetaal)" stroke-width="10"/></g>`;
+  if (!DEFS.gScherm) DEFS.gScherm = `<linearGradient id="gScherm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B82F6"/><stop offset="1" stop-color="#A855F7"/></linearGradient>`;
+  s += `<rect x="-100" y="-215" width="200" height="430" rx="26" fill="url(#gScherm)" opacity="0.9"/><rect x="-36" y="-206" width="72" height="18" rx="9" fill="#0A0D14"/>`;
+  for (let i = 0; i < 3; i++) s += `<rect x="-74" y="${-140 + i * 70}" width="${148 - i * 30}" height="36" rx="12" fill="#FFFFFF" opacity="${f2(0.25 + 0.2 * Math.sin(T * 2 + i))}"/>`;
+  return s + `<path d="M -100 120 L 100 -40 L 100 215 L -100 215 Z" fill="#FFFFFF" opacity="0.07"/>`;
+};
+ILU.platano = (T) => {
+  if (!DEFS.gBanaan) DEFS.gBanaan = `<linearGradient id="gBanaan" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF3A0"/><stop offset="0.6" stop-color="#F7CF2E"/><stop offset="1" stop-color="#C98F0C"/></linearGradient>`;
+  let s = `<g transform="rotate(${f1(-20 + Math.sin(T) * 3)})"><g filter="url(#schaduw)"><path d="M -230 -40 C -170 160 120 200 240 40 C 250 20 226 6 210 20 C 110 110 -110 100 -186 -60 Z" fill="url(#gBanaan)"/></g>`;
+  s += `<path d="M -200 -30 C -130 110 110 130 216 34" stroke="#B9860C" stroke-width="5" fill="none" opacity="0.6"/>`;
+  return s + `<path d="M -230 -40 L -250 -80 L -214 -86 L -186 -60 Z" fill="#5E4A1C"/><path d="M 238 42 L 262 40 L 258 24 Z" fill="#3B2F12"/></g>`;
+};
+ILU.taza = (T) => {
+  let s = "";
+  for (let i = 0; i < 3; i++) { const y0 = -150 - ((T * 40 + i * 50) % 150); s += `<path d="M ${-50 + i * 50} -110 C ${-80 + i * 50} ${f1(y0 + 40)} ${-20 + i * 50} ${f1(y0 + 10)} ${-50 + i * 50} ${f1(y0 - 40)}" stroke="#FFFFFF" stroke-width="9" fill="none" opacity="0.35" stroke-linecap="round" filter="url(#b6)"/>`; }
+  s += `<path d="M 150 -40 C 250 -40 250 90 150 90" stroke="#E9EDF5" stroke-width="28" fill="none"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M -170 -90 L 170 -90 L 150 140 C 140 180 100 200 60 200 L -60 200 C -100 200 -140 180 -150 140 Z" fill="#F4F6FB"/></g>`;
+  return s + `<ellipse cx="0" cy="-90" rx="170" ry="34" fill="#E5E9F2"/><ellipse cx="0" cy="-86" rx="148" ry="24" fill="#6B3E1E"/><ellipse cx="-30" cy="-90" rx="60" ry="8" fill="#A0663A" opacity="0.7"/><ellipse cx="0" cy="236" rx="230" ry="28" fill="#E5E9F2" opacity="0.9"/>`;
+};
+ILU.pez = (T) => {
+  const ola = Math.sin(T * 5) * 10;
+  if (!DEFS.gVis) DEFS.gVis = `<linearGradient id="gVis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7FD3FF"/><stop offset="0.6" stop-color="#2E86C1"/><stop offset="1" stop-color="#E8F7FF"/></linearGradient>`;
+  let s = `<g transform="translate(${f1(Math.sin(T) * 20)} 0)"><path d="M 150 0 L 260 ${f1(-90 + ola)} L 240 0 L 260 ${f1(90 + ola)} Z" fill="#3FA3DD"/>`;
+  s += `<g filter="url(#schaduw)"><path d="M -230 0 C -180 -120 60 -140 170 0 C 60 140 -180 120 -230 0 Z" fill="url(#gVis)"/></g>`;
+  s += `<path d="M -40 -96 L 40 -170 L 70 -90 Z" fill="#3FA3DD"/>`;
+  for (let i = 0; i < 4; i++) s += `<path d="M ${-60 + i * 50} -70 Q ${-30 + i * 50} 0 ${-60 + i * 50} 70" stroke="#FFFFFF" stroke-width="3" fill="none" opacity="0.35"/>`;
+  return s + `<circle cx="-150" cy="-20" r="22" fill="#FFFFFF"/><circle cx="-155" cy="-20" r="11" fill="#0A0D14"/></g>`;
+};
+function emoji(caracter, c) {
+  return `<circle r="250" fill="${c}" opacity="0.16" filter="url(#b40)"/><text x="0" y="120" text-anchor="middle" font-size="340" font-family="Noto Color Emoji" filter="url(#schaduw)">${esc(caracter)}</text>`;
+}
+
+// =============================== COMPONENTES ===============================
+function etiquetaLinea(x0, y0, x1, y1, titulo, sub, p, color = "#FFFFFF") {
+  const q = salida(p), xe = x0 + (x1 - x0) * q, ye = y0 + (y1 - y0) * q, der = x1 >= x0;
+  let s = `<circle cx="${f1(x0)}" cy="${f1(y0)}" r="7" fill="${color}" opacity="${f2(lim(p * 3))}"/><line x1="${f1(x0)}" y1="${f1(y0)}" x2="${f1(xe)}" y2="${f1(ye)}" stroke="${color}" stroke-width="2.2" opacity="0.85"/>`;
+  const o = lim((p - 0.55) / 0.45), dx = der ? 14 : -14, a = der ? "start" : "end";
+  s += `<g opacity="${f2(o)}"><text x="${f1(x1 + dx)}" y="${f1(y1 + 8)}" text-anchor="${a}" font-weight="700" font-size="38" fill="#FFFFFF">${esc(titulo)}</text>`;
+  if (sub) s += `<text x="${f1(x1 + dx)}" y="${f1(y1 + 44)}" text-anchor="${a}" font-weight="300" font-size="27" fill="#AEB6C7">${esc(sub)}</text>`;
+  return s + `</g>`;
+}
+
+function onda(x, y, w, label, c, picos, p) {
+  const pts = [];
+  for (let i = 0; i <= 120; i++) {
+    const u = i / 120; let h = 0;
+    for (let k = 0; k < picos; k++) { const m = (k + 0.7) / (picos + 0.4); h += Math.exp(-Math.pow((u - m) / 0.035, 2)); }
+    if (!picos) h = 0.03 * Math.sin(u * 47) * Math.sin(u * 13);   // línea plana, con un temblor mínimo
+    pts.push(`${f1(x + u * w)},${f1(y - h * 78)}`);
+  }
+  let s = `<text x="${x}" y="${y - 110}" font-weight="700" font-size="28" letter-spacing="4" fill="${c}">${esc(label)}</text>`;
+  s += `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y}" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2"/>`;
+  return s + `<polyline points="${pts.join(" ")}" fill="none" stroke="${c}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="${f2(1 - suave(p))}" filter="url(#gloed)"/>`;
+}
+
+const numNL = (v, d) => Number(v).toFixed(d).replace(".", ",");
+function deslizador(x, y, w, o, p) {
+  const v0 = Number(o.desde ?? 0), v1 = Number(o.hasta ?? 1), fr = lim((v1 - v0) / ((o.max ?? v1) - v0 || 1));
+  const q = suave(lim((p - 0.2) / 0.8)), v = v0 + (v1 - v0) * q, c = kleur(o.color || "geel"), xf = x + w * fr * q;
+  let s = `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y}" stroke="#232A3A" stroke-width="12" stroke-linecap="round"/>`;
+  s += `<line x1="${x}" y1="${y}" x2="${f1(xf)}" y2="${y}" stroke="${c}" stroke-width="12" stroke-linecap="round" filter="url(#gloed)"/>`;
+  s += `<circle cx="${f1(xf)}" cy="${y}" r="20" fill="#FFFFFF" filter="url(#schaduw)"/>`;
+  s += `<text x="${x}" y="${y + 58}" font-weight="300" font-size="30" fill="#AEB6C7">${esc(o.label || "")}</text>`;
+  return s + `<text x="${x + w}" y="${y + 58}" text-anchor="end" font-weight="700" font-size="34" fill="${c}">${numNL(v, o.decimales ?? 1)} ${esc(o.unidad || "")}</text>`;
+}
+
+function medidor(x, y, o, p) {
+  const v = lim(Number(o.valor ?? 0.5)) * muelle(lim((p - 0.15) / 0.85));
+  const c = v < 0.35 ? "#4ADE80" : v < 0.68 ? "#FACC15" : "#FF5A5F";
+  let s = `<g filter="url(#schaduw)"><rect x="${x - 190}" y="${y - 150}" width="380" height="300" rx="34" fill="url(#gKaart)" stroke="#2A3246" stroke-width="2"/></g>`;
+  s += `<path d="M ${x - 130} ${y + 30} A 130 130 0 0 1 ${x + 130} ${y + 30}" fill="none" stroke="url(#gMeter)" stroke-width="22" stroke-linecap="round"/>`;
+  for (let i = 0; i <= 10; i++) { const a = (180 + i * 18) * R; s += `<line x1="${f1(x + Math.cos(a) * 100)}" y1="${f1(y + 30 + Math.sin(a) * 100)}" x2="${f1(x + Math.cos(a) * 88)}" y2="${f1(y + 30 + Math.sin(a) * 88)}" stroke="#FFFFFF" stroke-width="3" opacity="0.5"/>`; }
+  const a = (180 + v * 180) * R;
+  s += `<line x1="${x}" y1="${y + 30}" x2="${f1(x + Math.cos(a) * 112)}" y2="${f1(y + 30 + Math.sin(a) * 112)}" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/><circle cx="${x}" cy="${y + 30}" r="14" fill="#FFFFFF"/>`;
+  s += `<text x="${x}" y="${y + 86}" text-anchor="middle" font-weight="600" font-size="22" letter-spacing="4" fill="#9AA3B5">${esc(o.label || "")}</text>`;
+  return s + `<text x="${x}" y="${y + 128}" text-anchor="middle" font-weight="700" font-size="36" fill="${c}">${esc(o.texto || "")}</text>`;
+}
+
+function escala(x, y, w, o, p) {
+  const v0 = Number(o.desde ?? 0), v1 = Number(o.hasta ?? 14), pos = v => x + w * lim((v - v0) / ((v1 - v0) || 1));
+  let s = `<rect x="${x}" y="${y - 9}" width="${f1(w * salida(p))}" height="18" rx="9" fill="url(#gPh)"/>`;
+  for (let i = 0; i <= 14; i++) { const xx = x + (w * i) / 14; s += `<line x1="${f1(xx)}" y1="${y + 18}" x2="${f1(xx)}" y2="${y + (i % 7 ? 30 : 40)}" stroke="#FFFFFF" stroke-width="2" opacity="0.45"/>`; }
+  s += `<text x="${x}" y="${y + 80}" font-size="26" font-weight="400" fill="#9AA3B5">${esc(String(v0))}</text><text x="${x + w}" y="${y + 80}" text-anchor="end" font-size="26" font-weight="400" fill="#9AA3B5">${esc(String(v1))}</text>`;
+  if (o.izquierda) s += `<text x="${x}" y="${y + 124}" font-size="26" font-weight="600" fill="#FF6B6B">← ${esc(o.izquierda)}</text>`;
+  if (o.derecha) s += `<text x="${x + w}" y="${y + 124}" text-anchor="end" font-size="26" font-weight="600" fill="#9AA3B5">${esc(o.derecha)} →</text>`;
+  (o.marcas || []).slice(0, 3).forEach((m, i) => {
+    const q = muelle(lim((p - 0.35 - i * 0.15) / 0.5)), xx = pos(Number(m.valor ?? 0)), up = 70 + (i % 2) * 70;
+    s += `<g opacity="${f2(lim(q * 2))}"><line x1="${f1(xx)}" y1="${y}" x2="${f1(xx)}" y2="${y - up}" stroke="#FFFFFF" stroke-width="2" opacity="0.7"/><circle cx="${f1(xx)}" cy="${y}" r="13" fill="#FFFFFF" stroke="#05070C" stroke-width="4"/>`;
+    s += `<text x="${f1(xx)}" y="${y - up - 50}" text-anchor="middle" font-weight="700" font-size="40" fill="${kleur(m.color || "wit")}">${esc(m.texto || "")}</text><text x="${f1(xx)}" y="${y - up - 12}" text-anchor="middle" font-weight="300" font-size="28" fill="#AEB6C7">${esc(m.sub || "")}</text></g>`;
+  });
+  return s;
+}
+
+function barras(x, y, w, o, p) {
+  let s = "";
+  (o.items || []).slice(0, 4).forEach((it, i) => {
+    const yy = y + i * 120, c = kleur(it.color || ["rood", "groen", "blauw", "geel"][i]), v = lim(Number(it.valor ?? 50) / 100);
+    const q = salida(lim((p - i * 0.15) / 0.7));
+    s += `<text x="${x}" y="${yy}" font-weight="700" font-size="34" fill="#FFFFFF">${esc(it.label || "")}</text><text x="${x + w}" y="${yy}" text-anchor="end" font-weight="700" font-size="34" fill="${c}">${Math.round(v * 100 * q)}%</text>`;
+    s += `<rect x="${x}" y="${yy + 22}" width="${w}" height="22" rx="11" fill="#1C2232"/><rect x="${x}" y="${yy + 22}" width="${f1(w * v * q)}" height="22" rx="11" fill="${c}" filter="url(#gloed)"/>`;
+  });
+  return s;
+}
+
+function numero(x, y, o, p) {
+  const q = muelle(lim(p / 0.8));
+  const valor = String(o.valor ?? ""), tw = ancho(valor, 800, 150);
+  let s = `<g opacity="${f2(lim(p * 3))}" transform="translate(${f1(x)} ${f1(y)}) scale(${f2(0.7 + 0.3 * q)})">`;
+  const ancla = o.titulo ? -tw / 2 - 150 : -tw / 2;
+  s += `<text x="${f1(ancla)}" y="0" font-weight="800" font-size="150" fill="#FFFFFF" filter="url(#schaduw)">${esc(valor)}</text>`;
+  if (o.titulo) s += `<text x="${f1(ancla + tw + 34)}" y="-48" font-weight="700" font-size="42" fill="#FFFFFF">${esc(o.titulo)}</text><text x="${f1(ancla + tw + 34)}" y="-6" font-weight="300" font-size="30" fill="#AEB6C7">${esc(o.sub || "")}</text>`;
+  return s + `</g>`;
+}
+
+function pildora(x, y, texto, p, color = "#8A93A6", relleno = "rgba(8,10,16,0.75)") {
+  const w = ancho(texto, 700, 36) + 76, q = muelle(lim(p / 0.7));
+  return `<g opacity="${f2(lim(p * 3))}" transform="translate(${f1(x)} ${f1(y)}) scale(${f2(0.75 + 0.25 * q)})"><rect x="${f1(-w / 2)}" y="-38" width="${f1(w)}" height="76" rx="38" fill="${relleno}" stroke="${color}" stroke-width="3"/><text x="0" y="12" text-anchor="middle" font-weight="700" font-size="36" fill="#FFFFFF">${esc(texto)}</text></g>`;
+}
+
+function final(tl, botones) {
+  const [a, b] = botones && botones.length === 2 ? botones : ["wist ik al", "nieuw voor mij"];
+  let s = pildora(340, 1540, a, tramo(tl, 0.35, 0.5)) + pildora(740, 1540, b, tramo(tl, 0.5, 0.5), "#5ED3F3");
+  const toque = tramo(tl, 1.6, 0.5);
+  if (toque > 0 && toque < 1) s += `<circle cx="740" cy="1540" r="${f1(40 + 120 * toque)}" fill="none" stroke="#5ED3F3" stroke-width="4" opacity="${f2(1 - toque)}"/>`;
+  const p = tramo(tl, 0.8, 0.5), frase = "Schrijf een reactie…", n = Math.floor(frase.length * lim((tl - 1.0) / 1.2));
+  s += `<g opacity="${f2(lim(p * 2))}" transform="translate(0 ${f1((1 - salida(p)) * 30)})"><rect x="130" y="1648" width="820" height="100" rx="50" fill="rgba(8,10,16,0.85)" stroke="#5ED3F3" stroke-width="3" filter="url(#gloed)"/>`;
+  s += `<text x="180" y="1710" font-weight="300" font-size="34" fill="#AEB6C7">${esc(frase.slice(0, n))}${(tl * 2) % 1 < 0.5 ? "|" : ""}</text>`;
+  s += `<circle cx="895" cy="1698" r="34" fill="#5ED3F3"/><path d="M 878 1698 L 910 1698 M 896 1684 L 910 1698 L 896 1712" stroke="#05070C" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  return s;
+}
+
+// =============================== TEXTO PALABRA A PALABRA ===============================
+function palabrasDe(e) {
+  const fichas = String(e.voz || e.texto || "").split(/\s+/).filter(Boolean);
+  if (e.palabras && e.palabras.length) {   // con la puntuación de la frase escrita, si cuadran las palabras
+    return fichas.length === e.palabras.length ? e.palabras.map((w, i) => Object.assign({}, w, { p: fichas[i] })) : e.palabras;
+  }
+  const ws = String(e.voz || e.texto || "").split(/\s+/).filter(Boolean), d = Math.max(0.5, e.fin - e.inicio - 0.4);
+  return ws.map((p, i) => ({ p, a: e.inicio + 0.1 + (d * i) / ws.length, b: e.inicio + 0.1 + (d * (i + 1)) / ws.length }));
+}
+function trozos(ws, clave) {
+  const out = []; let cur = [], w = 0;
+  for (const x of ws) {
+    const k = clave.has(norm(x.p)), pw = ancho(x.p, k ? 700 : 300, 74) + (k ? 40 : 0);
+    if (cur.length && (cur.length >= 4 || w + 24 + pw > 930)) { out.push(cur); cur = []; w = 0; }
+    cur.push(x); w += (cur.length > 1 ? 24 : 0) + pw;
+  }
+  if (cur.length) out.push(cur);
+  if (out.length > 1 && out[out.length - 1].length === 1) { const u = out.pop(); out[out.length - 1].push(u[0]); }
+  return out;
+}
+function texto(e, t) {
+  const clave = new Set((e.clave || []).flatMap(c => String(c).split(/\s+/)).map(norm).filter(Boolean));
+  const ts = trozos(palabrasDe(e), clave);
+  let i = ts.findIndex((c, k) => k === ts.length - 1 || t < ts[k + 1][0].a - 0.06);
+  if (i < 0) i = ts.length - 1;
+  const c = ts[i], piezas = c.map(x => ({ x, k: clave.has(norm(x.p)) }));
+  piezas.forEach(o => { o.w = ancho(o.x.p, o.k ? 700 : 300, 74) + (o.k ? 40 : 0); });
+  const lineas = [[]]; let lw = 0;
+  piezas.forEach(o => { if (lineas[lineas.length - 1].length && lw + 24 + o.w > 960) { lineas.push([]); lw = 0; } lineas[lineas.length - 1].push(o); lw += (lineas[lineas.length - 1].length > 1 ? 24 : 0) + o.w; });
+  let s = "";
+  lineas.forEach((L, li) => {
+    const total = L.reduce((a, o) => a + o.w, 0) + 24 * (L.length - 1);
+    let x = 540 - total / 2; const y = 352 + li * 104 - (lineas.length - 1) * 40;
+    L.forEach(o => {
+      const q = salida(tramo(t, o.x.a - 0.05, 0.2));
+      if (q > 0) {
+        const dy = (1 - q) * 16;
+        if (o.k) {
+          const qb = muelle(tramo(t, o.x.a - 0.05, 0.4));
+          s += `<g opacity="${f2(q)}" transform="translate(0 ${f1(dy)})"><rect x="${f1(x + (1 - qb) * o.w / 2)}" y="${y - 66}" width="${f1(o.w * qb)}" height="90" rx="16" fill="rgba(6,9,16,0.8)" stroke="#5ED3F3" stroke-width="3.5"/>`;
+          s += `<text x="${f1(x + 20)}" y="${y}" font-weight="700" font-size="74" fill="#FFFFFF">${esc(o.x.p)}</text></g>`;
+        } else s += `<text x="${f1(x)}" y="${f1(y + dy)}" font-weight="300" font-size="74" fill="#FFFFFF" opacity="${f2(q * 0.92)}">${esc(o.x.p)}</text>`;
+      }
+      x += o.w + 24;
+    });
+  });
+  return s;
+}
+
+// =============================== ESCENA ===============================
+const PLANOS = {
+  grande: { x: 540, y: 1010, k: 1.3 }, dato: { x: 540, y: 850, k: 0.95 }, grafica: { x: 845, y: 640, k: 0.42 },
+  lado: { x: 300, y: 1000, k: 0.72 }, banda: { x: 540, y: 1010, k: 1 }, final: { x: 540, y: 1000, k: 1.05 },
+};
+const ANCLAS = { arriba: [0, -190], abajo: [0, 190], izquierda: [-170, 0], derecha: [170, 0], centro: [0, 0] };
+const PUNTOS = {
+  cerebro: { cerebelo: [118, 106], delante: [-150, -40], detras: [150, -60], tronco: [44, 200] },
+  estomago: { acido: [10, 120], pared: [-205, 0], esofago: [-40, -260], salida: [270, -20] },
+  pie: { talon: [-20, 200], dedos: [-90, -200], planta: [-20, 40] },
+  corazon: { aorta: [130, -180], ventriculo: [-60, 80] }, ojo: { pupila: [0, 0], iris: [62, 0] },
+  celula: { nucleo: [-24, -12], membrana: [196, 0], mitocondria: [90, 60] }, diente: { esmalte: [-90, -100], raiz: [-50, 200] },
+  tierra: { atmosfera: [150, -150] }, sol: { nucleo: [0, 0], corona: [0, -240] }, planeta: { anillos: [260, -90] },
+  bombilla: { filamento: [0, -20] }, cohete: { motor: [0, 230], ventana: [0, -40] }, pulmones: { traquea: [0, -200] },
+};
+
+function escena(e, t, prevIlu) {
+  const T = t, tl = t - e.inicio, d = Math.max(0.5, e.fin - e.inicio), c = kleur(e.color);
+  const plano = PLANOS[e.plano] ? e.plano : "grande", P = PLANOS[plano];
+  let s = `<rect width="1080" height="1920" fill="#05070C"/>`;
+  s += `<ellipse cx="${P.x === 845 ? 540 : P.x === 300 ? 540 : P.x}" cy="${plano === "grafica" ? 1000 : P.y}" rx="760" ry="900" fill="${gloedVan(c)}"/>`;
+  for (let i = 0; i < 40; i++) {
+    const x = azar(i) * 1080, y = ((azar(i + 50) * 1920 - T * (8 + azar(i + 3) * 14)) % 1920 + 1920) % 1920;
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.5 + azar(i + 9) * 3)}" fill="#FFFFFF" opacity="${f2(0.05 + 0.12 * azar(i + 7))}"/>`;
+  }
+  const entra = salida(tramo(tl, 0, 0.55)), z = (0.94 + 0.06 * entra) * (1 + 0.04 * suave(lim(tl / d)));
+  const flota = i => Math.sin(T * 1.1 + i) * 7;
+  const dibuja = (nombre, x, y, k, i = 0) => {
+    if (!nombre) return "";
+    const datos = Object.assign({}, e, { __tl: tl });
+    if (String(nombre).startsWith("emoji:")) return `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${f2(k * z)})">${emoji(nombre.slice(6), c)}</g>`;
+    return ILU[nombre] ? `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${f2(k * z)})">${ILU[nombre](T, datos)}</g>` : "";
+  };
+  let m = "";
+  if (plano === "lado") {
+    m += dibuja(e.ilustracion, 300, 1000, 0.72, 0) + dibuja(e.ilustracion2, 790, 1000, 0.72, 2);
+  } else if (plano === "banda") {
+    m += dibuja(e.ilustracion || "tejido", 540, 1010, 1);
+  } else {
+    m += dibuja(e.ilustracion, P.x, P.y, P.k);
+    if (e.ilustracion2 && (ILU[e.ilustracion2] || String(e.ilustracion2).startsWith("emoji:"))) {
+      const k2 = e.ilustracion2 === "pluma" ? P.k * 0.85 : P.k * 0.42;
+      const off = e.ilustracion2 === "pluma" ? [-175, -70] : plano === "grafica" ? [-860, 0] : [235, -235];
+      m += dibuja(e.ilustracion2, P.x + off[0] * P.k, P.y + off[1] * P.k, k2, 2);
+    }
+  }
+  s += `<g opacity="${f2(lim(entra * 1.6))}">${m}</g>`;
+  // componentes
+  (e.componentes || []).slice(0, 3).forEach((o, i) => {
+    const p = tramo(tl, 0.45 + 0.35 * i, 1.4), yb = plano === "dato" ? 1330 + i * 40 : plano === "grafica" ? 900 + i * 300 : 1480;
+    if (o.tipo === "onda") s += onda(140, yb, 800, o.label || "", kleur(o.color || "blauw"), Math.max(0, Math.min(5, o.picos ?? 3)), p);
+    else if (o.tipo === "deslizador") s += deslizador(150, yb, 780, o, p);
+    else if (o.tipo === "medidor") s += medidor(540, yb + 40, o, p);
+    else if (o.tipo === "escala") s += escala(150, yb + 60, 780, o, p);
+    else if (o.tipo === "barras") s += barras(150, yb - 40, 780, o, p);
+    else if (o.tipo === "numero") s += numero(540, yb + 50, o, p);
+    else if (o.tipo === "pildora") s += pildora(540, yb + 40, o.texto || "", p);
+    else if (o.tipo === "etiqueta") {
+      const [ax, ay] = (PUNTOS[e.ilustracion] || {})[o.punto] || ANCLAS[o.punto] || ANCLAS.centro, k = P.k * z, x0 = P.x + ax * k, y0 = P.y + ay * k;
+      const tw = Math.max(ancho(o.texto || "", 700, 38), ancho(o.sub || "", 300, 27)) + 30;
+      let der = (o.lado || (ax <= 0 ? "izquierda" : "derecha")) === "derecha";
+      if (der && x0 + 170 + tw > 1040) der = false;
+      if (!der && x0 - 170 - tw < 40) der = true;
+      const x1 = der ? Math.min(1040 - tw, x0 + 170) : Math.max(40 + tw, x0 - 170), y1 = Math.min(1600, y0 + (ay < 0 ? -60 : 150));
+      s += etiquetaLinea(x0, y0, x1, y1, o.texto || "", o.sub || "", p);
+    }
+  });
+  if (plano === "final") s += final(tl, e.botones);
+  s += `<rect width="1080" height="1920" fill="url(#gVignet)"/>`;
+  return s + texto(e, t);
+}
+
+window.pintar = function (t) {
+  const g = window.GUION, E = g.escenas;
+  DEFS = {};
+  let i = E.findIndex(e => t < e.fin);
+  if (i < 0) i = E.length - 1;
+  let s = escena(E[i], t);
+  const tl = t - E[i].inicio;
+  if (i > 0 && tl < 0.3) s += `<g opacity="${f2(1 - suave(tl / 0.3))}">${escena(E[i - 1], E[i - 1].fin - 0.001)}</g>`;
+  // cabecera: WIST JE DAT y una barrita que avanza con el vídeo
+  const pr = lim(t / (g.duracion || 1));
+  s += `<text x="540" y="168" text-anchor="middle" font-weight="600" font-size="24" letter-spacing="10" fill="#8B93A3">${esc(g.cabecera || "WIST JE DAT")}</text>`;
+  s += `<rect x="440" y="192" width="200" height="4" rx="2" fill="#FFFFFF" opacity="0.12"/><rect x="440" y="192" width="${f1(200 * pr)}" height="4" rx="2" fill="#5ED3F3"/>`;
+  if (t > g.duracion - 0.4) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.4)) / 0.4))}"/>`;
+  document.getElementById("scene").innerHTML = `<defs>${Object.values(DEFS).join("")}</defs>` + s;
+};
+window.listo = Promise.all([300, 600, 700, 800].map(w => document.fonts.load(`${w} 60px Poppins`))).then(() => document.fonts.ready);
+</script>
+</body></html>

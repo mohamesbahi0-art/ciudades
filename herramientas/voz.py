@@ -65,6 +65,20 @@ def _eleven(texto, voz_id, velocidad, carpeta):
     return palabras
 
 
+async def _edge(texto, voz, velocidad, tono, carpeta, proxy):
+    com = edge_tts.Communicate(texto, voz, rate=velocidad, pitch=tono, boundary="WordBoundary", proxy=proxy)
+    palabras = []
+    with open(os.path.join(carpeta, "voz.mp3"), "wb") as audio:
+        async for trozo in com.stream():
+            if trozo["type"] == "audio":
+                audio.write(trozo["data"])
+            elif trozo["type"] == "WordBoundary":
+                ini = trozo["offset"] / 1e7
+                palabras.append({"palabra": trozo["text"], "inicio": round(ini, 3),
+                                 "fin": round(ini + trozo["duration"] / 1e7, 3)})
+    return palabras
+
+
 async def generar(texto, voz, velocidad, tono, carpeta):
     if str(voz).startswith("eleven:"):
         voz, _, gratis = str(voz).partition("|")
@@ -81,17 +95,16 @@ async def generar(texto, voz, velocidad, tono, carpeta):
     if os.environ.get("EDGE_TTS_CA"):
         ec._SSL_CTX = ssl.create_default_context(cafile=os.environ["EDGE_TTS_CA"])
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    com = edge_tts.Communicate(texto, voz, rate=velocidad, pitch=tono, boundary="WordBoundary", proxy=proxy)
-    palabras = []
     os.makedirs(carpeta, exist_ok=True)
-    with open(os.path.join(carpeta, "voz.mp3"), "wb") as audio:
-        async for trozo in com.stream():
-            if trozo["type"] == "audio":
-                audio.write(trozo["data"])
-            elif trozo["type"] == "WordBoundary":
-                ini = trozo["offset"] / 1e7
-                palabras.append({"palabra": trozo["text"], "inicio": round(ini, 3),
-                                 "fin": round(ini + trozo["duration"] / 1e7, 3)})
+    try:
+        palabras = await _edge(texto, voz, velocidad, tono, carpeta, proxy)
+    except edge_tts.exceptions.NoAudioReceived:
+        # algunas voces (p. ej. nl-NL-MaartenNeural) no aceptan ciertas velocidades o tonos y no devuelven nada:
+        # mejor la voz a su ritmo normal que quedarse sin vídeo
+        if (velocidad, tono) == ("+0%", "+0Hz"):
+            raise
+        print(f"voz: {voz} no acepta {velocidad} {tono}; se graba a ritmo normal", flush=True)
+        palabras = await _edge(texto, voz, "+0%", "+0Hz", carpeta, proxy)
     with open(os.path.join(carpeta, "palabras.json"), "w", encoding="utf-8") as f:
         json.dump(palabras, f, ensure_ascii=False, indent=1)
     return palabras
