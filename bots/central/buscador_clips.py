@@ -37,9 +37,83 @@ def segundos(iso):
     return sum(int(x or 0) * k for x, k in zip(m.groups(), (3600, 60, 1))) if m else 0
 
 
+VER = """Mira este vídeo de GTA (tiene licencia Creative Commons: se puede reutilizar diciendo de quién es).
+Busca los {n} MEJORES momentos para Shorts de 8 a 35 segundos. Para cada uno, piensa en qué canal encaja:
+- "clips": un momento gracioso, épico o increíble del juego;
+- "curios": un detalle o secreto de GTA 6 que casi nadie sabe;
+- "versus": una comparación entre GTA 5 y GTA 6.
+Prefiere momentos donde NO se vea la cara del youtuber (o se vea poco). No elijas trozos con anuncios, intros ni
+pantallas de espera.
+Devuelve SOLO un JSON: {{"momentos": [{{"desde": 0, "hasta": 0, "para": "clips|curios|versus", "que_pasa": "una frase",
+"por_que_engancha": "una frase", "sale_youtuber": "no | poco (dónde) | mucho", "gancho": "texto de 2 a 5 palabras para el principio",
+"nota": 0}}]}}  (nota de 0 a 100: cuánto crees que engancharía)"""
+
+
+def ver_y_elegir(candidatos, cuantos=6):
+    """Gemini «ve» por su enlace los vídeos de los creadores más famosos y elige los mejores momentos (no se descarga
+    nada). Deja la lista en estado/clips/para_grabar.json; el dueño los graba con el móvil y los deja en el buzón."""
+    import json
+    import urllib.request
+    from bots.comun import gemini
+    anterior = privado.leer(os.path.join("estado", "clips", "para_grabar.json"), {}) or {}
+    lista = anterior.get("momentos", [])
+    vistos = {m["video"] for m in lista}
+    # 2 vídeos como mucho por creador, los creadores con más suscriptores primero, vídeos de 20 s a 20 min
+    por_creador, elegidos = {}, []
+    for c in sorted(candidatos, key=lambda c: (c["suscriptores_creador"], c["visitas"]), reverse=True):
+        if c["id"] in vistos or not 20 <= c["segundos"] <= 1200 or por_creador.get(c["canal_id"], 0) >= 2:
+            continue
+        por_creador[c["canal_id"]] = por_creador.get(c["canal_id"], 0) + 1
+        elegidos.append(c)
+        if len(elegidos) >= cuantos:
+            break
+    numero = max([int(m["codigo"][2:]) for m in lista] + [0])
+    for c in elegidos:
+        cuerpo = {"contents": [{"parts": [{"file_data": {"file_uri": f"https://www.youtube.com/watch?v={c['id']}"}},
+                                          {"text": VER.format(n=2 if c["segundos"] < 90 else 3)}]}],
+                  "generationConfig": {"temperature": 0.3, "responseMimeType": "application/json"}}
+        r = None
+        for modelo in [m for m in gemini.BUENOS if m not in gemini.AGOTADOS]:
+            req = urllib.request.Request(gemini.URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
+                                         headers={"Content-Type": "application/json",
+                                                  "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+            try:
+                with urllib.request.urlopen(req, timeout=300) as resp:
+                    texto = "".join(p.get("text", "") for p in json.load(resp)["candidates"][0]["content"]["parts"])
+                r = gemini._limpiar_json(texto)
+                break
+            except Exception as e:      # sin cupo, saturado o tarda: el siguiente modelo
+                if getattr(e, "code", None) == 429:
+                    gemini.AGOTADOS.add(modelo)
+        for m in (r or {}).get("momentos", []) if isinstance(r, dict) else []:
+            try:
+                desde, hasta = float(m["desde"]), float(m["hasta"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not 5 <= hasta - desde <= 45 or hasta > c["segundos"] + 1:
+                continue
+            numero += 1
+            lista.append({"codigo": f"C-{numero:03d}", "video": c["id"], "creador": c["canal"],
+                          "suscriptores_creador": c["suscriptores_creador"], "titulo_original": c["titulo"],
+                          "enlace": f"https://youtu.be/{c['id']}?t={int(desde)}", "desde": desde, "hasta": hasta,
+                          "para": m.get("para", "clips"), "que_pasa": m.get("que_pasa", ""),
+                          "por_que": m.get("por_que_engancha", ""), "sale_youtuber": m.get("sale_youtuber", ""),
+                          "gancho": m.get("gancho", ""), "nota": m.get("nota"), "licencia": "CC BY",
+                          "estado": "por_grabar", "elegido": privado.ahora()})
+    lista.sort(key=lambda m: (m["estado"] != "por_grabar", -(m.get("nota") or 0)))
+    privado.guardar_estado("clips/para_grabar.json", {"momentos": lista})
+    c = privado.cuaderno("buscador_clips")
+    c.apuntar("momentos", {"vistos": len(elegidos), "momentos": len(lista) - len(anterior.get("momentos", []))})
+    c.guardar()
+    gemini.apuntar_portero()
+    return lista
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dias", type=int, default=30)
+    p.add_argument("--videos", type=int, default=6, help="cuántos vídeos ve Gemini en esta pasada")
+    p.add_argument("--sin-ver", action="store_true", help="solo busca, sin que Gemini vea los vídeos")
     a = p.parse_args()
     yt = servicio()
     desde = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=a.dias)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -60,8 +134,19 @@ def main():
                                "visitas": int(v.get("statistics", {}).get("viewCount", 0)),
                                "idioma": v["snippet"].get("defaultAudioLanguage") or v["snippet"].get("defaultLanguage")})
     candidatos.sort(key=lambda c: c["visitas"], reverse=True)
+    # Los creadores más famosos primero (por suscriptores)
+    canales = sorted({c["canal_id"] for c in candidatos})
+    subs = {}
+    for i in range(0, len(canales), 50):
+        r = yt.channels().list(id=",".join(canales[i:i + 50]), part="statistics").execute()
+        subs.update({x["id"]: int(x["statistics"].get("subscriberCount", 0)) for x in r.get("items", [])})
+    for c in candidatos:
+        c["suscriptores_creador"] = subs.get(c["canal_id"], 0)
     privado.guardar_estado("clips/candidatos.json", {"busquedas": BUSQUEDAS, "desde": desde, "licencia": "CC BY",
                                                      "candidatos": candidatos})
+    if not a.sin_ver:
+        momentos = ver_y_elegir(candidatos, a.videos)
+        print(f"buscador de clips: {len(momentos)} momentos elegidos para grabar")
     cuaderno = privado.cuaderno("buscador_clips")
     cuaderno.apuntar("busqueda", {"encontrados": len(candidatos), "dias": a.dias})
     cuaderno.guardar()

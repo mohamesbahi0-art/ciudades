@@ -18,7 +18,7 @@ jobs:
   buscar:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Sacar el repositorio privado
@@ -40,6 +40,7 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
           YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python bots/central/buscador_clips.py
       - name: Guardar en el repositorio privado
         if: always()
