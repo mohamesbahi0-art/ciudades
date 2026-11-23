@@ -108,6 +108,12 @@ def main():
     plan, esperan = planear(ajustes, cfg, revs, solo)
     ronda["plan"] = [k for k, _ in plan][:maximo]
     ronda["esperan"] = esperan
+    barrios_hoy = [k for k in ronda["plan"] if k in cfg.get("barrios", {})]
+    if barrios_hoy:                          # el Robot del vídeo diario prepara el vídeo de cada barrio
+        diario = privado.cuaderno("robot_video_diario")
+        for k in barrios_hoy:
+            diario.apuntar("video_del_dia", {"barrio": k})
+        diario.guardar()
     organizador = privado.cuaderno("organizador")
     organizador.apuntar("ronda", {"plan": ronda["plan"], "esperan": esperan, "prueba": a.prueba})
     organizador.guardar()

@@ -97,6 +97,10 @@ def main():
     alertas = cerebro.virales(ahora)                # el Detector de virales
     datos = {"fecha": privado.ahora(), "youtube": youtube(cfg, ahora), "instagram_tiktok": redes(cfg),
              "medidos_hoy": medidas, "liga": tabla_liga, "despegando": alertas}
+    torre = privado.cuaderno("torre_visualizaciones")    # la Torre cuenta las visitas de cada canal
+    torre.apuntar("visitas", {"canales": {k: v.get("visitas_24h") for k, v in datos["youtube"].items()
+                                          if v.get("visitas_24h") is not None}})
+    torre.guardar()
     cuaderno = privado.cuaderno("analista_cuentas")
     informe = None
     try:

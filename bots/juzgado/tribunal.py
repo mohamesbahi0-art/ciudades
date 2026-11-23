@@ -123,16 +123,21 @@ def juzgar(video, guion, canal, lecciones, carpeta):
         sala = gemini.preguntar(SALAS.format(defensa=alegatos.get("defensa", ""), fiscalia=alegatos.get("fiscalia", ""),
                                              jueces=jueces_txt, **comun), imagenes=imagenes, solo_bueno=True,
                                 temperatura=0.3)
-    except gemini.SinIA:
+        if not isinstance(alegatos, dict) or not isinstance(sala, dict):
+            raise gemini.SinIA("la IA no contestó con la forma pedida")
+    except Exception:                      # sin IA o con respuesta rara: juicio rápido del Juez de guardia
         v = juez_guardia.juzgar(video, guion, canal, lecciones, carpeta + "-guardia")
         v["tribunal"] = "juicio rápido (la IA no daba para el juicio completo)"
         return v
-    fallos += [str(x) for x in alegatos.get("fallos_graves", []) if x]
+    fallos += [str(x) for x in alegatos.get("fallos_graves", []) or [] if x]
     votos = []
-    for voto in sala.get("votos", []):
-        k = voto.get("juez")
+    for voto in sala.get("votos", []) or []:
+        k = voto.get("juez") if isinstance(voto, dict) else None
         if k in JUECES:
-            nota = max(0, min(100, int(voto.get("nota", 0))))
+            try:
+                nota = max(0, min(100, int(voto.get("nota", 0))))
+            except (TypeError, ValueError):
+                continue
             votos.append({"juez": JUECES[k]["nombre"], "clave": k, "voto": "sube" if voto.get("voto") == "sube" else "no",
                           "nota": nota, "razon": voto.get("razon", "")})
     if not votos:

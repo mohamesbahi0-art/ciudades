@@ -53,12 +53,16 @@ def juzgar(video, guion, canal, lecciones, carpeta):
     imagenes = [os.path.join(carpeta, f["archivo"]) for f in datos["fotogramas"]]
     try:
         v = gemini.preguntar(texto, imagenes=imagenes, solo_bueno=True, temperatura=0.3)
-        notas = {k: max(0, min(25, int(v.get(k, 0)))) for k in ("gancho", "retencion", "claridad", "final")}
+        if isinstance(v, list) and v:
+            v = v[0]
+        if not isinstance(v, dict):
+            raise gemini.SinIA("respuesta con forma rara")
+        notas = {k: max(0, min(25, int(v.get(k, 0) or 0))) for k in ("gancho", "retencion", "claridad", "final")}
         fallos += [str(x) for x in v.get("fallos_graves", []) if x]
         total = sum(notas.values())
         veredicto = "suspendido" if fallos or total < MINIMO else "aprobado"
         resultado = dict(notas, total=total, veredicto=veredicto, fallos_graves=fallos, consejo=v.get("consejo", ""))
-    except gemini.SinIA as e:
+    except (gemini.SinIA, TypeError, ValueError) as e:
         resultado = {"veredicto": "suspendido" if fallos else "sin_juicio", "fallos_graves": fallos,
                      "motivo": f"juicio sin IA: {e}"}
     resultado["medidas"] = medidas

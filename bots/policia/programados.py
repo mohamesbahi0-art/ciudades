@@ -117,6 +117,9 @@ def main():
             print(f"{clave}: {r['suscriptores']} suscriptores · {len(r['programados'])} programados "
                   f"(hasta {r['hasta'] or '—'}) · {r['programados24h']} en 24 h")
     jefes.guardar()
+    lector = privado.cuaderno("lector_youtube")              # el Lector de YouTube: leyó cada canal con su permiso
+    lector.apuntar("lectura", {"canales": sum(1 for v in resumen.values() if not v.get("error") and v.get("conectado", True))})
+    lector.guardar()
     vigilante = privado.cuaderno("vigilante_permisos")      # el Vigilante de permisos: qué canal puede subir y cuál no
     vigilante.apuntar("revision", {"permisos": permisos,
                                    "caducados": [k for k, v in permisos.items() if v == "caducado"]})

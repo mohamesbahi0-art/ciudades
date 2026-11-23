@@ -1,0 +1,25 @@
+# Latido: GitHub apaga los turnos con horario de un repositorio público si pasan 60 días sin cambios en él. Los robots
+# solo escriben en el repositorio privado, así que cada semana se deja aquí un cambio pequeño para que nunca se apaguen.
+name: Latido
+on:
+  schedule:
+    - cron: "41 5 * * 3"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  latido:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dejar el latido
+        run: |
+          mkdir -p estado-publico
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > estado-publico/latido.txt
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          git add estado-publico/latido.txt
+          git commit -q -m "latido semanal (para que GitHub no apague los turnos)"
+          for i in 1 2 3; do git pull -q --rebase && git push -q && exit 0; sleep 5; done
+          exit 1
