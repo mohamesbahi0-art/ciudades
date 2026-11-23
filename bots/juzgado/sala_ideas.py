@@ -3,7 +3,7 @@ funcionaría y la fiscalía por qué no; los tres jueces votan y gana la mejor. 
 Si la IA no contesta, se queda la primera idea (ningún canal se queda sin vídeos)."""
 import datetime as dt
 
-from bots.comun import gemini, privado
+from bots.comun import gemini, ia, privado
 
 PLANTILLA = """Eres la Sala de Ideas del Juzgado de «{nombre}» ({tema}). Estas son las ideas para el próximo vídeo corto:
 {ideas}
@@ -24,9 +24,9 @@ def elegir(clave, canal, ideas, pruebas=""):
         return (ideas[0] if ideas else None), None
     lista = "\n".join(f"{n}. {i.get('titulo')} — {i.get('idea')} (gancho: {i.get('gancho')})" for n, i in enumerate(ideas, 1))
     try:
-        r = gemini.preguntar(PLANTILLA.format(nombre=canal["nombre"], tema=canal.get("tema", ""), ideas=lista,
-                                              pruebas=pruebas or "- todavía hay pocos datos"), temperatura=0.4,
-                             ligero_primero=True)
+        r = ia.preguntar(PLANTILLA.format(nombre=canal["nombre"], tema=canal.get("tema", ""), ideas=lista,
+                                          pruebas=pruebas or "- todavía hay pocos datos"), papel="ideas", temperatura=0.4,
+                         ligero_primero=True)
         juicios = [j for j in r.get("juicios", []) if isinstance(j, dict)]
     except (gemini.SinIA, AttributeError):
         return ideas[0], None

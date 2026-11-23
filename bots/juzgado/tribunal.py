@@ -20,7 +20,7 @@ import statistics
 import subprocess
 import sys
 
-from bots.comun import gemini, privado
+from bots.comun import gemini, ia, privado
 from bots.juzgado import juez_guardia
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -136,13 +136,13 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
              "medidas": json.dumps(medidas, ensure_ascii=False),
              "exigencia": exigencia(canal)}
     try:
-        alegatos = gemini.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal),
-                                                    lecciones=lecciones, **comun), imagenes=imagenes, solo_bueno=True,
-                                    temperatura=0.5, audio=audio)
+        alegatos = ia.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal),
+                                                lecciones=lecciones, **comun), papel="juez", imagenes=imagenes,
+                                solo_bueno=True, temperatura=0.5, audio=audio)
         jueces_txt = "\n".join(f"- {k}: {j['nombre']} ({j['sala']}): {j['especialidad']}" for k, j in JUECES.items())
-        sala = gemini.preguntar(SALAS.format(defensa=alegatos.get("defensa", ""), fiscalia=alegatos.get("fiscalia", ""),
-                                             jueces=jueces_txt, **comun), imagenes=imagenes, solo_bueno=True,
-                                temperatura=0.3, audio=audio)
+        sala = ia.preguntar(SALAS.format(defensa=alegatos.get("defensa", ""), fiscalia=alegatos.get("fiscalia", ""),
+                                         jueces=jueces_txt, **comun), papel="juez", imagenes=imagenes, solo_bueno=True,
+                            temperatura=0.3, audio=audio)
         if not isinstance(alegatos, dict) or not isinstance(sala, dict):
             raise gemini.SinIA("la IA no contestó con la forma pedida")
     except Exception:                      # sin IA o con respuesta rara: juicio rápido del Juez de guardia
@@ -174,7 +174,8 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     veredicto = "aprobado" if sube else "suspendido"
     resultado = {"veredicto": veredicto, "total": total, "fallos_graves": fallos, "consejo": sala.get("consejo", ""),
                  "defensa": alegatos.get("defensa", ""), "fiscalia": alegatos.get("fiscalia", ""), "votos": votos,
-                 "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo"}
+                 "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo",
+                 "cerebro": ia.quien().get("motor", "gemini")}
     with open(os.path.join(carpeta, "veredicto.json"), "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=1)
     return resultado
@@ -195,7 +196,7 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "sentencia": "sube" if v["veredicto"] == "aprobado" else "no_sube", "juez": v["juez_mayor"],
         "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"), "resumen": resumen, "consejo": v.get("consejo"),
         "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
-        "nota": v["total"], "minimo": NOTA_MINIMA})
+        "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro")})
     for robot, que in (("detectives", "pruebas"), ("abogados", "alegatos"), ("jueces_sala", "votos"),
                        ("juez_mayor", "sentencia")):
         c = privado.cuaderno(robot)

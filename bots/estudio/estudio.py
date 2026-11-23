@@ -5,7 +5,7 @@ que dice la voz: el estadio lleno cuando triunfa, las gradas vacías cuando entr
 y maniquíes grises (la gente que habla o duda), y objetos que significan algo (trofeo, calendario, número grande, lista de
 tareas, bocadillo con una pregunta...). Arriba va la frase con las palabras clave resaltadas.
 
-Gemini escribe el guion por escenas eligiendo de una lista cerrada de fondos, acciones y objetos; la voz se graba escena a
+La IA (Claude o Gemini) escribe el guion por escenas eligiendo de una lista cerrada de fondos, acciones y objetos; la voz se graba escena a
 escena (edge-tts) para que la imagen vaya clavada con lo que se dice; plato.html dibuja cada fotograma (render.js, con el
 navegador) y ffmpeg junta voz, música compuesta por nosotros (herramientas/musica.py) y efectos hechos por nosotros.
 
@@ -26,7 +26,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
 import musica  # noqa: E402
 import voz as locutor  # noqa: E402
-from bots.comun import gemini, privado  # noqa: E402
+from bots.comun import ia, privado  # noqa: E402
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 FORMATOS = ("famoso",)
@@ -199,7 +199,7 @@ def _objeto(o, actores):
 
 
 def limpiar(g):
-    """Deja el guion de Gemini dentro de lo que sabe dibujar el plató (corrige o quita lo raro en vez de fallar)."""
+    """Deja el guion de la IA dentro de lo que sabe dibujar el plató (corrige o quita lo raro en vez de fallar)."""
     f = g.get("famoso") or {}
     g["famoso"] = {"nombre": str(f.get("nombre") or "ÍDOLO").upper()[:14], "piel": _hex(f.get("piel"), "#C68B5E"),
                    "pelo": f.get("pelo") if f.get("pelo") in PELOS else "corto",
@@ -246,7 +246,7 @@ def guionizar(canal, lecciones):
                              ejemplo=json.dumps(EJEMPLO, ensure_ascii=False), pelos="|".join(PELOS))
     ultimo = None
     for _ in range(3):
-        g = gemini.preguntar(texto, temperatura=0.95)
+        g = ia.preguntar(texto, papel="guionista", temperatura=0.95)
         if isinstance(g, list) and g:
             g = g[0]
         try:
@@ -255,7 +255,7 @@ def guionizar(canal, lecciones):
         except (ValueError, TypeError, KeyError) as e:
             ultimo = e
         texto += "\n\nEl intento anterior no tenía la forma pedida. Devuelve SOLO el JSON, con 6 a 8 escenas."
-    raise ValueError(f"Gemini no dio un guion válido para el estudio ({ultimo})")
+    raise ValueError(f"La IA no dio un guion válido para el estudio ({ultimo})")
 
 
 def _duracion(ruta):
@@ -393,6 +393,7 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     nombre, m = formato_de(canal, formato or (guion or {}).get("formato"))
     avisar(f"estudio: guion «{nombre}»")
     g = m.limpiar(json.loads(json.dumps(guion))) if guion else m.guionizar(canal, lecciones)
+    g["cerebro"] = "a mano" if guion else ia.quien().get("motor", "gemini")   # quién escribió el guion
     avisar("estudio: voz escena a escena")
     voz = voz_por_escenas(g, carpeta, canal)
     g["voz_motor"] = locutor.MOTOR.get("motor", "edge")
@@ -437,7 +438,7 @@ def apuntar(clave, g):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--canal", required=True)
-    p.add_argument("--guion", help="un guion ya hecho (JSON) en vez de pedírselo a Gemini")
+    p.add_argument("--guion", help="un guion ya hecho (JSON) en vez de pedírselo a la IA")
     p.add_argument("--salida", default=None)
     a = p.parse_args()
     canal = privado.canal(privado.resolver(a.canal))

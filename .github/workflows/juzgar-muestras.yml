@@ -34,6 +34,7 @@ jobs:
           PRIVADO: privado
           MEMORIA_DIR: privado/memoria
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python pruebas/juzgar_muestras.py peticiones/juzgar.json
       - name: Guardar en el repositorio privado
         if: always()

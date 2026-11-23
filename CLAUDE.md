@@ -16,6 +16,7 @@ Las claves y los permisos van en los secretos de GitHub. Los datos privados (la 
 
 - `herramientas/`: programas genéricos y probados (voz, subtítulos, portadas, medidas, recortes, subida, avisos y análisis).
 - `bots/`: el código de cada ciudad. `bots/central/fabrica.py` es la ronda de la fábrica: vacía la cola, decide qué canales y barrios necesitan vídeo (huecos.py) y hace un turno por cada uno (turno.py: reportero → escritor → locutor → dibujante → montador → juez de guardia → subidor o bandeja «Para subir»). `bots/influencers/analista.py` es la Analista de cuentas.
+- `bots/comun/ia.py` decide quién piensa: las ideas y los guiones, Claude (`bots/comun/claude.py`, con los 100 $ al mes de API del plan del dueño, secreto `ANTHROPIC_API_KEY`, gastando cada día solo su parte); el juez, Gemini gratis con Claude de reserva; lo demás, Gemini. Sin llave o sin presupuesto, todo sigue con Gemini. Los topes están en `config/fabrica.json` → `claude` (repositorio privado) y el gasto en `estado/claude.json`; las cifras nunca van a los registros públicos.
 - `ciudades.json`: la lista pública de ciudades y bots, sin datos de canales.
 - `.github/workflows/`: los turnos que corren solos en GitHub, aunque Claude y el ordenador estén apagados:
   - `fabrica.yml`: cada 2 horas (minuto 17); también con `peticiones/fabrica.json` (`{"solo": "gta", "maximo": 1}`).

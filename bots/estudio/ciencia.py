@@ -13,7 +13,7 @@ import sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
-from bots.comun import gemini, privado  # noqa: E402
+from bots.comun import ia, privado  # noqa: E402
 from bots.estudio.estudio import SIN_MIEDO  # noqa: E402
 
 MUSICA = "calma"
@@ -279,7 +279,7 @@ def guionizar(canal, lecciones):
                              sin_miedo=SIN_MIEDO, vocabulario=VOCABULARIO, ejemplo=json.dumps(EJEMPLO, ensure_ascii=False))
     ultimo = None
     for _ in range(3):
-        g = gemini.preguntar(texto, temperatura=0.9)
+        g = ia.preguntar(texto, papel="guionista", temperatura=0.9)
         if isinstance(g, list) and g:
             g = g[0]
         try:
@@ -288,7 +288,7 @@ def guionizar(canal, lecciones):
         except (ValueError, TypeError, KeyError) as e:
             ultimo = e
         texto += "\n\nEl intento anterior no tenía la forma pedida. Devuelve SOLO el JSON, con 7 a 9 escenas."
-    raise ValueError(f"Gemini no dio un guion válido para «ciencia» ({ultimo})")
+    raise ValueError(f"La IA no dio un guion válido para «ciencia» ({ultimo})")
 
 
 def _clave_en(e):

@@ -3,7 +3,7 @@ final en bucle. Lee antes sus lecciones (memoria), los títulos ya hechos (para 
 noticias, las fuentes que le trae el Reportero (solo puede contar lo que dicen)."""
 import re
 
-from bots.comun import gemini
+from bots.comun import ia
 
 ESTILOS = {
     "historias": "historias cortas de ficción con un giro final que cambia todo lo anterior",
@@ -121,7 +121,7 @@ def ideas(canal, lecciones, titulos, fuentes=None, n=3):
                          lecciones=lecciones, titulos="\n".join(f"- {t}" for t in titulos) or "- (ninguno todavía)",
                          fuentes=f"\nFUENTES (lo único que puedes contar como hecho):\n{fuentes}\n" if fuentes else "",
                          **medidas(canal))
-    r = gemini.preguntar(texto, ligero_primero=True)
+    r = ia.preguntar(texto, papel="ideas", ligero_primero=True)
     lista = r.get("ideas", []) if isinstance(r, dict) else (r if isinstance(r, list) else [])
     return [i for i in lista if isinstance(i, dict) and i.get("idea")][:n]
 
@@ -146,12 +146,13 @@ def escribir(canal, lecciones, titulos, fuentes=None, intentos=3, idea=None):
                   f"Título propuesto: {idea.get('titulo')}\nGancho: {idea.get('gancho')}")
     ultimo = []
     for _ in range(intentos):
-        g = gemini.preguntar(texto)
+        g = ia.preguntar(texto, papel="guionista")
         if isinstance(g, list) and g:
             g = g[0]
         ultimo = validar(g, canal) if isinstance(g, dict) else ["no devolvió un JSON con la forma pedida"]
         if not ultimo:
             g["titulo"] = g["titulo"].strip()[:100]
+            g["cerebro"] = ia.quien().get("motor", "gemini")        # quién lo escribió (Claude o Gemini)
             return g
         texto += f"\n\nEl intento anterior no valía ({'; '.join(ultimo)}). Corrígelo."
     raise ValueError("El Escritor no consiguió un guion válido: " + "; ".join(ultimo))

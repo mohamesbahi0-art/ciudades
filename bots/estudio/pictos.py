@@ -2,7 +2,7 @@
 estilo del dueño. Fondo oscuro con brillo, monigotes lisos, iconos de línea, barras, contadores, gráficas, listas y texto
 que sale palabra a palabra con la voz (pictos.html lo dibuja).
 
-Gemini escribe el guion con una lista cerrada de iconos y piezas; limpiar() lo deja dentro de lo que sabe dibujar el
+La IA (Claude o Gemini, ver bots/comun/ia.py) escribe el guion con una lista cerrada de iconos y piezas; limpiar() lo deja dentro de lo que sabe dibujar el
 estudio; eventos() pone los sonidos justo cuando aparece cada cosa.
 """
 import json
@@ -10,7 +10,7 @@ import os
 import re
 import unicodedata
 
-from bots.comun import gemini, privado
+from bots.comun import ia, privado
 
 MUSICA = "energia"
 PALETAS = ("menta", "azul", "naranja")
@@ -250,7 +250,7 @@ def guionizar(canal, lecciones):
         vocabulario=VOCABULARIO, ejemplo=json.dumps(EJEMPLO, ensure_ascii=False))
     ultimo = None
     for _ in range(3):
-        g = gemini.preguntar(texto, temperatura=0.95)
+        g = ia.preguntar(texto, papel="guionista", temperatura=0.95)
         if isinstance(g, list) and g:
             g = g[0]
         try:
@@ -259,7 +259,7 @@ def guionizar(canal, lecciones):
         except (ValueError, TypeError, KeyError) as e:
             ultimo = e
         texto += "\n\nEl intento anterior no tenía la forma pedida. Devuelve SOLO el JSON, con 8 a 12 escenas."
-    raise ValueError(f"Gemini no dio un guion válido de pictos ({ultimo})")
+    raise ValueError(f"La IA no dio un guion válido de pictos ({ultimo})")
 
 
 def _cuando(e, palabra, defecto):

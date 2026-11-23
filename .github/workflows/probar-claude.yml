@@ -1,0 +1,48 @@
+# Prueba de la llave de Claude (los créditos de API del plan del dueño): una pregunta cortita que cuesta menos de un
+# céntimo. Se pone en marcha cuando Claude deja peticiones/probar_claude.json o a mano desde Actions. El resultado y el
+# gasto van a estado/claude.json del repositorio privado.
+name: Probar Claude
+on:
+  push:
+    paths:
+      - "peticiones/probar_claude.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: probar-claude
+  cancel-in-progress: false
+jobs:
+  probar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Probar la llave
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+        run: python pruebas/probar_claude.py
+      - name: Guardar el resultado en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('prueba de Claude') else 1)"

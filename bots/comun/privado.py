@@ -138,6 +138,22 @@ def fusionar(ruta, suyo, nuestro):
         if ruta.startswith("estado/historial/"):
             return sorted(_por_id(suyo, nuestro, clave="fecha"), key=lambda x: x.get("fecha", ""))
         return _por_id(suyo, nuestro)
+    if ruta == "estado/claude.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        # el gasto de Claude de dos turnos a la vez: cuentan las llamadas de los dos; el aviso, el del más reciente
+        nuevo, viejo = (nuestro, suyo) if (nuestro.get("actualizado") or "") >= (suyo.get("actualizado") or "") \
+            else (suyo, nuestro)
+        junto = dict(viejo, **nuevo)
+        junto["gastos"] = sorted(_por_id(suyo.get("gastos", []), nuestro.get("gastos", [])),
+                                 key=lambda g: g.get("fecha", ""))
+        dias = dict(suyo.get("dias") or {})
+        for d, v in (nuestro.get("dias") or {}).items():
+            dias[d] = max(dias.get(d, 0), v)
+        detalle = {}
+        for g in junto["gastos"]:
+            detalle[g.get("dia")] = detalle.get(g.get("dia"), 0) + (g.get("usd") or 0)
+        dias.update({d: round(v, 4) for d, v in detalle.items()})
+        junto["dias"] = dias
+        return junto
     if ruta == "estado/cuota.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         if suyo.get("dia") != nuestro.get("dia"):          # el libro de un día nuevo gana entero
             return max(suyo, nuestro, key=lambda c: c.get("dia") or "")

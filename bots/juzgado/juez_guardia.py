@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from bots.comun import gemini
+from bots.comun import gemini, ia
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MINIMO = 90               # el dueño: solo se publica lo de 90 o más, en todas las plataformas
@@ -54,7 +54,7 @@ def juzgar(video, guion, canal, lecciones, carpeta):
                              lecciones=lecciones)
     imagenes = [os.path.join(carpeta, f["archivo"]) for f in datos["fotogramas"]]
     try:
-        v = gemini.preguntar(texto, imagenes=imagenes, solo_bueno=True, temperatura=0.3)
+        v = ia.preguntar(texto, papel="juez", imagenes=imagenes, solo_bueno=True, temperatura=0.3)
         if isinstance(v, list) and v:
             v = v[0]
         if not isinstance(v, dict):
@@ -72,6 +72,8 @@ def juzgar(video, guion, canal, lecciones, carpeta):
         resultado = {"veredicto": "suspendido" if fallos else "sin_juicio", "fallos_graves": fallos,
                      "motivo": f"juicio sin IA: {e}"}
     resultado["medidas"] = medidas
+    if resultado.get("total") is not None:
+        resultado["cerebro"] = ia.quien().get("motor", "gemini")
     with open(os.path.join(carpeta, "veredicto.json"), "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=1)
     return resultado
