@@ -23,6 +23,8 @@ from bots.comun import privado  # noqa: E402
 
 SIN_HACER = {}                   # tipos de canal que todavía no se pueden hacer (y por qué)
 SOLO_CON_CLIP = ("clips",)       # canales que solo trabajan cuando el dueño ha grabado un clip para ellos
+ESPERA_DUENO = 30 * 60           # «Juzga mi vídeo» va primero: como mucho media hora de pausa por vídeo del dueño
+YA_ESPERADOS = set()
 
 
 def revisiones(cfg):
@@ -100,6 +102,34 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
             candidatos.append((clave not in con_clip, dias, orden.get(clave, 99), clave, None))
     candidatos.sort()
     return [(clave, hora) for _, _, _, clave, hora in candidatos], esperan
+
+
+def espera_del_dueno(paso=print, cada=60):
+    """Los vídeos que sube el dueño en «Juzga mi vídeo» van antes que todo: si hay uno en el Juzgado (su rama
+    juicio/<codigo> sigue viva), la fábrica para hasta que termine y luego sigue con la cola. Como mucho media hora por
+    vídeo, por si algo se atasca. Devuelve los segundos que ha esperado."""
+    try:
+        from bots.juzgado import ventanilla
+    except Exception:
+        return 0.0
+    inicio, avisado = time.time(), False
+    while True:
+        try:
+            pendientes = set(ventanilla.ramas()) - YA_ESPERADOS
+        except Exception:
+            return time.time() - inicio
+        if not pendientes:
+            if avisado:
+                paso("el vídeo del dueño ya está juzgado: la fábrica sigue con la cola")
+            return time.time() - inicio
+        if time.time() - inicio > ESPERA_DUENO:
+            YA_ESPERADOS.update(pendientes)
+            paso("el vídeo del dueño tarda más de media hora: la fábrica sigue y él se juzga a la vez")
+            return time.time() - inicio
+        if not avisado:
+            paso(f"pausa: hay {len(pendientes)} vídeo(s) del dueño en el Juzgado; la fábrica espera a que terminen")
+            avisado = True
+        time.sleep(cada)
 
 
 def main():
@@ -181,6 +211,8 @@ def main():
     ronda["sin_sitio"] = [k for k, _ in plan[maximo:]]
     sin_ia = 0                       # turnos seguidos en los que la IA no ha contestado
     for clave, hora in plan[:maximo]:
+        if not a.prueba:             # lo del dueño, primero: si tiene un vídeo en el Juzgado, la cola espera
+            inicio += espera_del_dueno(paso=lambda t: print(t, flush=True))   # la espera no le quita tiempo a la cola
         if (time.time() - inicio) / 60 > ajustes["minutos_por_ronda"]:
             print("se acaba el tiempo de la ronda: lo que falta, en la siguiente", flush=True)
             ronda["sin_sitio"] += [k for k, _ in plan[:maximo] if k not in {t["canal"] for t in ronda["turnos"]}]
