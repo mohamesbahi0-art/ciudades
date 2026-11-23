@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Bolas</title>
+<!-- «Bolas» (canal de mapas): bolas-país con su bandera, sus ojos y sus bocadillos sobre un mapa del mundo de verdad.
+     El país protagonista se borra del mapa y deja su hueco; la cámara va del mundo a la zona y a las bolas de cerca.
+     Lo usa render.js: window.GUION = guion; await window.listo; window.pintar(t) para cada fotograma.
+     Mapa: Natural Earth (dominio público). Banderas: flag-icons (MIT), en banderas/. -->
+<style>
+@font-face{font-family:"Poppins";font-weight:600;src:url("fuentes/poppins-600.woff2") format("woff2")}
+@font-face{font-family:"Poppins";font-weight:800;src:url("fuentes/poppins-800.woff2") format("woff2")}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#2E86C9}
+canvas{display:block}
+</style></head><body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+"use strict";
+const W = 1080, H = 1920, VISTA = { x: 30, y: 330, w: 1020, h: 1090 };
+const ctx = document.getElementById("c").getContext("2d");
+const lim = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const suave = x => { x = lim(x); return x * x * (3 - 2 * x); };
+const atras = x => { x = lim(x); const c = 1.7; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const azar = i => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const CAMINOS = {}, BANDERAS = {};
+let G = null;
+
+function preparar() {
+  G = window.GUION;
+  for (const [iso, p] of Object.entries(G.mapa || {})) CAMINOS[iso] = new Path2D(p.d);
+  const isos = new Set([G.pais]);
+  for (const e of G.escenas) for (const b of e.bolas || []) isos.add(b.pais);
+  return Promise.all([...isos].map(iso => new Promise(ok => {
+    const img = new Image();
+    img.onload = () => { BANDERAS[iso] = img; ok(); };
+    img.onerror = () => ok();
+    img.src = "banderas/" + iso.toLowerCase() + ".svg";
+  })));
+}
+
+/* ---------- cámara ---------- */
+function camaraDe(caja) {
+  const [x0, y0, x1, y1] = caja, w = x1 - x0, h = y1 - y0;
+  const s = Math.min(VISTA.w / w, VISTA.h / h);
+  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, s };
+}
+function escenaEn(t) {
+  const es = G.escenas;
+  for (let i = 0; i < es.length; i++) if (t < es[i].fin) return i;
+  return es.length - 1;
+}
+function camara(t) {
+  const i = escenaEn(t), e = G.escenas[i], ahora = camaraDe(e.caja);
+  if (i === 0) {                                   // al empezar, un acercamiento suave desde un poco más lejos
+    const p = suave(t / 1.2);
+    return { cx: ahora.cx, cy: ahora.cy, s: ahora.s * (0.82 + 0.18 * p) };
+  }
+  const antes = camaraDe(G.escenas[i - 1].caja), p = suave((t - e.inicio) / 0.7);
+  return { cx: antes.cx + (ahora.cx - antes.cx) * p, cy: antes.cy + (ahora.cy - antes.cy) * p,
+           s: Math.exp(Math.log(antes.s) + (Math.log(ahora.s) - Math.log(antes.s)) * p) };
+}
+function aPantalla(c, x, y) {
+  return [VISTA.x + VISTA.w / 2 + (x - c.cx) * c.s, VISTA.y + VISTA.h / 2 + (y - c.cy) * c.s];
+}
+
+/* ---------- el mapa ---------- */
+function momentoBorrado() {
+  if (G.borrado_desde === 0) return -10;
+  const e = G.escenas.find(x => x.accion === "desaparece");
+  return e ? e.inicio + 0.45 : Infinity;
+}
+function aclarar(hex, k) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const f = v => Math.round(v + (255 - v) * k);
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+function mar(t) {
+  const fondo = ctx.createLinearGradient(0, 0, 0, H);
+  fondo.addColorStop(0, "#5BC0F0"); fondo.addColorStop(1, "#2479BD");
+  ctx.fillStyle = fondo; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 4;
+  for (let k = 0; k < 14; k++) {                    // olitas que se mueven despacio
+    const y = 120 + k * 135, d = (t * 18 + k * 47) % 180;
+    ctx.beginPath();
+    for (let x = -200 + d; x < W + 200; x += 180) { ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 22, y - 12, x + 44, y); }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function mapa(t, c, foco) {
+  const tb = momentoBorrado(), protagonista = G.pais;
+  ctx.save();
+  ctx.translate(VISTA.x + VISTA.w / 2, VISTA.y + VISTA.h / 2); ctx.scale(c.s, c.s); ctx.translate(-c.cx, -c.cy);
+  ctx.lineJoin = "round";
+  for (const [iso, p] of Object.entries(G.mapa)) {
+    if (iso === protagonista) continue;
+    ctx.fillStyle = iso === foco ? aclarar(p.c, 0.25) : p.c;
+    ctx.fill(CAMINOS[iso]);
+    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = (iso === foco ? 4.5 : 2.2) / c.s; ctx.stroke(CAMINOS[iso]);
+  }
+  const camino = CAMINOS[protagonista];
+  if (camino) {
+    const q = lim((t - tb) / 0.9);
+    if (q < 1) {                                       // el país todavía está (o se está borrando)
+      ctx.save();
+      if (q > 0) ctx.translate(Math.sin(t * 70) * 3 / c.s * (1 - q), Math.sin(t * 53) * 3 / c.s * (1 - q));
+      ctx.globalAlpha = 1 - q;
+      ctx.fillStyle = aclarar(G.mapa[protagonista].c, 0.3); ctx.fill(camino);
+      ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 5 / c.s; ctx.stroke(camino);
+      if (q > 0) {                                     // grietas mientras se borra
+        ctx.clip(camino); ctx.strokeStyle = "rgba(40,20,0,0.8)"; ctx.lineWidth = 3 / c.s;
+        for (let k = 0; k < 7; k++) {
+          ctx.beginPath(); let x = c.cx + (azar(k) - 0.5) * 300 / c.s, y = c.cy + (azar(k + 9) - 0.5) * 300 / c.s;
+          ctx.moveTo(x, y);
+          for (let j = 0; j < 4; j++) { x += (azar(k * 7 + j) - 0.5) * 160 / c.s * q * 2; y += (azar(k * 5 + j + 3) - 0.5) * 160 / c.s * q * 2; ctx.lineTo(x, y); }
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    if (t >= tb) {                                     // el hueco: agua más oscura y el contorno a trazos
+      ctx.save(); ctx.globalAlpha = lim((t - tb) / 0.6) * 0.35; ctx.fillStyle = "#0B3D6B"; ctx.fill(camino); ctx.restore();
+      ctx.save(); ctx.setLineDash([12 / c.s, 10 / c.s]); ctx.lineDashOffset = -t * 30 / c.s;
+      ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 4 / c.s; ctx.stroke(camino); ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/* ---------- las bolas ---------- */
+function ojos(expr, r, mira, parpadeo) {
+  const dx = r * 0.33, y = -r * 0.1, rx = r * 0.17, ry = (expr === "sorprendido" || expr === "asustado" ? 0.27 : 0.22) * r;
+  const mx = mira * r * 0.07;
+  ctx.lineWidth = Math.max(3, r * 0.045); ctx.strokeStyle = "#111";
+  for (const lado of [-1, 1]) {
+    const x = lado * dx + mx;
+    ctx.save();
+    if (expr === "feliz") {                                       // ojos que sonríen
+      ctx.lineWidth = Math.max(4, r * 0.06); ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(x, y + ry * 0.35, rx * 0.95, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      ctx.restore(); continue;
+    }
+    const alto = parpadeo ? ry * 0.12 : (expr === "malvado" ? ry * 0.5 : ry);
+    ctx.beginPath(); ctx.ellipse(x, y, rx, alto, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#FFF"; ctx.fill(); ctx.stroke();
+    if (!parpadeo && ["enfadado", "malvado", "triste"].includes(expr)) {       // el párpado da el humor
+      ctx.save(); ctx.beginPath(); ctx.ellipse(x, y, rx, alto, 0, 0, Math.PI * 2); ctx.clip();
+      ctx.fillStyle = "#111"; ctx.beginPath();
+      const dentro = expr === "triste" ? -lado : lado;             // triste: cae hacia fuera; enfadado: hacia dentro
+      ctx.moveTo(x - rx * 1.2, y - alto * 1.2); ctx.lineTo(x + rx * 1.2, y - alto * 1.2);
+      ctx.lineTo(x + rx * 1.2, y - alto * (dentro < 0 ? -0.05 : 0.6));
+      ctx.lineTo(x - rx * 1.2, y - alto * (dentro < 0 ? 0.6 : -0.05)); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    if (!parpadeo && ["sorprendido", "asustado", "malvado"].includes(expr)) {   // pupilas
+      ctx.fillStyle = "#111"; ctx.beginPath();
+      ctx.arc(x + mira * rx * 0.35, y + (expr === "malvado" ? 0 : ry * 0.1), expr === "asustado" ? rx * 0.18 : rx * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  if (expr === "asustado") {                                       // gota de sudor
+    ctx.fillStyle = "#7FD3FF"; ctx.strokeStyle = "#111"; ctx.lineWidth = Math.max(2, r * 0.025);
+    ctx.beginPath(); ctx.moveTo(r * 0.72, -r * 0.55); ctx.quadraticCurveTo(r * 0.86, -r * 0.3, r * 0.72, -r * 0.25);
+    ctx.quadraticCurveTo(r * 0.58, -r * 0.3, r * 0.72, -r * 0.55); ctx.fill(); ctx.stroke();
+  }
+}
+function bola(b, x, y, r, rot, alfa, mira, parpadeo) {
+  ctx.save(); ctx.globalAlpha = alfa; ctx.translate(x, y);
+  ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.ellipse(0, r * 0.98, r * 0.78, r * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.rotate(rot);
+  ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+  const img = BANDERAS[b.pais];
+  if (img) ctx.drawImage(img, -r, -r, 2 * r, 2 * r); else { ctx.fillStyle = "#DDD"; ctx.fillRect(-r, -r, 2 * r, 2 * r); }
+  const brillo = ctx.createRadialGradient(-r * 0.35, -r * 0.42, r * 0.05, 0, 0, r * 1.05);
+  brillo.addColorStop(0, "rgba(255,255,255,0.40)"); brillo.addColorStop(0.45, "rgba(255,255,255,0)");
+  brillo.addColorStop(1, "rgba(0,0,0,0.30)");
+  ctx.fillStyle = brillo; ctx.fillRect(-r, -r, 2 * r, 2 * r);
+  ctx.restore();
+  ctx.lineWidth = Math.max(4, r * 0.055); ctx.strokeStyle = "#141414";
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ojos(b.expresion, r, mira, parpadeo);
+  ctx.restore();
+}
+function lagrimas(x, y, r, t) {
+  ctx.save(); ctx.fillStyle = "#7FD3FF"; ctx.strokeStyle = "#1B5E8C"; ctx.lineWidth = 2;
+  for (const lado of [-1, 1]) for (let k = 0; k < 3; k++) {
+    const f = ((t * 1.6 + k / 3) % 1), gx = x + lado * r * 0.33, gy = y + r * 0.1 + f * r * 1.1;
+    ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.ellipse(gx, gy, r * 0.05, r * 0.08, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+function bocadillo(texto, x, y, r, aparece) {
+  if (!texto) return;
+  const q = atras(aparece / 0.3);
+  if (aparece <= 0) return;
+  ctx.save(); ctx.font = "800 44px Poppins";
+  const palabras = texto.split(/\s+/), lineas = []; let l = "";
+  for (const p of palabras) { const prueba = (l + " " + p).trim(); if (ctx.measureText(prueba).width > 420 && l) { lineas.push(l); l = p; } else l = prueba; }
+  if (l) lineas.push(l);
+  const ancho = Math.max(...lineas.map(s => ctx.measureText(s).width)) + 56, alto = lineas.length * 52 + 34;
+  let bx = lim(x - ancho / 2, 24, W - 24 - ancho), by = y - r - 40 - alto;
+  if (by < 150) by = y + r + 40;                       // si no cabe arriba, debajo
+  const colaX = lim(x, bx + 30, bx + ancho - 30), arriba = by < y;
+  ctx.translate(colaX, arriba ? by + alto : by); ctx.scale(q, q); ctx.translate(-colaX, -(arriba ? by + alto : by));
+  ctx.fillStyle = "#FFFFFF"; ctx.strokeStyle = "#111"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.roundRect(bx, by, ancho, alto, 26); ctx.fill(); ctx.stroke();
+  ctx.beginPath();                                      // la colita hacia la bola
+  if (arriba) { ctx.moveTo(colaX - 16, by + alto - 2); ctx.lineTo(colaX, by + alto + 26); ctx.lineTo(colaX + 16, by + alto - 2); }
+  else { ctx.moveTo(colaX - 16, by + 2); ctx.lineTo(colaX, by - 26); ctx.lineTo(colaX + 16, by + 2); }
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lineas.forEach((s, i) => ctx.fillText(s, bx + ancho / 2, by + 17 + 26 + i * 52));
+  ctx.restore();
+}
+function confeti(t, desde) {
+  ctx.save();
+  for (let k = 0; k < 70; k++) {
+    const f = t - desde - azar(k) * 0.6; if (f < 0) continue;
+    const x = azar(k + 3) * W + Math.sin(f * 3 + k) * 30, y = -40 + f * (380 + azar(k + 7) * 300);
+    if (y > H) continue;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(f * 5 + k);
+    ctx.fillStyle = ["#FFD43B", "#FF6B6B", "#4DD4AC", "#5C7CFA", "#F783AC"][k % 5]; ctx.fillRect(-9, -5, 18, 10);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+function sitios(e, c, t) {
+  const n = e.bolas.length;
+  if (e.plano === "bolas") {                           // de cerca, en fila
+    const r = n <= 2 ? 185 : n === 3 ? 150 : 125, paso = W / (n + 1);
+    return e.bolas.map((b, k) => ({ b, x: paso * (k + 1), y: 1060 + (k % 2) * 40, r }));
+  }
+  const r = n <= 1 ? 120 : n === 2 ? 105 : n === 3 ? 92 : 82;
+  const pos = e.bolas.map(b => { const [x, y] = aPantalla(c, b.x, b.y); return { b, x, y, r }; });
+  for (let i = 0; i < pos.length; i++) for (let j = 0; j < i; j++) {   // que no se monten unas encima de otras
+    const a = pos[i], o = pos[j], d = Math.hypot(a.x - o.x, a.y - o.y);
+    if (d < a.r + o.r + 20) { const k = (a.r + o.r + 20 - d) / 2 + 1, ux = d ? (a.x - o.x) / d : 1, uy = d ? (a.y - o.y) / d : 0; a.x += ux * k; a.y += uy * k; o.x -= ux * k; o.y -= uy * k; }
+  }
+  for (const p of pos) { p.x = lim(p.x, p.r + 24, W - p.r - 24); p.y = lim(p.y, 420 + p.r, 1360 - p.r); }
+  return pos;
+}
+function bolas(t, c) {
+  const i = escenaEn(t), e = G.escenas[i], dentro = t - e.inicio, tb = momentoBorrado();
+  if (e.plano === "bolas") { ctx.fillStyle = "rgba(10,20,40,0.38)"; ctx.fillRect(0, 0, W, H); }
+  const pos = sitios(e, c, t), [hx, hy] = aPantalla(c, ...(G.mapa[G.pais] ? centroDe(G.pais) : [c.cx, c.cy]));
+  if (e.accion === "celebra") confeti(t, e.inicio + 0.3);
+  pos.forEach((p, k) => {
+    const sale = dentro - 0.12 - 0.12 * k; if (sale <= 0) return;
+    let { x, y, r } = p, rot = 0, alfa = 1, mira = Math.sign(hx - x) || 0;
+    const escala = atras(sale / 0.35);
+    y += Math.sin(t * 3 + k) * r * 0.04;                       // respira
+    const fase = (t - e.inicio) * 2.2 + k * 0.4;
+    if (e.accion === "salta" || e.accion === "celebra") y -= Math.abs(Math.sin(Math.PI * fase)) * r * 0.35;
+    if (e.accion === "tiembla" || p.b.expresion === "asustado") x += Math.sin(t * 60 + k) * r * 0.05;
+    if (e.accion === "rie") rot = Math.sin(t * 12 + k) * 0.16;
+    if (e.accion === "corre") { const f = suave(dentro / Math.max(0.5, e.fin - e.inicio)); x += (hx - x) * f * 0.6; y += (hy - y) * f * 0.6; }
+    if (e.accion === "pelea" && pos.length >= 2 && k < 2) {
+      const otro = pos[1 - k], f = Math.abs(Math.sin(Math.PI * fase * 0.8));
+      x += (otro.x - p.x) * 0.38 * f; rot = (k ? -1 : 1) * 0.12 * f; mira = Math.sign(otro.x - p.x);
+    }
+    if (p.b.pais === G.pais && t > tb) {                       // la bola del país que se borra se hunde y se va
+      const f = lim((t - tb) / 1.2); y += f * 220; alfa = 1 - f;
+    }
+    if (alfa <= 0.02) return;
+    const parpadeo = ((t + k * 0.7) % 3.1) < 0.09;
+    ctx.save(); ctx.translate(x, y); ctx.scale(escala, escala); ctx.translate(-x, -y);
+    bola(p.b, x, y, r, rot, alfa, mira, parpadeo);
+    ctx.restore();
+    if (e.accion === "llora" || (p.b.expresion === "triste" && p.b.pais === G.pais)) lagrimas(x, y, r * escala, t);
+    if (e.accion === "rie" && sale > 0.3) { ctx.save(); ctx.font = "800 40px Poppins"; ctx.fillStyle = "#FFF"; ctx.strokeStyle = "#111"; ctx.lineWidth = 6; ctx.textAlign = "center"; const jx = p.b.dice ? x - r * 1.15 : x + r * 0.9, jy = p.b.dice ? y + r * 0.1 : y - r * 0.9; ctx.strokeText("JA JA", jx, jy); ctx.fillText("JA JA", jx, jy); ctx.restore(); }
+    if (e.accion === "pelea" && k === 0 && pos.length >= 2) {
+      const f = Math.abs(Math.sin(Math.PI * fase * 0.8));
+      if (f > 0.85) { ctx.save(); ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 4; const sx = (x + pos[1].x) / 2, sy = (y + pos[1].y) / 2 - r * 0.6; ctx.beginPath(); for (let j = 0; j < 10; j++) { const a = j * Math.PI / 5, rr = j % 2 ? 22 : 50; ctx.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    }
+    bocadillo(p.b.dice, x, y, r * escala, dentro - 0.3 - 0.25 * k);
+  });
+}
+function centroDe(iso) {
+  const e = G.escenas.flatMap(x => x.bolas).find(b => b.pais === iso);
+  if (e) return [e.x, e.y];
+  const c = camaraDe(G.escenas[0].caja); return [c.cx, c.cy];
+}
+
+/* ---------- letras ---------- */
+function rotulo(txt, x, y, tam, color, alfa = 1, sombra = "#000") {
+  ctx.save(); ctx.globalAlpha = alfa; ctx.font = `800 ${tam}px Poppins`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineJoin = "round"; ctx.lineWidth = Math.max(8, tam * 0.16); ctx.strokeStyle = sombra; ctx.strokeText(txt, x, y);
+  ctx.fillStyle = color; ctx.fillText(txt, x, y); ctx.restore();
+}
+function gancho(t) {
+  const txt = String(G.texto_pantalla || "").toUpperCase();
+  if (!txt || t > 2.6) return;
+  const q = lim(t / 0.18) * lim((2.6 - t) / 0.25), palabras = txt.split(/\s+/), lineas = []; let l = "";
+  for (const p of palabras) { if ((l + " " + p).trim().length > 15 && l) { lineas.push(l); l = p; } else l = (l + " " + p).trim(); }
+  if (l) lineas.push(l);
+  lineas.forEach((s, i) => rotulo(s, W / 2, 200 + i * 96, 82, "#FFFFFF", q));
+}
+function clave(t) {
+  if (t < 2.6) return;
+  const e = G.escenas[escenaEn(t)], dentro = t - e.inicio;
+  if (!e.texto || dentro < 0.1) return;
+  const q = atras((dentro - 0.1) / 0.3), sale = lim((e.fin - t) / 0.2);
+  ctx.save(); ctx.translate(W / 2, 250); ctx.scale(q, q); rotulo(e.texto.toUpperCase(), 0, 0, 92, "#FFE23D", sale); ctx.restore();
+}
+function insignia() {
+  if (!(G.partes > 1)) return;
+  ctx.save(); ctx.font = "800 36px Poppins"; const txt = `PARTE ${G.parte}/${G.partes}`, w = ctx.measureText(txt).width + 40;
+  ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.roundRect(W - 36 - w, 60, w, 62, 31); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, W - 36 - w / 2, 92); ctx.restore();
+}
+function palabrasDe(e) {
+  if (e.palabras && e.palabras.length) return e.palabras;
+  const ws = String(e.voz || "").split(/\s+/).filter(Boolean), d = Math.max(0.5, e.fin - e.inicio - 0.3);
+  return ws.map((p, i) => ({ p, a: e.inicio + (d * i) / ws.length, b: e.inicio + (d * (i + 1)) / ws.length }));
+}
+function subtitulos(t) {
+  const e = G.escenas[escenaEn(t)], ws = palabrasDe(e), grupos = [];
+  for (let i = 0; i < ws.length; i += 3) grupos.push(ws.slice(i, i + 3));
+  const gr = grupos.find(x => t < x[x.length - 1].b + 0.08) || grupos[grupos.length - 1];
+  if (!gr || t < gr[0].a - 0.1) return;
+  ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const piezas = gr.map(w => ({ w, on: t >= w.a && t < w.b + 0.05 }));
+  const anchos = piezas.map(p => { ctx.font = `800 ${p.on ? 92 : 84}px Poppins`; return ctx.measureText(String(p.w.p).toUpperCase()).width; });
+  const total = anchos.reduce((a, b) => a + b, 0) + 26 * (piezas.length - 1), esc = total > 1000 ? 1000 / total : 1;
+  let x = W / 2 - Math.min(total, 1000) / 2;
+  piezas.forEach((p, i) => {
+    const w = anchos[i] * esc, s = String(p.w.p).toUpperCase();
+    ctx.font = `800 ${Math.round((p.on ? 92 : 84) * esc)}px Poppins`;
+    ctx.lineJoin = "round"; ctx.lineWidth = 15; ctx.strokeStyle = "#000"; ctx.strokeText(s, x + w / 2, 1610);
+    ctx.fillStyle = p.on ? "#FFE23D" : "#FFFFFF"; ctx.fillText(s, x + w / 2, 1610);
+    x += w + 26 * esc;
+  });
+  ctx.restore();
+}
+function final(t) {
+  const d = G.duracion || 1, q = lim((t - (d - 1.4)) / 0.3);
+  if (q <= 0) return;
+  const txt = G.parte < G.partes ? `PARTE ${G.parte + 1} MAÑANA 👉` : "¿QUÉ PAÍS AHORA? 👇";
+  ctx.save(); ctx.translate(W / 2, 1440); ctx.scale(atras(q), atras(q));     // abajo, para no tapar a las bolas
+  ctx.font = "800 70px Poppins"; const w = ctx.measureText(txt).width + 70;
+  ctx.globalAlpha = q; ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.roundRect(-w / 2, -58, w, 116, 58); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, 0, 4); ctx.restore();
+}
+
+window.pintar = function (t) {
+  const c = camara(t), e = G.escenas[escenaEn(t)];
+  mar(t);
+  mapa(t, c, e.foco);
+  bolas(t, c);
+  gancho(t); clave(t); insignia(); subtitulos(t); final(t);
+  const d = G.duracion || 1;
+  if (t > d - 0.25) { ctx.fillStyle = `rgba(0,0,0,${lim((t - (d - 0.25)) / 0.25)})`; ctx.fillRect(0, 0, W, H); }
+};
+window.listo = Promise.all([600, 800].map(w => document.fonts.load(`${w} 60px Poppins`)))
+  .then(() => new Promise(ok => { const mira = () => window.GUION ? ok() : setTimeout(mira, 20); mira(); }))
+  .then(preparar).then(() => document.fonts.ready);
+</script>
+</body></html>

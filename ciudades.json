@@ -208,10 +208,10 @@
    "ciudad": "central",
    "donde": "ciudad",
    "grupo": "Especialistas",
-   "hace": "Descarga el mapa del mundo de la NASA para los vídeos del canal de mapas.",
+   "hace": "Tiene el mapa del mundo de los vídeos de bolas-país (Natural Earth): la forma de cada país, su centro y sus vecinos, y decide qué parte del mapa se ve en cada escena.",
    "origen": "antes",
    "lote": 1,
-   "codigo": "reescribir",
+   "codigo": "reescrito",
    "tipo": "bot"
   },
   {
@@ -220,10 +220,10 @@
    "ciudad": "central",
    "donde": "ciudad",
    "grupo": "Especialistas",
-   "hace": "Ordena los guiones del canal de mapas para que la subida los encuentre.",
+   "hace": "Ordena las series «¿Y si X desapareciera?»: termina las que quedaron a medias, sigue con la Parte 2 y la 3 en orden y elige el país nuevo sin repetir.",
    "origen": "antes",
    "lote": 1,
-   "codigo": "reescribir",
+   "codigo": "reescrito",
    "tipo": "bot"
   },
   {
@@ -232,10 +232,10 @@
    "ciudad": "central",
    "donde": "ciudad",
    "grupo": "Especialistas",
-   "hace": "Hace vídeos de «¿Qué pasaría si un país desapareciera?» con bolas-país.",
+   "hace": "Hace los vídeos de bolas-país: cada bola con su bandera, sus ojos y sus bocadillos sobre un mapa de verdad; el país se borra y deja su hueco.",
    "origen": "antes",
    "lote": 1,
-   "codigo": "reescribir",
+   "codigo": "reescrito",
    "tipo": "bot"
   },
   {
