@@ -1,7 +1,9 @@
 """Música de fondo propia, compuesta desde cero por el ordenador: gratis y sin derechos de nadie.
 
-Cada ambiente es una pequeña pieza con acordes, piano, colchón de cuerdas, bajo y percusión, hecha nota a nota con
-numpy y con reverberación. Si numpy no está, sale la versión sencilla de antes (ondas de ffmpeg).
+Primero busca música de verdad de dominio público (la Discoteca, bots/central/discoteca.py, la deja en la carpeta
+MUSICA_DIR con su biblioteca.json): elige una de las mejores de ese ambiente y corta un trozo. Si no hay, compone una
+pieza nota a nota con numpy (acordes, piano, colchón, bajo y percusión). Si tampoco hay numpy, la versión sencilla de
+antes (ondas de ffmpeg).
 
 Ambientes:
   inspira  → piano emotivo, cuerdas y percusión suave que entra a los pocos segundos (motivación, historias de famosos)
@@ -10,7 +12,9 @@ Ambientes:
   tension  → zumbido grave, latidos y notas sueltas inquietantes (terror, supervivencia)
 Uso:  python musica.py inspira 30 salida.m4a
 """
+import json
 import os
+import random
 import subprocess
 import sys
 import tempfile
@@ -268,12 +272,51 @@ ANTIGUOS = {
 }
 
 
-def crear(ambiente, segundos, salida, semilla=None):
+def _biblioteca(ambiente):
+    """Las piezas de dominio público de ese ambiente que hay en MUSICA_DIR, las mejor puntuadas primero."""
+    carpeta = os.environ.get("MUSICA_DIR")
+    if not carpeta:
+        return []
+    try:
+        with open(os.path.join(carpeta, "biblioteca.json"), encoding="utf-8") as f:
+            pistas = json.load(f).get("pistas", [])
+    except (OSError, ValueError):
+        return []
+    buenas = [p for p in pistas if ambiente in (p.get("ambientes") or [p.get("ambiente")])
+              and os.path.exists(os.path.join(carpeta, p.get("nombre", "")))]
+    return sorted(buenas, key=lambda p: -(p.get("nota") or 0))
+
+
+def _de_biblioteca(pistas, seg, salida, fades, semilla):
+    azar = random.Random(semilla)
+    p = azar.choice(pistas[:6])
+    ruta = os.path.join(os.environ["MUSICA_DIR"], p["nombre"])
+    dur = float(p.get("segundos") or 0)
+    if dur >= seg + 4:
+        inicio = min(azar.choice([0.0, 0.0, dur * 0.2, dur * 0.4]), max(0.0, dur - seg - 2))
+        entrada = ["-ss", f"{inicio:.2f}", "-t", f"{seg:.2f}", "-i", ruta]
+    else:
+        entrada = ["-stream_loop", "-1", "-t", f"{seg:.2f}", "-i", ruta]
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *entrada, "-af", fades, "-ac", "2", "-c:a", "aac",
+                    "-b:a", "160k", salida], check=True)
+    with open(salida + ".json", "w", encoding="utf-8") as f:    # qué pieza ha sonado (por si alguien pregunta)
+        json.dump({"titulo": p.get("titulo"), "fuente": p.get("fuente"), "licencia": "CC0 (dominio público)"}, f,
+                  ensure_ascii=False)
+    return salida
+
+
+def crear(ambiente, segundos, salida, semilla=None, libre=True):
     """Escribe la pista (con entrada y salida suaves) y devuelve su ruta, o None si el ambiente es «ninguna»."""
     if ambiente in (None, "ninguna", ""):
         return None
     seg = max(3.0, float(segundos))
     fades = f"afade=t=in:d=1.0,afade=t=out:st={max(0.0, seg - 1.8):.2f}:d=1.8,loudnorm=I=-24:TP=-3"
+    pistas = _biblioteca(ambiente) if libre else []
+    if pistas:
+        try:
+            return _de_biblioteca(pistas, seg, salida, fades, semilla)
+        except (subprocess.CalledProcessError, OSError):
+            pass                                  # si la pieza falla, se compone una
     try:
         estereo = _componer(ambiente if ambiente in PIEZAS else "calma", seg,
                             semilla if semilla is not None else int(seg * 1000) % 97)

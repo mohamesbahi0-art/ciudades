@@ -18,7 +18,7 @@ import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
-from bots.central import huecos, parasubir, subidor, turno  # noqa: E402
+from bots.central import discoteca, huecos, parasubir, subidor, turno  # noqa: E402
 from bots.comun import privado  # noqa: E402
 
 SIN_HACER = {"clips": "falta la lista de creadores con permiso"}
@@ -112,6 +112,13 @@ def main():
                 print(f"almacén: {borrados} vídeo(s) ya subidos borrados de la estantería", flush=True)
         except Exception as e:
             print(f"almacén: no he podido limpiar ({type(e).__name__})", flush=True)
+
+    try:                                       # música de verdad (dominio público) para los vídeos de esta ronda
+        piezas = discoteca.preparar(os.path.join(trabajo, "musica"))
+        print(f"discoteca: {piezas} piezas de música libre listas" if piezas else "discoteca: sin piezas, se compone",
+              flush=True)
+    except Exception as e:
+        print(f"discoteca: sin música libre ({type(e).__name__}); se compone", flush=True)
 
     plan, esperan = planear(ajustes, cfg, revs, solo)
     ronda["plan"] = [k for k, _ in plan][:maximo]
