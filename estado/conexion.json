@@ -1,9 +1,8 @@
 {
- "estado": "esperando",
+ "estado": "conectado",
  "canal": "terror",
- "codigo": "DQK-GSG-ZXX",
- "url": "https://www.google.com/device",
- "caduca": "2026-11-23T02:22:09Z",
- "quedan": 3,
- "actualizado": "2026-11-23T01:52:09Z"
+ "pedido": "terror",
+ "coincide": true,
+ "quedan": 2,
+ "actualizado": "2026-11-23T01:53:14Z"
 }
