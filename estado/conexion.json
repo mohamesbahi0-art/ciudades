@@ -1,8 +1,9 @@
 {
- "estado": "conectado",
- "canal": "versus",
- "pedido": "versus",
- "coincide": true,
+ "estado": "esperando",
+ "canal": "mapas",
+ "codigo": "ZRXB-BNGN",
+ "url": "https://www.google.com/device",
+ "caduca": "2026-11-23T02:19:55Z",
  "quedan": 4,
- "actualizado": "2026-11-23T01:49:53Z"
+ "actualizado": "2026-11-23T01:49:55Z"
 }
