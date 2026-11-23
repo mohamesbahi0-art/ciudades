@@ -164,7 +164,10 @@ def plan(elegidos, tendencias, a):
                       "categorias": (["Todo"] + categorias)[:5], "rondas": 3})
     for n, p in enumerate(elegidos):
         estado = leer(p["clave"])
-        tema = p["temas"][int(estado.get("siguiente", 0)) % len(p["temas"])]
+        hace_semana = _ahora() - dt.timedelta(days=7)
+        vacios = {t for t, f in (estado.get("temas_vacios") or {}).items() if (_fecha(f) or _ahora()) > hace_semana}
+        temas = [t for t in p["temas"] if t not in vacios] or p["temas"]    # los temas sin página se saltan una semana
+        tema = temas[int(estado.get("siguiente", 0)) % len(temas)]
         alias = privado.alias(p["clave"])
         if libre(tendencias, "tiktok-temas", a["descanso_horas"]):
             pasos.append({"id": f"tiktok-temas-{alias}", "tipo": "tiktok-temas", "perfil": p["clave"], "tema": tema,
@@ -358,10 +361,14 @@ def main(argv=None):
                                   for r in vista.get("pasos", [])]
     for r in vista.get("pasos", []):
         tipo = (por_id.get(r["id"]) or {}).get("tipo") or r["id"].split("-")[0]
-        if r["estado"] in ("bloqueada", "bien"):
-            fuentes[tipo] = {"estado": r["estado"], "fecha": privado.ahora(), "motivo": r.get("motivo")}
-        elif tipo not in fuentes or fuentes[tipo].get("estado") != "bien":
-            fuentes[tipo] = {"estado": r["estado"], "fecha": privado.ahora(), "motivo": r.get("motivo")}
+        antes = fuentes.get(tipo) or {}
+        if r["estado"] == "vacia" and antes.get("estado") == "bien":
+            continue                                  # una página sin vídeos no cambia lo que se sabe de la red
+        nueva = {"estado": r["estado"], "fecha": privado.ahora(), "motivo": r.get("motivo")}
+        if r["estado"] == "bloqueada":                # desde cuándo no deja mirar (el Archivo de casos lo vigila)
+            nueva["bloqueada_desde"] = antes.get("bloqueada_desde") if antes.get("estado") == "bloqueada" \
+                else privado.ahora()
+        fuentes[tipo] = nueva
 
     # 2. Datos de cada vídeo nuevo (con caché, para no preguntar dos veces por lo mismo)
     conocidos = (privado.leer(os.path.join("estado", CACHE), {}) or {}).get("videos") or {}
@@ -451,6 +458,11 @@ def main(argv=None):
             nuevos.append(entrada)
             print(f"ojeador: {alias} vídeo {n}: {'visto' if entrada.get('analisis') else 'sin ver'}", flush=True)
             time.sleep(PAUSA_IA)
+        sin_pagina = [(por_id.get(r["id"]) or {}).get("tema") for r in vista.get("pasos", [])
+                      if (por_id.get(r["id"]) or {}).get("perfil") == clave and r["estado"] == "vacia"
+                      and (por_id.get(r["id"]) or {}).get("tipo") == "tiktok-temas"]
+        if sin_pagina:
+            estado.setdefault("temas_vacios", {}).update({t: privado.ahora() for t in sin_pagina if t})
         estado.update(clave=clave, alias=alias, nombre=perfil["nombre"], idioma=perfil["idioma"], tema=perfil["tema"],
                       en_pausa=perfil["pausa"], temas=perfil["temas"], categorias=perfil["categorias"],
                       siguiente=int(estado.get("siguiente", 0)) + 1, ultimo=privado.ahora())

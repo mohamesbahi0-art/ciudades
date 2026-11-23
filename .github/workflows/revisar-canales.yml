@@ -63,6 +63,12 @@ jobs:
           MEMORIA_DIR: privado/memoria
           GH_TOKEN: ${{ github.token }}
         run: python bots/policia/maquinas.py
+      - name: El Archivo de casos apunta cada fallo y cada arreglo
+        if: always()
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+        run: python bots/policia/casos.py
       - name: La Analista repasa cómo van las cuentas
         if: always()
         env:

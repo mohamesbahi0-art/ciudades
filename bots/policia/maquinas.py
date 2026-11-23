@@ -17,7 +17,8 @@ sys.path.insert(0, RAIZ)
 from bots.comun import privado  # noqa: E402
 
 # Cada cuántas horas debería pasar cada turno con horario (si no, algo va mal)
-ESPERADO = {"fabrica.yml": 2, "revisar-canales.yml": 3}
+ESPERADO = {"fabrica.yml": 2, "revisar-canales.yml": 3, "ojeador.yml": 3, "radar.yml": 24, "estudio.yml": 24,
+            "buscar-clips.yml": 168, "latido.yml": 168}
 
 
 def api(ruta):
@@ -31,8 +32,16 @@ def api(ruta):
 def main():
     ahora = dt.datetime.now(dt.timezone.utc)
     runs = api("/actions/runs?per_page=100").get("workflow_runs", [])
-    turnos, problemas = {}, []
-    for r in runs:
+    for nombre in ESPERADO:          # los que pasan poco (una vez al día o a la semana) no siempre salen entre los 100 últimos
+        try:
+            runs += api(f"/actions/workflows/{nombre}/runs?per_page=5").get("workflow_runs", [])
+        except Exception:
+            pass
+    turnos, problemas, vistos = {}, [], set()
+    for r in sorted(runs, key=lambda x: x.get("run_started_at") or "", reverse=True):
+        if r["id"] in vistos:
+            continue
+        vistos.add(r["id"])
         nombre = r["path"].split("/")[-1]
         t = turnos.setdefault(nombre, {"nombre": r["name"], "ultimas": []})
         if len(t["ultimas"]) < 5:
