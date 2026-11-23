@@ -98,7 +98,34 @@ def validar(g, canal=None):
     return problemas
 
 
-def escribir(canal, lecciones, titulos, fuentes=None, intentos=3):
+IDEAS = """Eres el Escritor de {donde} llamado «{nombre}» ({tema}). Propón {n} ideas DISTINTAS para el próximo vídeo
+vertical de {seg_min} a {seg_max} segundos, en {idioma}. Que cada una pueda parar el dedo de alguien en 2 segundos.
+{reglas_tipo}
+Lo que ha aprendido este canal (lo del dueño manda):
+{lecciones}
+
+Títulos ya hechos (no repitas sus temas):
+{titulos}
+{fuentes}
+Devuelve SOLO un JSON: {{"ideas": [{{"idea": "una línea", "titulo": "título con gancho", "gancho": "lo que se ve y se oye en los 2 primeros segundos"}}]}}"""
+
+
+def ideas(canal, lecciones, titulos, fuentes=None, n=3):
+    """Varias ideas cortas para que la Sala de Ideas elija la mejor antes de gastar dibujos en ella."""
+    tipo = canal.get("tipo", "historias")
+    youtube = canal.get("destino", "youtube") == "youtube"
+    texto = IDEAS.format(donde="un canal de YouTube Shorts" if youtube else "una cuenta de Instagram y TikTok",
+                         nombre=canal["nombre"], tema=canal.get("tema") or ESTILOS.get(tipo, ESTILOS["historias"]), n=n,
+                         idioma=IDIOMAS.get(canal.get("idioma", "es")[:2], "español"), reglas_tipo=REGLAS_TIPO.get(tipo, ""),
+                         lecciones=lecciones, titulos="\n".join(f"- {t}" for t in titulos) or "- (ninguno todavía)",
+                         fuentes=f"\nFUENTES (lo único que puedes contar como hecho):\n{fuentes}\n" if fuentes else "",
+                         **medidas(canal))
+    r = gemini.preguntar(texto, ligero_primero=True)
+    lista = r.get("ideas", []) if isinstance(r, dict) else (r if isinstance(r, list) else [])
+    return [i for i in lista if isinstance(i, dict) and i.get("idea")][:n]
+
+
+def escribir(canal, lecciones, titulos, fuentes=None, intentos=3, idea=None):
     tipo = canal.get("tipo", "historias")
     estilo = ESTILOS.get(tipo, ESTILOS["historias"])
     dibujo = canal.get("estilo_dibujo") or "dark cinematic illustration, moody lighting, high detail"
@@ -113,6 +140,9 @@ def escribir(canal, lecciones, titulos, fuentes=None, intentos=3):
         estilo_dibujo=dibujo, extra="" if youtube else EXTRA_REDES,
         fuentes_usadas=',\n  "fuentes_usadas": ["los números de las fuentes que has usado"]' if fuentes else "",
         **medidas(canal))
+    if idea:
+        texto += (f"\n\nLa Sala de Ideas ha elegido ESTA idea: escribe su guion.\nIdea: {idea.get('idea')}\n"
+                  f"Título propuesto: {idea.get('titulo')}\nGancho: {idea.get('gancho')}")
     ultimo = []
     for _ in range(intentos):
         g = gemini.preguntar(texto)

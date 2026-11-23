@@ -51,7 +51,7 @@ def _limpiar_json(texto):
     return json.loads(texto)
 
 
-def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3):
+def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False):
     clave = os.environ.get("GEMINI_API_KEY")
     if not clave:
         raise SinIA("falta el secreto GEMINI_API_KEY")
@@ -63,7 +63,8 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
     if json_salida:
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"
     ultimo = "sin intentar"
-    modelos = [m for m in (BUENOS if solo_bueno else BUENOS + LIGEROS) if m not in AGOTADOS]
+    orden = BUENOS if solo_bueno else (LIGEROS + BUENOS if ligero_primero else BUENOS + LIGEROS)
+    modelos = [m for m in orden if m not in AGOTADOS]    # para texto sencillo, los ligeros primero: guardan cupo bueno
     for modelo in modelos:
         for intento in range(intentos):
             req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",

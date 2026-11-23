@@ -26,7 +26,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
 from bots.central import dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
 from bots.comun import privado  # noqa: E402
-from bots.juzgado import juez_guardia  # noqa: E402
+from bots.juzgado import sala_ideas, tribunal  # noqa: E402
 import voz as locutor  # noqa: E402  (herramientas/voz.py)
 
 ROBOTS = ("reportero_gta6", "escritor", "locutor", "dibujante", "montador", "juez_guardia", "subidor", "publicador")
@@ -87,13 +87,24 @@ def main(argv=None):
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
             paso("reportero_gta6", f"{len(lista)} fuentes")
 
+        idea, id_idea = None, None
+        if ajustes.get("sala_ideas", True):     # la Sala de Ideas elige la mejor de 3 antes de gastar dibujos
+            paso("escritor", "proponiendo ideas a la Sala de Ideas")
+            try:
+                propuestas = escritor.ideas(canal, cuadernos["escritor"].para_el_prompt(), privado.titulos_recientes(clave),
+                                            fuentes)
+                idea, id_idea = sala_ideas.elegir(clave, canal, propuestas, tribunal._pruebas(clave, canal))
+                paso("escritor", f"la Sala de Ideas eligió «{(idea or {}).get('titulo')}» de {len(propuestas)}",
+                     f"la Sala de Ideas eligió 1 de {len(propuestas)}")
+            except Exception as e:      # sin Sala de Ideas, el Escritor sigue solo
+                paso("escritor", f"sin Sala de Ideas hoy ({type(e).__name__})")
         aviso_juez = ""
         for intento in (1, 2):           # si el Juez lo suspende, una segunda oportunidad con su consejo
             if intento == 2:
                 paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
             paso("escritor", "escribiendo el guion")
             g = escritor.escribir(canal, cuadernos["escritor"].para_el_prompt() + aviso_juez,
-                                 privado.titulos_recientes(clave), fuentes)
+                                 privado.titulos_recientes(clave), fuentes, idea=idea)
             if lista:
                 reportero.apuntar_usadas(clave, lista, g.get("fuentes_usadas"))
             json.dump(g, open(os.path.join(trabajo, "guion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
@@ -128,7 +139,9 @@ def main(argv=None):
             paso("montador", f"vídeo de {segundos:.1f} s")
 
             paso("juez_guardia", "juzgando el vídeo")
-            v = juez_guardia.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(), os.path.join(trabajo, "juicio"))
+            v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
+                                os.path.join(trabajo, f"juicio{intento}"))
+            id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
             id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
                                                                      "veredicto": v["veredicto"], "total": v.get("total")})
             cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juez de guardia", v.get("consejo", ""))
@@ -136,7 +149,8 @@ def main(argv=None):
                  f"{v['veredicto']} ({v.get('total', '-')}/100)")
             resumen.update(titulo=g["titulo"], veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
                            juicio=id_juicio, segundos=round(segundos, 1), intento=intento,
-                           fallos=v.get("fallos_graves"))
+                           fallos=v.get("fallos_graves"), tribunal=v.get("tribunal"), juicio_app=id_tribunal,
+                           juicio_idea=id_idea)
             if v["veredicto"] != "suspendido" or a.prueba or not ajustes.get("segunda_oportunidad", True):
                 break
             aviso_juez = (f"\n- (Juez de guardia, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
