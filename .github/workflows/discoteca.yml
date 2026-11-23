@@ -43,7 +43,8 @@ jobs:
           GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
         run: |
           por=$(python -c "import json;print(int(json.load(open('peticiones/discoteca.json')).get('por_ambiente',6)))" 2>/dev/null || echo 6)
-          python bots/central/discoteca.py --por-ambiente "$por"
+          probar=$(python -c "import json;print(int(json.load(open('peticiones/discoteca.json')).get('probar',10)))" 2>/dev/null || echo 10)
+          python bots/central/discoteca.py --por-ambiente "$por" --probar "$probar"
       - name: Guardar en el repositorio privado
         if: always()
         env:
