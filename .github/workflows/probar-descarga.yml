@@ -1,0 +1,31 @@
+# Prueba de la Policía: ¿puede GitHub bajar vídeos de YouTube con yt-dlp? (Momentazos, curiosidades y comparaciones lo
+# necesitan). Se pone en marcha cuando Claude deja peticiones/descarga.json ({"url": "..."}) o a mano desde Actions.
+name: Probar descarga
+on:
+  push:
+    paths:
+      - "peticiones/descarga.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probar
+        run: |
+          pip install -q -U yt-dlp
+          url=$(python -c "import json;print(json.load(open('peticiones/descarga.json'))['url'])")
+          echo "yt-dlp $(yt-dlp --version)"
+          if yt-dlp -q --no-warnings -f "bv*[height<=720]+ba/b[height<=720]/b" -o prueba.mp4 "$url"; then
+            echo "DESCARGA OK $(du -h prueba.mp4* | cut -f1)"
+          else
+            echo "DESCARGA FALLA"
+          fi
+          yt-dlp --flat-playlist --playlist-end 3 --print "%(id)s %(title)s" "https://www.youtube.com/@YouTube/videos" \
+            && echo "LISTA OK" || echo "LISTA FALLA"
