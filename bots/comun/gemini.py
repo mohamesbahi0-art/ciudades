@@ -51,7 +51,8 @@ def _limpiar_json(texto):
     return json.loads(texto)
 
 
-def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False):
+def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False,
+              audio=None):
     clave = os.environ.get("GEMINI_API_KEY")
     if not clave:
         raise SinIA("falta el secreto GEMINI_API_KEY")
@@ -59,6 +60,9 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
     for ruta in imagenes:
         with open(ruta, "rb") as f:
             partes.append({"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(f.read()).decode()}})
+    if audio and os.path.exists(audio) and os.path.getsize(audio) < 8_000_000:   # que los jueces también lo oigan
+        with open(audio, "rb") as f:
+            partes.append({"inline_data": {"mime_type": "audio/mp3", "data": base64.b64encode(f.read()).decode()}})
     cuerpo = {"contents": [{"role": "user", "parts": partes}], "generationConfig": {"temperature": temperatura}}
     if json_salida:
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"

@@ -40,7 +40,7 @@ Título: {titulo}
 Texto del principio: {gancho}
 Narración: {narracion}
 Medidas: {medidas}
-Te paso 7 fotogramas en orden (del principio al final).
+Te paso 7 fotogramas en orden (del principio al final) y la voz entera (escúchala: ritmo, claridad, emoción).
 
 Pruebas del detective Paco Lupa (para la defensa) y de la detective Elena Rastro (para la fiscalía), con datos reales:
 {pruebas}
@@ -53,7 +53,7 @@ Escribe los dos alegatos, cortos y con argumentos concretos (usa las pruebas, no
 - el fiscal Héctor Duro dice que no y señala sus fallos.
 Devuelve SOLO un JSON: {{"defensa": "3-4 frases", "fiscalia": "3-4 frases", "fallos_graves": ["solo si hay pantalla negra, vídeo sin voz, imágenes rotas o con letras deformadas, título sin relación o contenido no apto"]}}"""
 
-SALAS = """Eres el Juzgado de {donde} «{nombre}». Tres jueces deciden si este vídeo se sube. Fotogramas adjuntos.
+SALAS = """Eres el Juzgado de {donde} «{nombre}». Tres jueces deciden si este vídeo se sube. Fotogramas y voz adjuntos.
 Título: {titulo}
 Texto del principio: {gancho}
 Medidas: {medidas}
@@ -96,7 +96,7 @@ def _jefe():
     return max(candidatos)[1] if candidatos else JEFE_INICIAL
 
 
-def juzgar(video, guion, canal, lecciones, carpeta):
+def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     clave = canal["clave"]
     subprocess.run([sys.executable, os.path.join(RAIZ, "herramientas", "fotogramas.py"), video, "--salida", carpeta],
                    check=True, capture_output=True)
@@ -118,11 +118,11 @@ def juzgar(video, guion, canal, lecciones, carpeta):
     try:
         alegatos = gemini.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal),
                                                     lecciones=lecciones, **comun), imagenes=imagenes, solo_bueno=True,
-                                    temperatura=0.5)
+                                    temperatura=0.5, audio=audio)
         jueces_txt = "\n".join(f"- {k}: {j['nombre']} ({j['sala']}): {j['especialidad']}" for k, j in JUECES.items())
         sala = gemini.preguntar(SALAS.format(defensa=alegatos.get("defensa", ""), fiscalia=alegatos.get("fiscalia", ""),
                                              jueces=jueces_txt, **comun), imagenes=imagenes, solo_bueno=True,
-                                temperatura=0.3)
+                                temperatura=0.3, audio=audio)
         if not isinstance(alegatos, dict) or not isinstance(sala, dict):
             raise gemini.SinIA("la IA no contestó con la forma pedida")
     except Exception:                      # sin IA o con respuesta rara: juicio rápido del Juez de guardia

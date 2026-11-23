@@ -144,7 +144,7 @@ def main(argv=None):
 
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
-                                os.path.join(trabajo, f"juicio{intento}"))
+                                os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"))
             id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
             id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
                                                                      "veredicto": v["veredicto"], "total": v.get("total")})
