@@ -1,0 +1,67 @@
+# Jefes de canal: miran en YouTube qué tiene cada canal (programados, último vídeo, suscriptores). Solo leen, no tocan
+# nada. Cada 3 horas, cuando Claude deja peticiones/revisar.json, o a mano desde Actions.
+name: Revisar canales
+on:
+  schedule:
+    - cron: "37 */3 * * *"
+  push:
+    paths:
+      - "peticiones/revisar.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: revisar-canales
+  cancel-in-progress: false
+jobs:
+  revisar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Revisar los canales
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          YT_ID_GTA: ${{ secrets.YT_ID_GTA }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_ID_CLIPS: ${{ secrets.YT_ID_CLIPS }}
+          YT_REFRESH_CURIOS: ${{ secrets.YT_REFRESH_CURIOS }}
+          YT_ID_CURIOS: ${{ secrets.YT_ID_CURIOS }}
+          YT_REFRESH_VERSUS: ${{ secrets.YT_REFRESH_VERSUS }}
+          YT_ID_VERSUS: ${{ secrets.YT_ID_VERSUS }}
+          YT_REFRESH_MAPAS: ${{ secrets.YT_REFRESH_MAPAS }}
+          YT_ID_MAPAS: ${{ secrets.YT_ID_MAPAS }}
+          YT_REFRESH_TERROR: ${{ secrets.YT_REFRESH_TERROR }}
+          YT_ID_TERROR: ${{ secrets.YT_ID_TERROR }}
+          YT_REFRESH_SOBSHORTS: ${{ secrets.YT_REFRESH_SOBSHORTS }}
+          YT_ID_SOBSHORTS: ${{ secrets.YT_ID_SOBSHORTS }}
+          YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
+          YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
+        run: python bots/policia/programados.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          git add -A estado memoria
+          git diff --cached --quiet && exit 0
+          git commit -q -m "revisión de canales"
+          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((i*5)); done
+          exit 1
