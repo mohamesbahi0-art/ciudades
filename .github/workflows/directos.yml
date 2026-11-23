@@ -1,0 +1,57 @@
+# El Presentador de directos: cada lunes deja preparado el directo de la semana de cada cuenta de TikTok/Instagram
+# encendida (guion por bloques, preguntas para el chat, encuesta, reto y lo que no hay que hacer). El directo lo hace el
+# dueño; esto solo se lo deja listo en la app. También arranca con peticiones/directo.json ({"solo": "barrio-3"}).
+name: Directos de la semana
+on:
+  schedule:
+    - cron: "23 15 * * 1"
+  push:
+    paths:
+      - "peticiones/directo.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: directos
+  cancel-in-progress: false
+jobs:
+  preparar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Preparar los directos
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          solo=""
+          if [ "${{ github.event_name }}" = "push" ] && [ -f peticiones/directo.json ]; then
+            solo=$(python -c "import json;print(json.load(open('peticiones/directo.json')).get('solo',''))" | tr -cd 'a-z0-9.,_-')
+          fi
+          python bots/central/directos.py ${solo:+--solo $solo}
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('directos de la semana') else 1)"

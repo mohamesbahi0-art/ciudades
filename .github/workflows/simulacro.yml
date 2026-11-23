@@ -56,3 +56,5 @@ jobs:
         run: python pruebas/simulacro_ventanilla.py
       - name: Constructor de canales (ficha, configuración, foto y banner de un canal y una cuenta nuevos)
         run: python pruebas/simulacro_constructor.py
+      - name: Presentador de directos (el directo de la semana de cada cuenta encendida)
+        run: python pruebas/simulacro_directos.py
