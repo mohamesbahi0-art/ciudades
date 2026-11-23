@@ -94,7 +94,12 @@ def llenar(por_ambiente=6, avisar=print):
     paginas = [p for p in todos if _ambiente(p) and not p.lower().endswith(".mp3")]
     avisar(f"discoteca: secciones útiles: {', '.join(p.rsplit('/', 1)[-1] for p in paginas) or 'ninguna'}")
     if not paginas:                        # la web ha cambiado: se enseña su índice para arreglarlo
-        avisar("discoteca: enlaces de la portada: " + " | ".join(u[len(WEB):] for u in todos[:80]))
+        crudos = re.findall(r'(?:href|src)\s*=\s*["\']([^"\']+)["\']', portada, flags=re.I)
+        avisar(f"discoteca: portada de {len(portada)} letras, {portada.lower().count('.mp3')} menciones de .mp3; enlaces: "
+               + " | ".join(crudos[:60]))
+        for m in re.finditer(r"[^\s\"'<>]{0,80}\.mp3", portada[:200000], flags=re.I):
+            avisar(f"discoteca: mp3 visto: {m.group(0)}")
+            break
     lista = privado.leer(LISTA, {}) or {}
     pistas = {p["fuente"]: p for p in lista.get("pistas", [])}
     cuenta = {a: sum(1 for p in pistas.values() if p.get("vale") and p.get("ambiente") == a) for a in USOS}
