@@ -1,8 +1,9 @@
 {
- "estado": "conectado",
- "canal": "sobshorts",
- "pedido": "sobshorts",
- "coincide": true,
+ "estado": "esperando",
+ "canal": "nivshorts",
+ "codigo": "WLJX-HSRN",
+ "url": "https://www.google.com/device",
+ "caduca": "2026-11-23T02:24:54Z",
  "quedan": 1,
- "actualizado": "2026-11-23T01:54:52Z"
+ "actualizado": "2026-11-23T01:54:54Z"
 }
