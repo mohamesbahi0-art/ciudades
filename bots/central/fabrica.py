@@ -217,6 +217,10 @@ def main():
                                                 rondas=(rondas + [resumen_ronda])[-30:]))
     guardar("fábrica: fin de la ronda")
     fallos = [t for t in ronda["turnos"] if t["codigo"] != 0]
+    if fallos and all(str(t.get("error") or "").startswith("SinIA") for t in fallos):
+        # sin IA (cupo gratis agotado y Claude sin poder): la ronda espera, no es una avería del código
+        print("la IA no contesta ahora: la ronda espera a la siguiente (no es un fallo del código)", flush=True)
+        return 0
     return 1 if ronda["turnos"] and len(fallos) == len(ronda["turnos"]) else 0
 
 
