@@ -1,0 +1,52 @@
+# Prueba del Ojeador de TikTok e Instagram: qué se ve sin cuenta. Abre unas pocas páginas públicas con un navegador
+# normal (sin cuenta, sin disfrazarse, despacio) y prueba a leer los datos de los vídeos con yt-dlp. Las capturas y el
+# detalle van al repositorio privado (pruebas/redes/); en este registro público solo salen sí o no y cuentas.
+# Se pone en marcha cuando Claude deja peticiones/redes.json o a mano desde Actions.
+name: Probar redes (Ojeador)
+on:
+  push:
+    paths:
+      - "peticiones/redes.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: probar-redes
+  cancel-in-progress: false
+jobs:
+  probar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          pip install -q -r requirements.txt && pip install -q -U yt-dlp
+          npm install --no-save --silent playwright@1.63.0 && npx playwright install --with-deps chromium > /dev/null
+      - name: Mirar las páginas
+        run: node pruebas/probar_redes.js privado/pruebas/redes
+      - name: Leer los datos de los vídeos
+        if: always()
+        run: python pruebas/probar_redes_ytdlp.py privado/pruebas/redes
+      - name: Guardar el resultado en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          rm -f privado/pruebas/redes/muestra.mp4
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('prueba del Ojeador de redes') else 1)"
