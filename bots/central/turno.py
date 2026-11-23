@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
 from bots.central import dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
 from bots.comun import privado  # noqa: E402
 from bots.juzgado import sala_ideas, tribunal  # noqa: E402
+from bots.coliseo import coliseo  # noqa: E402
 from bots.estudio import estudio as estudio_animacion  # noqa: E402
 import voz as locutor  # noqa: E402  (herramientas/voz.py)
 
@@ -51,6 +52,21 @@ CON_FUENTES = ("noticias", "datos", "versus")
 
 class _Hecho(Exception):
     """El turno ya está terminado (lo ha hecho el estudio de animación)."""
+
+
+def _coliseo(clave, canal, g, v, paso, a, resumen):
+    """El vídeo aprobado (90 o más) pasa por el Coliseo: 8 gladiadores pelean por su título, texto y hashtags.
+    Si algo falla, sale con su salida de siempre: el Coliseo nunca para un vídeo aprobado."""
+    if v.get("veredicto") != "aprobado":
+        return g
+    try:
+        nuevo = coliseo.luchar(clave, canal, g, v, paso=paso, prueba=a.prueba)
+    except Exception as e:
+        paso("coliseo", f"no ha podido hacer el torneo ({type(e).__name__}): sale con su salida de siempre")
+        return g
+    if nuevo.get("coliseo"):
+        resumen.update(coliseo=nuevo["coliseo"], titulo=nuevo.get("titulo"))
+    return nuevo
 
 
 def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None):
@@ -88,6 +104,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                    "Haz otro vídeo distinto que no tenga ese fallo.)")
         if intento < intentos:
             paso("juez_guardia", "suspendido: se tira y se hace otro con el consejo del Juzgado")
+    g = _coliseo(clave, canal, g, v, paso, a, resumen)
     if a.prueba:
         paso("subidor", "es una prueba: no se sube nada")
         resumen["destino_resultado"] = "prueba"
@@ -225,6 +242,7 @@ def main(argv=None):
                           f"{v.get('consejo', '')} Fallos: {', '.join(v.get('fallos_graves') or []) or 'ninguno grave'}. "
                           "Escribe un guion distinto que lo corrija.")
 
+        g = _coliseo(clave, canal, g, v, paso, a, resumen)
         if a.prueba:
             paso("subidor", "es una prueba: no se sube nada")
             resumen["destino_resultado"] = "prueba"

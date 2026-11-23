@@ -26,6 +26,11 @@
    "id": "derechos",
    "nombre": "Derechos Sociales",
    "numero": 5
+  },
+  {
+   "id": "coliseo",
+   "nombre": "El Coliseo",
+   "numero": 6
   }
  ],
  "bots": [
@@ -708,6 +713,42 @@
    "donde": "ciudad",
    "grupo": "Nuevos",
    "hace": "Lee la línea directa y lo de todos, y decide lo de hoy: qué va a Claude, qué al dueño y qué ya está hecho.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "organizador_juegos",
+   "nombre": "Organizador de los juegos",
+   "ciudad": "coliseo",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Recibe cada vídeo que el Juzgado aprueba con 90 o más, mira si hoy queda sitio y monta el torneo: saca a los gladiadores y hace el cuadro de combates.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "gladiadores",
+   "nombre": "Gladiadores",
+   "ciudad": "coliseo",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Ocho gladiadores, cada uno con su carta (curiosidad, polémica, dato bomba, historia, miedo a perdérselo, humor, directo al grano y tendencia), pelean por la salida del vídeo: título, texto y hashtags. Se atacan por parejas, se defienden y se corrigen.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "juez_ciego",
+   "nombre": "Juez ciego",
+   "ciudad": "coliseo",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Decide cada combate sin saber quién escribió cada salida ni con qué carta, hasta que solo queda una: la que se publica.",
    "origen": "nuevo",
    "lote": 2,
    "codigo": "nuevo",
