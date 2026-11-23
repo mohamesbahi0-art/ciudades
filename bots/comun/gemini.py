@@ -18,6 +18,25 @@ BUENOS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gem
 LIGEROS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
 BUENO, LIGERO = BUENOS[0], LIGEROS[0]
 AGOTADOS = set()          # los que hoy ya han dicho que no les queda cupo (en esta ronda no se vuelven a probar)
+USO = {}                  # el Portero de Gemini lleva la cuenta: {modelo: {"bien": n, "sin_cupo": n, "fallos": n}}
+
+
+def _contar(modelo, que):
+    USO.setdefault(modelo, {"bien": 0, "sin_cupo": 0, "fallos": 0})[que] += 1
+
+
+def apuntar_portero():
+    """El Portero de Gemini apunta en su cuaderno cuánto se ha pedido a cada modelo y cuáles se han quedado sin cupo."""
+    if not USO:
+        return
+    from bots.comun import privado
+    portero = privado.cuaderno("portero_gemini")
+    portero.apuntar("reparto", {"uso": USO, "sin_cupo": sorted(AGOTADOS)})
+    portero.guardar()
+    anterior = privado.leer("estado/gemini.json", {}) or {}
+    privado.guardar_estado("gemini.json", {"ultimo_reparto": USO, "sin_cupo": sorted(AGOTADOS),
+                                           "anteriores": (anterior.get("anteriores", []) + [anterior.get("ultimo_reparto")])[-20:]
+                                           if anterior.get("ultimo_reparto") else []})
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
 
@@ -53,12 +72,16 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                 with urllib.request.urlopen(req, timeout=180) as r:
                     datos = json.load(r)
                 texto_respuesta = "".join(p.get("text", "") for p in datos["candidates"][0]["content"]["parts"])
-                return _limpiar_json(texto_respuesta) if json_salida else texto_respuesta
+                salida = _limpiar_json(texto_respuesta) if json_salida else texto_respuesta
+                _contar(modelo, "bien")
+                return salida
             except urllib.error.HTTPError as e:
                 ultimo = f"{modelo}: HTTP {e.code}"
                 if e.code in (429, 404, 403):          # sin cupo, modelo que no existe o sin permiso: siguiente modelo
                     AGOTADOS.add(modelo)
+                    _contar(modelo, "sin_cupo")
                     break
+                _contar(modelo, "fallos")
                 if e.code in (500, 502, 503, 504):
                     if intento >= 1:                   # saturado: mejor probar otro modelo que esperar
                         break

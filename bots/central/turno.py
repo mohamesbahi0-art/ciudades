@@ -30,6 +30,21 @@ from bots.juzgado import juez_guardia  # noqa: E402
 import voz as locutor  # noqa: E402  (herramientas/voz.py)
 
 ROBOTS = ("reportero_gta6", "escritor", "locutor", "dibujante", "montador", "juez_guardia", "subidor", "publicador")
+# Cada canal tiene su especialista: el mismo motor, pero con su propio cuaderno (memoria) y su puesto en la app.
+REPORTERO = {"gta": "reportero_gta6", "curios": "cazador_datos", "versus": "comparador"}
+EN_BARRIO = {"escritor": "guionista", "montador": "editor_video"}       # en TikTok/Instagram trabajan el guionista y el editor
+EN_MAPAS = {"dibujante": "dibujante_mapas", "escritor": "archivero_mapas"}
+
+
+def puestos(clave, canal):
+    """Qué robot hace cada paso en este canal o barrio (para su cuaderno y para la app)."""
+    nombres = {r: r for r in ROBOTS}
+    nombres["reportero_gta6"] = REPORTERO.get(clave, "cazador_datos" if canal["destino"] == "parasubir" else "reportero_gta6")
+    if canal["destino"] == "parasubir":
+        nombres.update(EN_BARRIO)
+    if clave == "mapas":
+        nombres.update(EN_MAPAS)
+    return nombres
 CON_FUENTES = ("noticias", "datos", "versus")
 
 
@@ -47,10 +62,15 @@ def main(argv=None):
     hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
     trabajo = os.path.join(a.salida, f"{hoy}-{privado.alias(clave)}")
     os.makedirs(trabajo, exist_ok=True)
-    cuadernos = {r: privado.cuaderno(r) for r in ROBOTS}
+    nombres = puestos(clave, canal)
+    cuadernos = {r: privado.cuaderno(nombres[r]) for r in ROBOTS}
     registro = []
 
+    en_curso = {"robot": "escritor"}
+
     def paso(robot, texto, publico=None):
+        if robot in cuadernos:
+            en_curso["robot"] = robot
         hora = dt.datetime.now(dt.timezone.utc).strftime('%H:%M:%S')
         registro.append(f"[{hora}] {robot}: {texto}")
         print(privado.limpiar(f"[{hora}] {clave} · {robot}: {publico if publico is not None else texto}"), flush=True)
@@ -60,12 +80,12 @@ def main(argv=None):
     try:
         fuentes, lista = None, []
         if canal.get("tipo") in CON_FUENTES and canal.get("fuentes"):
-            paso("reportero", "buscando fuentes")
-            fuentes, lista = reportero.fuentes(clave, canal, registro=lambda t: paso("reportero", t))
+            paso("reportero_gta6", "buscando fuentes")
+            fuentes, lista = reportero.fuentes(clave, canal, registro=lambda t: paso("reportero_gta6", t))
             if not fuentes:
                 raise RuntimeError("el Reportero no ha encontrado ninguna fuente hoy")
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
-            paso("reportero", f"{len(lista)} fuentes")
+            paso("reportero_gta6", f"{len(lista)} fuentes")
 
         aviso_juez = ""
         for intento in (1, 2):           # si el Juez lo suspende, una segunda oportunidad con su consejo
@@ -160,7 +180,8 @@ def main(argv=None):
                 resumen.update(destino_resultado="en_cola", motivo=motivo)
         resumen["resultado"] = "hecho"
     except Exception as e:  # el turno nunca se queda a medias sin contarlo
-        resumen.update(resultado="error", error=f"{type(e).__name__}: {e}")
+        resumen.update(resultado="error", error=f"{type(e).__name__}: {e}", robot=nombres[en_curso["robot"]])
+        cuadernos[en_curso["robot"]].apuntar("error", {"canal": clave, "error": f"{type(e).__name__}: {str(e)[:300]}"})
         paso("turno", f"ERROR {type(e).__name__}: {e}", f"ERROR {type(e).__name__}")
         detalle = traceback.format_exc()
         with open(os.path.join(trabajo, "fallo.txt"), "w", encoding="utf-8") as f:

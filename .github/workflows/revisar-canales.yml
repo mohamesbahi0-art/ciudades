@@ -11,6 +11,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: revisar-canales
   cancel-in-progress: false
@@ -55,6 +56,13 @@ jobs:
           YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
           YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
         run: python bots/policia/programados.py
+      - name: La Jefa de máquinas mira que cada turno pase a su hora
+        if: always()
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GH_TOKEN: ${{ github.token }}
+        run: python bots/policia/maquinas.py
       - name: La Analista repasa cómo van las cuentas
         if: always()
         env:

@@ -19,6 +19,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, RAIZ)
 from bots.central import huecos, parasubir  # noqa: E402
 from bots.comun import gemini, privado  # noqa: E402
+from bots.influencers import cerebro  # noqa: E402
 
 PLANTILLA = """Eres la Analista de cuentas de una fábrica de vídeos cortos. El dueño no sabe de técnica: háblale en español
 de España, claro y sin palabras raras. Estos son los datos de hoy (JSON):
@@ -91,7 +92,11 @@ def redes(cfg):
 def main():
     ahora = dt.datetime.now(dt.timezone.utc)
     cfg = privado.config()
-    datos = {"fecha": privado.ahora(), "youtube": youtube(cfg, ahora), "instagram_tiktok": redes(cfg)}
+    medidas = cerebro.medir(ahora)                 # el Cerebro pone las notas reales a las 48-96 h
+    tabla_liga = cerebro.liga()                     # la Liga: cuánto acierta cada juez
+    alertas = cerebro.virales(ahora)                # el Detector de virales
+    datos = {"fecha": privado.ahora(), "youtube": youtube(cfg, ahora), "instagram_tiktok": redes(cfg),
+             "medidos_hoy": medidas, "liga": tabla_liga, "despegando": alertas}
     cuaderno = privado.cuaderno("analista_cuentas")
     informe = None
     try:
@@ -117,6 +122,7 @@ def main():
     id_informe = cuaderno.apuntar("informe", {"titular": (informe or {}).get("titular"), "lecciones": nuevas})
     cuaderno.guardar()
     privado.guardar_estado("analisis/informe.json", dict(datos, informe=informe, id=id_informe))
+    gemini.apuntar_portero()
     print(f"analista: informe hecho ({len(datos['youtube'])} canales, {len(datos['instagram_tiktok'])} barrios, "
           f"{len(nuevas)} lecciones nuevas)", flush=True)
     return 0

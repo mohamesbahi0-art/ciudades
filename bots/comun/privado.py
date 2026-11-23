@@ -153,8 +153,8 @@ def git_guardar(mensaje, intentos=5):
     import time
     c = carpeta()
 
-    def git(*args):
-        return subprocess.run(["git", "-C", c, *args], capture_output=True, text=True)
+    def git(*args, texto=True):
+        return subprocess.run(["git", "-C", c, *args], capture_output=True, text=texto)
 
     git("add", "-A", "--", ".", ":(exclude)*.mp4", ":(exclude)*.mp3", ":(exclude)*.webp")
     if git("diff", "--cached", "--quiet").returncode != 0:
@@ -171,8 +171,8 @@ def git_guardar(mensaje, intentos=5):
             continue
         cambiados = [f for f in git("diff", "--name-only", "@{u}...HEAD").stdout.split() if f]
         nuestros = {}
-        for f in cambiados:
-            r = git("show", f"HEAD:{f}")
+        for f in cambiados:                      # en bytes: puede haber vídeos (las pruebas guardan su mp4)
+            r = git("show", f"HEAD:{f}", texto=False)
             nuestros[f] = r.stdout if r.returncode == 0 else None
         git("reset", "-q", "--hard", "@{u}")
         for f, texto in nuestros.items():
@@ -184,13 +184,17 @@ def git_guardar(mensaje, intentos=5):
             if f.endswith(".json"):
                 try:
                     suyo = json.load(open(ruta, encoding="utf-8")) if os.path.exists(ruta) else None
-                    texto = json.dumps(fusionar(f, suyo, json.loads(texto)), ensure_ascii=False, indent=1)
+                    texto = json.dumps(fusionar(f, suyo, json.loads(texto.decode("utf-8"))), ensure_ascii=False,
+                                       indent=1).encode("utf-8")
                 except ValueError:
                     pass
-            os.makedirs(os.path.dirname(ruta), exist_ok=True)
-            with open(ruta, "w", encoding="utf-8") as fh:
+            os.makedirs(os.path.dirname(ruta) or c, exist_ok=True)
+            with open(ruta, "wb") as fh:
                 fh.write(texto)
         git("add", "-A", "--", ".", ":(exclude)*.mp4", ":(exclude)*.mp3", ":(exclude)*.webp")
+        for f in nuestros:                       # lo que ya iba en el commit (un vídeo de prueba) sigue yendo
+            if f.endswith((".mp4", ".mp3", ".webp")) and nuestros[f] is not None:
+                git("add", "-f", f)
         git("commit", "-q", "-m", f"{mensaje} (juntado con otro turno)")
         if git("push", "-q").returncode == 0:
             return True

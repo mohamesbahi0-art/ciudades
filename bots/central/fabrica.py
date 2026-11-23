@@ -131,6 +131,8 @@ def main():
                                                     rondas=rondas))
         guardar(f"fábrica: turno de {clave} ({ultimo.get('destino_resultado') or ultimo.get('resultado')})")
 
+    from bots.comun import gemini
+    gemini.apuntar_portero()
     ronda["terminada"] = privado.ahora()
     resumen_ronda = {k: ronda.get(k) for k in ("empezada", "terminada", "plan", "turnos", "cola_subidos")}
     privado.guardar_estado("fabrica.json", dict(ronda, cuota=subidor.cuota(), cola=len(subidor.en_cola()),

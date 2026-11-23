@@ -89,7 +89,7 @@ def main():
     with open(os.path.join(privado.carpeta(), "config", "canales.json"), encoding="utf-8") as f:
         canales = json.load(f)["canales"]
     jefes = privado.cuaderno("jefes_canal")
-    resumen, fallos = {}, 0
+    resumen, fallos, permisos = {}, 0, {}
     for clave, cfg in canales.items():
         if a.canal and clave != a.canal:
             continue
@@ -98,9 +98,13 @@ def main():
             continue
         try:
             r = revisar(clave, cfg)
+            r["permiso"] = "al_dia"
         except Exception as e:  # un canal que falla no para a los demás
-            r = {"canal": clave, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+            caducado = type(e).__name__ == "RefreshError" or "invalid_grant" in str(e)
+            r = {"canal": clave, "error": "permiso caducado o quitado" if caducado else f"{type(e).__name__}: {str(e)[:200]}",
+                 "permiso": "caducado" if caducado else "desconocido"}
             fallos += 1
+        permisos[clave] = r.get("permiso")
         resumen[clave] = r
         privado.guardar_estado(f"canales/{clave}.json", r)
         if not r.get("error"):
@@ -113,6 +117,11 @@ def main():
             print(f"{clave}: {r['suscriptores']} suscriptores · {len(r['programados'])} programados "
                   f"(hasta {r['hasta'] or '—'}) · {r['programados24h']} en 24 h")
     jefes.guardar()
+    vigilante = privado.cuaderno("vigilante_permisos")      # el Vigilante de permisos: qué canal puede subir y cuál no
+    vigilante.apuntar("revision", {"permisos": permisos,
+                                   "caducados": [k for k, v in permisos.items() if v == "caducado"]})
+    vigilante.guardar()
+    privado.guardar_estado("permisos.json", {"permisos": permisos})
     privado.guardar_estado("canales/_resumen.json", {"canales": {k: {x: v.get(x) for x in
                            ("suscriptores", "programados24h", "hasta", "error", "conectado")} for k, v in resumen.items()}})
     return 1 if fallos == len(resumen) and resumen else 0
