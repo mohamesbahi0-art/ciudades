@@ -40,7 +40,8 @@ gemini.preguntar = falso
 almacen.guardar = lambda etiqueta, ruta, nombre=None: f"https://example.invalid/{etiqueta}/{nombre or os.path.basename(ruta)}"
 cfg = privado.config()
 for b in cfg.get("barrios", {}).values():
-    b.update(estudio="animacion", formato_estudio="ciencia", voz_estudio="nl-NL-MaartenNeural", idioma="nl",
+    b.update(estudio="animacion", formato_estudio="ciencia", voz_estudio="nl-NL-MaartenNeural|nl-BE-ArnaudNeural", idioma="nl",
+             musica_estudio="ninguna",
              velocidad_estudio="-4%", tono_estudio="+0Hz")
 privado.escribir(os.path.join("config", "canales.json"), cfg)
 codigo = turno.main(["--canal", "barrio-1", "--salida", os.path.join(os.environ["PRIVADO"], "trabajo")])

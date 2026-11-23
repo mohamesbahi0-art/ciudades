@@ -96,15 +96,25 @@ async def generar(texto, voz, velocidad, tono, carpeta):
         ec._SSL_CTX = ssl.create_default_context(cafile=os.environ["EDGE_TTS_CA"])
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
     os.makedirs(carpeta, exist_ok=True)
+    voz, _, reserva = str(voz).partition("|")      # "voz|voz de reserva", también con las voces gratis
     try:
         palabras = await _edge(texto, voz, velocidad, tono, carpeta, proxy)
     except edge_tts.exceptions.NoAudioReceived:
-        # algunas voces (p. ej. nl-NL-MaartenNeural) no aceptan ciertas velocidades o tonos y no devuelven nada:
-        # mejor la voz a su ritmo normal que quedarse sin vídeo
-        if (velocidad, tono) == ("+0%", "+0Hz"):
+        # algunas voces (p. ej. nl-NL-MaartenNeural) a veces no devuelven nada con ciertas frases, velocidades o tonos:
+        # primero a ritmo normal y, si no, la voz de reserva; mejor eso que quedarse sin vídeo
+        palabras = None
+        for v, r, t in ((voz, "+0%", "+0Hz"), (reserva, velocidad, tono), (reserva, "+0%", "+0Hz")):
+            if not v or (v == voz and (velocidad, tono) == (r, t)):
+                continue
+            try:
+                palabras = await _edge(texto, v, r, t, carpeta, proxy)
+            except edge_tts.exceptions.NoAudioReceived:
+                continue
+            MOTOR["aviso"] = f"{voz} no ha podido con «{texto[:40]}»; uso {v} {r}"
+            print(f"voz: {MOTOR['aviso']}", flush=True)
+            break
+        if palabras is None:
             raise
-        print(f"voz: {voz} no acepta {velocidad} {tono}; se graba a ritmo normal", flush=True)
-        palabras = await _edge(texto, voz, "+0%", "+0Hz", carpeta, proxy)
     with open(os.path.join(carpeta, "palabras.json"), "w", encoding="utf-8") as f:
         json.dump(palabras, f, ensure_ascii=False, indent=1)
     return palabras
