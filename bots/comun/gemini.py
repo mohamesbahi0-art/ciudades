@@ -103,3 +103,46 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                 ultimo = f"{modelo}: no contesta a tiempo ({type(e).__name__})"
                 time.sleep(5)
     raise SinIA(f"Gemini no contesta: {ultimo}")
+
+
+VE_VIDEOS = None     # el último modelo que supo ver un vídeo de YouTube por su enlace: se prueba el primero
+
+
+def ver_youtube(url, texto, temperatura=0.3, json_salida=True, espera=300):
+    """Gemini «ve» un vídeo público de YouTube por su enlace (no se descarga nada) y contesta a `texto`.
+    No todos los modelos saben hacerlo: prueba los buenos, empezando por el último que supo, y salta los que no pueden."""
+    global VE_VIDEOS
+    clave = os.environ.get("GEMINI_API_KEY")
+    if not clave:
+        raise SinIA("falta el secreto GEMINI_API_KEY")
+    cuerpo = {"contents": [{"role": "user", "parts": [{"file_data": {"file_uri": url}}, {"text": texto}]}],
+              "generationConfig": {"temperature": temperatura}}
+    if json_salida:
+        cuerpo["generationConfig"]["responseMimeType"] = "application/json"
+    orden = ([VE_VIDEOS] if VE_VIDEOS else []) + [m for m in BUENOS if m != VE_VIDEOS]
+    ultimo = "sin intentar"
+    for modelo in [m for m in orden if m not in AGOTADOS]:
+        req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
+                                     headers={"Content-Type": "application/json", "x-goog-api-key": clave})
+        try:
+            with urllib.request.urlopen(req, timeout=espera) as r:
+                datos = json.load(r)
+            respuesta = "".join(p.get("text", "") for p in datos["candidates"][0]["content"]["parts"])
+            salida = _limpiar_json(respuesta) if json_salida else respuesta
+            _contar(modelo, "bien")
+            VE_VIDEOS = modelo
+            return salida
+        except urllib.error.HTTPError as e:
+            ultimo = f"{modelo}: HTTP {e.code}"
+            if e.code in (429, 404):                  # sin cupo o modelo que ya no existe: no se vuelve a probar hoy
+                AGOTADOS.add(modelo)
+                _contar(modelo, "sin_cupo")
+            else:                                     # este modelo no sabe ver vídeos (o no ese): el siguiente
+                _contar(modelo, "fallos")
+        except (KeyError, IndexError, ValueError) as e:
+            ultimo = f"{modelo}: respuesta rara ({type(e).__name__})"
+            _contar(modelo, "fallos")
+        except (urllib.error.URLError, TimeoutError, OSError) as e:   # tarda demasiado: el siguiente modelo
+            ultimo = f"{modelo}: no contesta a tiempo ({type(e).__name__})"
+            _contar(modelo, "fallos")
+    raise SinIA(f"Gemini no ha podido ver el vídeo: {ultimo}")

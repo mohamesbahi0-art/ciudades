@@ -52,8 +52,6 @@ Devuelve SOLO un JSON: {{"momentos": [{{"desde": 0, "hasta": 0, "para": "clips|c
 def ver_y_elegir(candidatos, cuantos=6):
     """Gemini «ve» por su enlace los vídeos de los creadores más famosos y elige los mejores momentos (no se descarga
     nada). Deja la lista en estado/clips/para_grabar.json; el dueño los graba con el móvil y los deja en el buzón."""
-    import json
-    import urllib.request
     from bots.comun import gemini
     anterior = privado.leer(os.path.join("estado", "clips", "para_grabar.json"), {}) or {}
     lista = anterior.get("momentos", [])
@@ -69,22 +67,10 @@ def ver_y_elegir(candidatos, cuantos=6):
             break
     numero = max([int(m["codigo"][2:]) for m in lista] + [0])
     for c in elegidos:
-        cuerpo = {"contents": [{"parts": [{"file_data": {"file_uri": f"https://www.youtube.com/watch?v={c['id']}"}},
-                                          {"text": VER.format(n=2 if c["segundos"] < 90 else 3)}]}],
-                  "generationConfig": {"temperature": 0.3, "responseMimeType": "application/json"}}
-        r = None
-        for modelo in [m for m in gemini.BUENOS if m not in gemini.AGOTADOS]:
-            req = urllib.request.Request(gemini.URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
-                                         headers={"Content-Type": "application/json",
-                                                  "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-            try:
-                with urllib.request.urlopen(req, timeout=300) as resp:
-                    texto = "".join(p.get("text", "") for p in json.load(resp)["candidates"][0]["content"]["parts"])
-                r = gemini._limpiar_json(texto)
-                break
-            except Exception as e:      # sin cupo, saturado o tarda: el siguiente modelo
-                if getattr(e, "code", None) == 429:
-                    gemini.AGOTADOS.add(modelo)
+        try:
+            r = gemini.ver_youtube(f"https://www.youtube.com/watch?v={c['id']}", VER.format(n=2 if c["segundos"] < 90 else 3))
+        except gemini.SinIA:            # ningún modelo ha podido verlo hoy: el siguiente vídeo
+            r = None
         for m in (r or {}).get("momentos", []) if isinstance(r, dict) else []:
             try:
                 desde, hasta = float(m["desde"]), float(m["hasta"])

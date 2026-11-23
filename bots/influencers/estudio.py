@@ -159,7 +159,10 @@ def recetas(clave, tema, lista, palabras):
         print(f"estudio: sin IA para la receta ({e})", flush=True)
         return None
     todas = privado.leer(os.path.join(CARPETA, "recetas.json"), {}) or {}
-    todas.setdefault("canales", {})[clave] = dict(receta, fecha=privado.ahora(), basada_en=len(top))
+    anterior = todas.setdefault("canales", {}).get(clave) or {}
+    todas["canales"][clave] = dict(receta, fecha=privado.ahora(), basada_en=len(top))
+    if anterior.get("radar"):                    # lo que ha visto el Radar de nichos se queda
+        todas["canales"][clave]["radar"] = anterior["radar"]
     privado.guardar_estado("influencers/recetas.json", {"canales": todas["canales"]})
     _apuntar("recetario", "receta", {"canal": clave})
     return receta

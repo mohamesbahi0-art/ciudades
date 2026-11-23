@@ -1,0 +1,79 @@
+# Radar de nichos (Influencers): cada día mira en YouTube Shorts (API oficial) lo que más crece en el nicho de cada perfil
+# (canales de YouTube y barrios de TikTok/Instagram). Gemini ve los mejores por su enlace (no se descarga nada) y lo que
+# funciona va a las recetas de los guionistas. Gasta como mucho unas 500 unidades de cuota al día: las subidas mandan.
+# Corre al final del día de cuota de YouTube (medianoche de California), cuando ya no quedan subidas que hacer.
+# También con peticiones/radar.json ({"solo": "barrio-2", "videos": 3, "todos": true}; usa alias, nunca el nombre de la
+# cuenta). Con "todos" mira todos los perfiles aunque no les toque hoy (siempre respetando la cuota).
+name: Radar de nichos
+on:
+  schedule:
+    - cron: "11 7 * * *"
+  push:
+    paths:
+      - "peticiones/radar.json"
+  workflow_dispatch:
+    inputs:
+      solo:
+        description: "Perfiles (clave o alias como barrio-2, separados por comas)"
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: radar
+  cancel-in-progress: false
+jobs:
+  radar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Qué mirar
+        id: que
+        env:
+          SOLO: ${{ github.event.inputs.solo }}
+          EVENTO: ${{ github.event_name }}
+        run: |
+          solo="$SOLO"; videos=""; todos=""
+          if [ "$EVENTO" = "push" ] && [ -f peticiones/radar.json ]; then
+            solo=$(python -c "import json;print(json.load(open('peticiones/radar.json')).get('solo',''))")
+            videos=$(python -c "import json;print(json.load(open('peticiones/radar.json')).get('videos',''))")
+            todos=$(python -c "import json;print('si' if json.load(open('peticiones/radar.json')).get('todos') else '')")
+          fi
+          solo=$(printf '%s' "$solo" | tr -cd 'a-z0-9.,_-'); videos=$(printf '%s' "$videos" | tr -cd '0-9')
+          args=""
+          [ -n "$solo" ] && args="$args --solo $solo"
+          [ -n "$videos" ] && args="$args --videos $videos"
+          [ -n "$todos" ] && args="$args --todos"
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+      - name: Mirar los nichos
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python bots/influencers/radar.py ${{ steps.que.outputs.args }}
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('radar de nichos') else 1)"

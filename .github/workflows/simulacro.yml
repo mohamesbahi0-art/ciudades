@@ -33,3 +33,7 @@ jobs:
         run: |
           rm -rf /tmp/privado2 && cp -r pruebas/privado_ejemplo /tmp/privado2
           PRIVADO=/tmp/privado2 MEMORIA_DIR=/tmp/privado2/memoria python pruebas/simulacro_estudio.py
+      - name: Radar de nichos de mentira
+        run: |
+          rm -rf /tmp/privado3 && cp -r pruebas/privado_ejemplo /tmp/privado3
+          PRIVADO=/tmp/privado3 MEMORIA_DIR=/tmp/privado3/memoria python pruebas/simulacro_radar.py

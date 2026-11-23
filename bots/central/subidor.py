@@ -41,6 +41,27 @@ def hay_cupo(ajustes):
     return not c.get("agotada_hasta") and c["subidas"] < ajustes["subidas_por_dia"]
 
 
+def gastar(unidades, quien):
+    """Apunta en el libro de cuota lo que gastan los robots que no suben vídeos (Radar, Influencers…): así nadie se
+    come la cuota de las subidas sin que se sepa."""
+    c = cuota()
+    otros = c.setdefault("otros", {})
+    otros[quien] = otros.get(quien, 0) + int(unidades)
+    _guardar_cuota(c)
+    return otros[quien]
+
+
+def gastado(quien):
+    return (cuota().get("otros") or {}).get(quien, 0)
+
+
+def agotada():
+    """Alguien se ha topado con la cuota común acabada: nadie más lo intenta hasta que se renueve."""
+    c = cuota()
+    c["agotada_hasta"] = huecos.iso(_manana_california())
+    _guardar_cuota(c)
+
+
 def _manana_california():
     manana = dt.datetime.now(CALIFORNIA).date() + dt.timedelta(days=1)
     return dt.datetime(manana.year, manana.month, manana.day, 0, 10, tzinfo=CALIFORNIA).astimezone(dt.timezone.utc)

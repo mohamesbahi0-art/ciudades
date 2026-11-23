@@ -138,6 +138,30 @@ def fusionar(ruta, suyo, nuestro):
         if ruta.startswith("estado/historial/"):
             return sorted(_por_id(suyo, nuestro, clave="fecha"), key=lambda x: x.get("fecha", ""))
         return _por_id(suyo, nuestro)
+    if ruta == "estado/cuota.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        if suyo.get("dia") != nuestro.get("dia"):          # el libro de un día nuevo gana entero
+            return max(suyo, nuestro, key=lambda c: c.get("dia") or "")
+        junto = dict(suyo, **nuestro)
+        for k in ("subidas", "intentos"):                  # las subidas de los dos turnos cuentan
+            junto[k] = max(suyo.get(k) or 0, nuestro.get(k) or 0)
+        otros = dict(suyo.get("otros") or {})
+        for quien, unidades in (nuestro.get("otros") or {}).items():
+            otros[quien] = max(otros.get(quien, 0), unidades)
+        junto["otros"] = otros
+        junto["agotada_hasta"] = max([x for x in (suyo.get("agotada_hasta"), nuestro.get("agotada_hasta")) if x] or [None])
+        return junto
+    if ruta == "estado/influencers/recetas.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        canales = {}                                       # la receta del Recetario y la del Radar van cada una a lo suyo
+        for clave in set(suyo.get("canales") or {}) | set(nuestro.get("canales") or {}):
+            a, b = (suyo.get("canales") or {}).get(clave) or {}, (nuestro.get("canales") or {}).get(clave) or {}
+            base = dict(b if (b.get("fecha") or "") >= (a.get("fecha") or "") else a)
+            radares = [x["radar"] for x in (a, b) if x.get("radar")]
+            if radares:
+                base["radar"] = max(radares, key=lambda r: r.get("fecha") or "")
+            canales[clave] = base
+        junto = dict(suyo, **nuestro)
+        junto["canales"] = canales
+        return junto
     if isinstance(suyo, dict) and isinstance(nuestro, dict) and ruta.startswith("estado/central/"):
         junto = dict(suyo, **nuestro)
         junto["turnos"] = sorted(_por_id(suyo.get("turnos", []), nuestro.get("turnos", []), clave="empezado"),

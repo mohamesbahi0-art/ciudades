@@ -599,6 +599,18 @@
    "lote": 2,
    "codigo": "nuevo",
    "tipo": "bot"
+  },
+  {
+   "id": "radar_nichos",
+   "nombre": "Radar de nichos",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Cada día mira en YouTube Shorts lo que más crece en el nicho de cada perfil, lo ve entero con la IA y les pasa a los guionistas lo que funciona.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
   }
  ]
 }
