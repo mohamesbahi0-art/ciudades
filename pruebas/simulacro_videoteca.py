@@ -28,7 +28,7 @@ shutil.copytree(os.path.join(RAIZ, "pruebas", "privado_ejemplo"), PRIV)
 os.environ["PRIVADO"] = PRIV
 os.environ["MEMORIA_DIR"] = os.path.join(PRIV, "memoria")
 os.environ.pop("ANTHROPIC_API_KEY", None)
-for k in ("GTA", "TERROR", "VERSUS"):
+for k in ("GTA", "TERROR", "VERSUS", "CLIPS"):
     os.environ[f"YT_REFRESH_{k}"] = "x"
 
 
@@ -52,6 +52,8 @@ cfg = json.load(open(os.path.join(PRIV, "config", "canales.json"), encoding="utf
 cfg["canales"]["gta"]["videoteca"] = True
 cfg["canales"]["versus"] = {"nombre": "Versus de prueba", "tipo": "versus", "horas": ["13:00", "20:00"], "videoteca": True,
                             "voz": "es-MX-JorgeNeural", "categoria": "20", "tema": "GTA 5 contra GTA 6, punto por punto"}
+cfg["canales"]["clips"] = {"nombre": "Clips de prueba", "tipo": "clips", "horas": ["14:00"], "voz": "es-MX-JorgeNeural",
+                           "categoria": "20", "tema": "momentos increíbles de GTA"}
 json.dump(cfg, open(os.path.join(PRIV, "config", "canales.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 # --- la videoteca que ya había y los clips recién grabados por el dueño ---
@@ -69,6 +71,8 @@ json.dump({"tomas": tomas}, open(os.path.join(PRIV, "estado", "clips", "videotec
 BASE = {"creador": "Creador Nuevo", "enlace": "https://youtu.be/nuevo?t=30", "video": "nuevo", "licencia": "CC BY",
         "estado": "grabado", "tipo": "toma", "para": "videoteca", "sale_creador": "no"}
 json.dump({"momentos": [
+    dict(BASE, codigo="M-1", archivo="M-1.mp4", juego="gta6", tipo="momento", para="clips", etiquetas=["coches"],
+         que_pasa="un coche sale volando por un puente", gancho="¡VUELA!", por_que="es una locura", nota=96),
     dict(BASE, codigo="T-1", archivo="T-1.mp4", juego="gta5", etiquetas=["agua"], que_pasa="el agua del puerto", nota=95),
     dict(BASE, codigo="T-2", archivo="T-2.mp4", juego="gta6", etiquetas=["agua"], que_pasa="olas en la playa", nota=94),
     dict(BASE, codigo="T-3", archivo="T-3.mp4", juego="gta6", etiquetas=["armas"], que_pasa="un tiroteo", nota=93)]},
@@ -111,11 +115,15 @@ VISTO = {"portero": 0, "ideas": [], "guiones": []}
 def falso(texto, imagenes=(), **kw):
     if "Portero de clips" in texto:
         VISTO["portero"] += 1
-        if VISTO["portero"] == 3:
+        if VISTO["portero"] == 4:
             return {"limpio": False, "vale": False, "recorte": None, "habla_creador": True,
                     "problemas": ["la cara del creador en medio"], "que_se_ve": "el creador hablando"}
         return {"limpio": True, "vale": True, "recorte": None, "habla_creador": False, "problemas": [],
                 "que_se_ve": "el agua se mueve con olas y reflejos"}
+    if "Vas a narrar un clip" in texto:
+        return {"titulo": "Este coche VUELA en GTA 6 🚗", "texto_pantalla": "¡VUELA!",
+                "narracion": "Este coche sale volando por encima del puente y gira en el aire. ¿Lo habías visto?",
+                "descripcion": "Física de locos.", "hashtags": ["#gta6"]}
     if "Propón" in texto:
         VISTO["ideas"].append(texto)
         return {"ideas": [{"idea": f"idea {i}", "titulo": f"Título {i}", "gancho": "gancho"} for i in range(1, 4)]}
@@ -224,7 +232,9 @@ def turno_de(clave):
 
 # 1. El Archivero
 guardados = videoteca.archivar()
-comprobar(guardados == 2, f"el Archivero guarda limpios los 2 clips buenos ({guardados})")
+comprobar(guardados == 3, f"el Archivero guarda limpios los 3 clips buenos ({guardados})")
+comprobar(momento("M-1")["estado"] == "grabado" and momento("M-1").get("en_videoteca"),
+          "un momento viral queda en la videoteca y sigue esperando su propio Short")
 comprobar(momento("T-1")["estado"] == "en_videoteca" and momento("T-2")["estado"] == "en_videoteca",
           "las tomas grabadas quedan en la videoteca")
 comprobar(momento("T-3")["estado"] == "descartado", "el clip donde sale el creador se descarta")
@@ -267,6 +277,14 @@ comprobar(all(e["toma"] in {t["id"] for t in videoteca.tomas() if t["juego"] == 
 comprobar("FUENTES" in VISTO["guiones"][-1] and "pantalla partida" not in VISTO["guiones"][-1],
           "el Escritor de noticias ve las fuentes y el catálogo de tomas")
 comprobar(not any("dibujo" in e for e in guion["escenas"]), "ni un dibujo")
+
+# 3b. El momento viral, ya limpio en la videoteca, se convierte en su Short (sin volver a pasar por el Portero)
+antes = VISTO["portero"]
+codigo, resumen, videos, guion = turno_de("clips")
+comprobar(codigo == 0 and resumen.get("formato") == "clip" and resumen.get("destino_resultado") == "subido"
+          and VISTO["portero"] == antes, f"el momento sale de la videoteca y se sube ({resumen.get('error')})")
+comprobar(momento("M-1")["estado"] == "usado" and "🎬 Clip: Creador Nuevo" in SUBIDAS[-1]["descripcion"],
+          "queda usado y con el crédito en la descripción")
 
 # 4. Sin videoteca, como siempre
 comprobar(not videoteca.suficientes(privado.canal("terror")), "un canal sin videoteca sigue con sus dibujos")
