@@ -65,6 +65,12 @@ def dejar(clave, canal, video, guion, duracion, juicio=None):
         id_doc = f"{base}-{'ig' if red == 'instagram' else 'tt' if red == 'tiktok' else slug(red, 8)}"
         privado.escribir(os.path.join(CARPETA, f"{id_doc}.json"), doc)
         ids.append(id_doc)
+    try:                                   # el Cartero avisa al móvil (sin nombres de cuentas)
+        from bots.central import cartero
+        esperan = len({(d.get("barrio"), d.get("titulo")) for d in documentos() if d.get("estado") == "pendiente"})
+        cartero.video_para_subir(esperan)
+    except Exception as e:
+        print(f"cartero: no ha podido avisar ({type(e).__name__})", flush=True)
     return ids
 
 

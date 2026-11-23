@@ -1,0 +1,32 @@
+# El Cartero: cada tarde manda al móvil del dueño (app ntfy) el resumen del día, sin nada privado. También con
+# peticiones/cartero.json (para probar).
+name: Cartero
+on:
+  schedule:
+    - cron: "41 19 * * *"
+  push:
+    paths:
+      - "peticiones/cartero.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resumen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resumen del día
+        env:
+          PRIVADO: privado
+          NTFY_TEMA: ${{ secrets.NTFY_TEMA }}
+        run: python bots/central/cartero.py resumen
