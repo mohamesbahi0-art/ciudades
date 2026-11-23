@@ -13,7 +13,8 @@ Lo que ya se sabe del canal (datos reales):
 
 Para CADA idea: la letrada Sofía Vargas dice en una frase por qué funcionaría y el fiscal Héctor Duro, por qué no.
 Después votan la jueza Carmen Gancho (¿para el dedo en 2 segundos?), el juez Ramón Reloj (¿se verá entero?) y la jueza
-Lola Calle (¿le importa a la gente ahora?), con nota de 0 a 100 cada uno.
+Lola Calle (¿le importa a la gente ahora?), con nota de 0 a 100 cada uno. Una idea dura, oscura o incómoda no se
+castiga: el dueño quiere vídeos sin miedo.
 Devuelve SOLO un JSON: {{"juicios": [{{"n": 1, "defensa": "...", "fiscalia": "...", "gancho": 0, "reloj": 0, "calle": 0}}]}}"""
 
 

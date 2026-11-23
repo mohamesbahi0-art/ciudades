@@ -51,7 +51,7 @@ Lo que ha aprendido el Juzgado (lo del dueño manda):
 Escribe los dos alegatos, cortos y con argumentos concretos (usa las pruebas, no te inventes cifras):
 - la letrada Sofía Vargas defiende que el vídeo va a funcionar;
 - el fiscal Héctor Duro dice que no y señala sus fallos.
-Devuelve SOLO un JSON: {{"defensa": "3-4 frases", "fiscalia": "3-4 frases", "fallos_graves": ["solo si hay pantalla negra, vídeo sin voz, imágenes rotas o con letras deformadas, título sin relación o contenido no apto"]}}"""
+Devuelve SOLO un JSON: {{"defensa": "3-4 frases", "fiscalia": "3-4 frases", "fallos_graves": ["solo si hay pantalla negra, vídeo sin voz, imágenes rotas o con letras deformadas, título sin relación o algo que rompa las normas de YouTube o TikTok (un tema duro u oscuro no es un fallo)"]}}"""
 
 SALAS = """Eres el Juzgado de {donde} «{nombre}». Tres jueces deciden si este vídeo se sube. Fotogramas y voz adjuntos.
 Título: {titulo}
@@ -63,7 +63,8 @@ Alegato de la fiscalía (Héctor Duro): {fiscalia}
 
 Los jueces, cada uno mirando SOLO su especialidad:
 {jueces}
-Los dibujos hechos con IA son el estilo del canal: no es un fallo.
+Los dibujos hechos con IA son el estilo del canal: no es un fallo. Un tema duro, oscuro o incómodo tampoco: el dueño
+quiere vídeos sin miedo; solo cuenta que enganche.
 Devuelve SOLO un JSON: {{"votos": [{{"juez": "gancho|reloj|calle", "voto": "sube" o "no", "nota": 0-100, "razon": "una frase"}}],
 "consejo": "una frase concreta para mejorar el próximo vídeo"}}"""
 

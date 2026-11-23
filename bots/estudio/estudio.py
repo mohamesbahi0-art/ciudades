@@ -73,7 +73,8 @@ Escribe UN vídeo nuevo con el formato «{formato}», en {idioma}, que enganche 
 quiera saber cómo acaba. Duración: {duracion}. Entre {escenas_min} y {escenas_max} escenas más el final.
 Iconos disponibles para "props" e "icono": {iconos}.
 Si sale una persona famosa, que sea de las que más interesan ahora (deportistas, cantantes, empresarios muy conocidos) y
-cuenta solo cosas ciertas y conocidas de su vida; nada inventado ni ofensivo. Sin logotipos ni marcas.
+cuenta solo cosas ciertas y conocidas de su vida; nada inventado. Sin logotipos ni marcas.
+Sin miedo (lo pide el dueño): temas duros, oscuros, incómodos o polémicos, sí, contados con crudeza y sin moralina. Solo tres límites: lo que se diga de gente real tiene que ser verdad, nada de odio contra grupos de personas y nada que rompa las normas de YouTube o TikTok (por ejemplo, gore explícito).
 Devuelve SOLO un JSON con esta forma (más "descripcion", "hashtags" (3-5), "texto_instagram" y "texto_tiktok"):
 {esquema}"""
 

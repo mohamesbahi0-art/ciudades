@@ -42,7 +42,7 @@ Reglas que funcionan:
 - Frases cortas (12 palabras como mucho), una idea por frase. Algo nuevo cada 3-5 segundos.
 - El final remata y, si puede ser, enlaza con la primera frase para que el vídeo se vea dos veces.
 - Escribe los números como se dicen en voz alta.
-- Contenido original y para todos los públicos: miedo sí, gore no.
+- Contenido original. Sin miedo (lo pide el dueño): temas duros, oscuros, incómodos o polémicos, sí, contados con crudeza y sin moralina. Solo tres límites: lo que se diga de gente real tiene que ser verdad, nada de odio contra grupos de personas y nada que rompa las normas de YouTube o TikTok (por ejemplo, gore explícito).
 {reglas_tipo}
 - La narración tiene entre {pal_min} y {pal_max} palabras.
 
@@ -100,6 +100,7 @@ def validar(g, canal=None):
 
 IDEAS = """Eres el Escritor de {donde} llamado «{nombre}» ({tema}). Propón {n} ideas DISTINTAS para el próximo vídeo
 vertical de {seg_min} a {seg_max} segundos, en {idioma}. Que cada una pueda parar el dedo de alguien en 2 segundos.
+Sin miedo (lo pide el dueño): temas duros, oscuros, incómodos o polémicos, sí, contados con crudeza y sin moralina. Solo tres límites: lo que se diga de gente real tiene que ser verdad, nada de odio contra grupos de personas y nada que rompa las normas de YouTube o TikTok (por ejemplo, gore explícito).
 {reglas_tipo}
 Lo que ha aprendido este canal (lo del dueño manda):
 {lecciones}
