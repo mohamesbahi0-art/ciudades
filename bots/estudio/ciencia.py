@@ -300,6 +300,27 @@ def _clave_en(e):
     return e["inicio"] + 0.6
 
 
+def _norm(texto):
+    import unicodedata
+    texto = unicodedata.normalize("NFD", str(texto).lower())
+    return re.sub(r"[^a-z0-9]", "", "".join(c for c in texto if not unicodedata.combining(c)))
+
+
+def _entradas(e):
+    """Cuándo entra cada componente, igual que en ciencia.html: encadenados (cada uno cuando aterriza el anterior) o
+    justo cuando la voz dice lo suyo."""
+    a, plano = e["inicio"], e.get("plano")
+    arranque = a + (0.15 if plano in ("dato", "grafica") else max(0.12, min(0.55, _clave_en(e) - a - 0.12)))
+    salida = []
+    for c in (e.get("componentes") or [])[:3]:
+        previo = salida[-1] + 0.24 if salida else arranque
+        buscar = [_norm(str(v).split()[0]) for v in (c.get("hasta"), c.get("valor"), c.get("texto"), c.get("label"))
+                  if v not in (None, "") and str(v).split()]
+        dicho = next((w["a"] for w in e.get("palabras", []) if _norm(w.get("p", "")) in buscar), None)
+        salida.append(max(previo, dicho - 0.08) if dicho is not None else previo)
+    return salida
+
+
 def eventos(g):
     """Golpes de sonido para que nada pase en silencio (sin música): whoosh en cada corte, golpe en el gancho y en las
     cifras, pop en la palabra clave y en cada cosa que sale, tic-tic mientras sube un contador, brillo en el «?», el
@@ -311,13 +332,12 @@ def eventos(g):
             ev.append(("whoosh", max(0.0, a - 0.08), 0.55))
         tk = _clave_en(e)
         ev.append(("pop", max(0.0, tk - 0.02), 0.3))
-        arranque = a + (0.15 if plano in ("dato", "grafica") else max(0.12, min(0.55, tk - a - 0.12)))
-        for k, c in enumerate(e.get("componentes", [])):
-            ev.append(("pop", arranque + 0.09 * k, 0.32))
+        for c, t0 in zip((e.get("componentes") or [])[:3], _entradas(e)):     # cada uno cuando entra (encadenados)
+            ev.append(("pop", t0, 0.32))
             if c["tipo"] in ("deslizador", "medidor"):
-                ev.append(("tic", arranque + 0.5 + 0.09 * k, 0.4))
+                ev.append(("tic", t0 + 0.5, 0.4))
             if c["tipo"] == "numero":
-                ev.append(("golpe", arranque + 0.09 * k, 0.5))
+                ev.append(("golpe", t0, 0.5))
         if plano == "gancho":
             ev += [("golpe", a + 0.04, 0.95), ("brillo", a + 0.25, 0.3)]
         elif plano == "pregunta":
