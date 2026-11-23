@@ -22,6 +22,19 @@ async function bajar(pagina, veces) {
   }
 }
 
+async function quitarCartel(pagina) {
+  // El cartel de «Inicia sesión en TikTok» tapa la página: una persona sin cuenta pulsa «Omitir» y sigue mirando.
+  for (const texto of ['Omitir', 'Skip', 'Ahora no', 'Not now']) {
+    const boton = pagina.getByText(texto, { exact: true }).first();
+    if ((await boton.count().catch(() => 0)) && (await boton.isVisible().catch(() => false))) {
+      await boton.click({ timeout: 5000 }).catch(() => {});
+      await espera(1500, 3000);
+      return true;
+    }
+  }
+  return false;
+}
+
 async function recoger(pagina) {
   return pagina.evaluate((patron) => {
     const cifra = new RegExp(patron, 'i');
@@ -52,6 +65,7 @@ async function recoger(pagina) {
       const resp = await pagina.goto(paso.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
       r.http = resp ? resp.status() : null;
       await espera(6000, 9000);
+      r.cartel = await quitarCartel(pagina);
       if (r.http && r.http >= 400) {
         r.estado = 'bloqueada';
         r.motivo = `http ${r.http}`;
@@ -65,8 +79,22 @@ async function recoger(pagina) {
             r.faltan = (r.faltan || []).concat(categoria);
             continue;
           }
-          await boton.click({ timeout: 8000 }).catch(() => {});
+          let pulsado = false;
+          for (let intento = 0; intento < 2 && !pulsado; intento++) {
+            try {
+              await boton.scrollIntoViewIfNeeded({ timeout: 5000 });
+              await boton.click({ timeout: 8000 });
+              pulsado = true;
+            } catch (e) {
+              await quitarCartel(pagina);
+            }
+          }
+          if (!pulsado) {
+            r.fallos = (r.fallos || []).concat(categoria);
+            continue;
+          }
           await espera(4000, 7000);
+          await quitarCartel(pagina);
         }
         await bajar(pagina, paso.rondas || 3);
         const texto = await pagina.evaluate(() => (document.body ? document.body.innerText : '').slice(0, 6000));
@@ -76,9 +104,14 @@ async function recoger(pagina) {
           r.motivo = (texto.match(NO_DEJA) || [''])[0];
           break;
         }
+        let nuevos = 0;
         for (const v of encontrados) {
-          if (!r.videos.find((x) => x.url === v.url)) r.videos.push(Object.assign(v, { categoria: categoria || null }));
+          if (!r.videos.find((x) => x.url === v.url)) {
+            r.videos.push(Object.assign(v, { categoria: categoria || null }));
+            nuevos++;
+          }
         }
+        if (categoria) r.por_categoria = Object.assign(r.por_categoria || {}, { [categoria]: nuevos });
       }
       if (r.estado === 'bien' && !r.videos.length) r.estado = 'vacia';
     } catch (e) {

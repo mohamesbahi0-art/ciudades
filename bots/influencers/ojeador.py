@@ -18,7 +18,7 @@ Cada ronda (GitHub Actions, cada 3 horas):
 Configuración (repositorio privado):
 - config/canales.json → en cada perfil: "ojeador": {"categorias": ["Educación"], "temas": ["dinero"]} (sin "temas",
   usa las búsquedas del nicho; sin "categorias", solo mira sus temas);
-- config/fabrica.json → "ojeador": {"perfiles_ronda": 3, "datos_ronda": 40, "ia_ronda": 3, "ia_dia": 8,
+- config/fabrica.json → "ojeador": {"perfiles_ronda": 3, "datos_ronda": 60, "ia_ronda": 3, "ia_dia": 8,
   "minimo": 20000, "descanso_horas": 12}.
 En el registro público solo salen alias y cuentas.
 Uso:  python bots/influencers/ojeador.py [--solo barrio-2,gta] [--sin-ver] [--vista salida.json]
@@ -46,7 +46,7 @@ TENDENCIAS = os.path.join(CARPETA, "tendencias.json")
 CACHE = os.path.join(CARPETA, "_cifras.json")             # las cifras ya leídas (2 días), para no preguntar dos veces
 EXPLORAR = "https://www.tiktok.com/explore"
 PAUSA_IA = float(os.environ.get("OJEADOR_PAUSA", 25))     # segundos entre vídeo y vídeo: no comerse la IA de la fábrica
-DEFECTO = {"perfiles_ronda": 3, "datos_ronda": 40, "ia_ronda": 3, "ia_dia": 8, "minimo": 20000, "descanso_horas": 12,
+DEFECTO = {"perfiles_ronda": 3, "datos_ronda": 60, "ia_ronda": 3, "ia_dia": 8, "minimo": 20000, "descanso_horas": 12,
            "max_mb": 12}
 IDIOMAS = {"es": "español de España", "en": "inglés", "nl": "neerlandés", "fr": "francés", "pt": "portugués"}
 RELLENO = {"fyp", "foryou", "foryoupage", "parati", "viral", "viralvideo", "trending", "tiktok", "fy", "xyzbca", "capcut",
@@ -162,14 +162,15 @@ def plan(elegidos, tendencias, a):
             categorias += [c for c in p["categorias"] if c not in categorias]
         pasos.append({"id": "tiktok-explorar", "tipo": "tiktok-explorar", "url": EXPLORAR,
                       "categorias": (["Todo"] + categorias)[:5], "rondas": 3})
-    for p in elegidos:
+    for n, p in enumerate(elegidos):
         estado = leer(p["clave"])
         tema = p["temas"][int(estado.get("siguiente", 0)) % len(p["temas"])]
         alias = privado.alias(p["clave"])
         if libre(tendencias, "tiktok-temas", a["descanso_horas"]):
             pasos.append({"id": f"tiktok-temas-{alias}", "tipo": "tiktok-temas", "perfil": p["clave"], "tema": tema,
                           "url": f"https://www.tiktok.com/discover/{trozo(tema)}", "rondas": 2})
-        if libre(tendencias, "instagram", a["descanso_horas"]):
+        # Instagram corta enseguida si se le piden muchas páginas seguidas: una sola por ronda
+        if n == 0 and libre(tendencias, "instagram", a["descanso_horas"]):
             pasos.append({"id": f"instagram-{alias}", "tipo": "instagram", "perfil": p["clave"], "tema": tema,
                           "url": f"https://www.instagram.com/explore/tags/{etiqueta(tema)}/", "rondas": 2})
     return pasos
@@ -262,7 +263,7 @@ def recuento(videos, cuantos=12):
         if v.get("cancion") and not SONIDO_PROPIO.search(v["cancion"]):
             canciones[v["cancion"]] += 1
         for h in set(v.get("hashtags") or []):
-            if h not in RELLENO and len(h) > 2:
+            if h not in RELLENO and len(h) > 2 and not h.isdigit():
                 hashtags[h] += 1
     return ([{"nombre": c, "veces": n} for c, n in canciones.most_common(cuantos)],
             [{"nombre": h, "veces": n} for h, n in hashtags.most_common(cuantos)])
@@ -352,6 +353,9 @@ def main(argv=None):
         vista = {"pasos": []}
     por_id = {x["id"]: x for x in pasos}
     fuentes = tendencias.setdefault("fuentes", {})
+    tendencias["ultima_vista"] = [{k: r.get(k) for k in ("id", "estado", "http", "motivo", "cartel", "por_categoria",
+                                                         "faltan", "fallos")} | {"videos": len(r.get("videos", []))}
+                                  for r in vista.get("pasos", [])]
     for r in vista.get("pasos", []):
         tipo = (por_id.get(r["id"]) or {}).get("tipo") or r["id"].split("-")[0]
         if r["estado"] in ("bloqueada", "bien"):
@@ -362,24 +366,29 @@ def main(argv=None):
     # 2. Datos de cada vídeo nuevo (con caché, para no preguntar dos veces por lo mismo)
     conocidos = (privado.leer(os.path.join("estado", CACHE), {}) or {}).get("videos") or {}
     vistos_ahora, sin_datos_ig, pedidos_datos = [], 0, 0
-    for r in vista.get("pasos", []):
+    colas = [[(r, v) for v in r.get("videos", [])] for r in vista.get("pasos", [])]
+    turnos = []                                       # por turnos: un vídeo de cada página, para que todas tengan cifras
+    while any(colas):
+        for cola in colas:
+            if cola:
+                turnos.append(cola.pop(0))
+    for r, v in turnos:
         paso = por_id.get(r["id"]) or {}
-        for v in r.get("videos", []):
-            entrada = {"url": v["url"], "red": _red(v["url"]), "tipo": paso.get("tipo"), "perfil": paso.get("perfil"),
-                       "categoria": v.get("categoria"), "tema": paso.get("tema"), "cifra_pagina": v.get("cifra")}
-            clave_url = v["url"]
-            if clave_url in conocidos:
-                entrada.update(conocidos[clave_url])
-            elif pedidos_datos < int(aj["datos_ronda"]) and not (entrada["red"] == "instagram" and sin_datos_ig >= 2):
-                pedidos_datos += 1
-                d = datos(v["url"])
-                time.sleep(1.5)
-                if d:
-                    conocidos[clave_url] = dict({k: x for k, x in d.items() if k != "texto"}, leido=privado.ahora())
-                    entrada.update(d)
-                elif entrada["red"] == "instagram":
-                    sin_datos_ig += 1
-            vistos_ahora.append(entrada)
+        entrada = {"url": v["url"], "red": _red(v["url"]), "tipo": paso.get("tipo"), "perfil": paso.get("perfil"),
+                   "categoria": v.get("categoria"), "tema": paso.get("tema"), "cifra_pagina": v.get("cifra")}
+        clave_url = v["url"]
+        if clave_url in conocidos:
+            entrada.update(conocidos[clave_url])
+        elif pedidos_datos < int(aj["datos_ronda"]) and not (entrada["red"] == "instagram" and sin_datos_ig >= 2):
+            pedidos_datos += 1
+            d = datos(v["url"])
+            time.sleep(1.5)
+            if d:
+                conocidos[clave_url] = dict({k: x for k, x in d.items() if k != "texto"}, leido=privado.ahora())
+                entrada.update(d)
+            elif entrada["red"] == "instagram":
+                sin_datos_ig += 1
+        vistos_ahora.append(entrada)
     corte = _ahora() - dt.timedelta(days=2)
     conocidos = dict(sorted(((u, d) for u, d in conocidos.items() if (_fecha(d.get("leido")) or _ahora()) >= corte),
                             key=lambda x: x[1].get("leido", ""))[-700:])
