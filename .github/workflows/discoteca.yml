@@ -2,9 +2,9 @@
 # trozo de cada pieza y solo se quedan las que sirven de fondo. Van a la release «musica» del repositorio privado y la
 # fábrica las usa en sus vídeos. Una vez al mes busca piezas nuevas; también con peticiones/discoteca.json.
 name: Discoteca
+# PARADA: archive.org trae música de videojuegos mal etiquetada como libre. No vuelve a correr sola hasta que solo
+# use fuentes fiables (pendiente con el dueño).
 on:
-  schedule:
-    - cron: "41 3 9 * *"
   push:
     paths:
       - "peticiones/discoteca.json"
