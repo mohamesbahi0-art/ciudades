@@ -1,0 +1,45 @@
+# Analiza con Gemini los vídeos de referencia del dueño (en el repositorio privado) para copiar su estilo.
+# Con peticiones/referencias.json ({"carpeta": "referencias/barrio-2"}) o a mano.
+name: Analizar referencias
+on:
+  push:
+    paths:
+      - "peticiones/referencias.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analizar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Analizar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PRIVADO: privado
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          carpeta=$(python -c "import json;print(json.load(open('peticiones/referencias.json'))['carpeta'])" | tr -cd 'a-z0-9/_.-')
+          nombre=$(basename "$carpeta")
+          python herramientas/analizar_referencias.py "privado/$carpeta" "privado/estado/referencias/$nombre.json"
+      - name: Guardar
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('análisis de referencias') else 1)"
