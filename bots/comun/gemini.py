@@ -11,8 +11,13 @@ import time
 import urllib.error
 import urllib.request
 
-BUENO = "gemini-flash-latest"
-LIGERO = "gemini-flash-lite-latest"
+# Cada modelo tiene su propio cupo gratis: si uno se agota (429), está saturado (503) o ya no existe (404), se prueba el
+# siguiente. Los «buenos» también saben mirar imágenes; los ligeros, solo para texto (confunden imágenes).
+BUENOS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-flash-latest", "gemini-3.7-flash",
+          "gemini-3.8-flash"]
+LIGEROS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+BUENO, LIGERO = BUENOS[0], LIGEROS[0]
+AGOTADOS = set()          # los que hoy ya han dicho que no les queda cupo (en esta ronda no se vuelven a probar)
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
 
@@ -39,7 +44,8 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
     if json_salida:
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"
     ultimo = "sin intentar"
-    for modelo in ([BUENO] if solo_bueno else [BUENO, LIGERO]):
+    modelos = [m for m in (BUENOS if solo_bueno else BUENOS + LIGEROS) if m not in AGOTADOS]
+    for modelo in modelos:
         for intento in range(intentos):
             req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
                                          headers={"Content-Type": "application/json", "x-goog-api-key": clave})
@@ -51,9 +57,12 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
             except urllib.error.HTTPError as e:
                 ultimo = f"{modelo}: HTTP {e.code}"
                 if e.code in (429, 404, 403):          # sin cupo, modelo que no existe o sin permiso: siguiente modelo
+                    AGOTADOS.add(modelo)
                     break
                 if e.code in (500, 502, 503, 504):
-                    time.sleep(8 * (intento + 1))
+                    if intento >= 1:                   # saturado: mejor probar otro modelo que esperar
+                        break
+                    time.sleep(8)
                     continue
                 raise SinIA(ultimo)
             except (KeyError, IndexError, ValueError) as e:
