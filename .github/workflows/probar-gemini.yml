@@ -1,0 +1,52 @@
+# Prueba de la Policía: qué modelos de Gemini contestan hoy con la clave gratis (cada modelo tiene su propio cupo).
+# Solo enseña el nombre del modelo y el código de respuesta. Se pone en marcha con peticiones/gemini.json.
+name: Probar Gemini
+on:
+  push:
+    paths:
+      - "peticiones/gemini.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          clave = os.environ["GEMINI_API_KEY"]
+          def pedir(url, cuerpo=None):
+              req = urllib.request.Request(url, data=json.dumps(cuerpo).encode() if cuerpo else None,
+                                           headers={"Content-Type": "application/json", "x-goog-api-key": clave},
+                                           method="POST" if cuerpo else "GET")
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      return r.status, r.read()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read()
+          c, b = pedir("https://generativelanguage.googleapis.com/v1beta/models?pageSize=300")
+          modelos = [m["name"].split("/")[1] for m in json.loads(b).get("models", [])
+                     if "generateContent" in m.get("supportedGenerationMethods", [])
+                     and "image" not in m["name"] and "tts" not in m["name"] and "embedding" not in m["name"]]
+          print("MODELOS:", ", ".join(modelos))
+          for m in modelos:
+              if not any(x in m for x in ("flash", "pro", "gemma")):
+                  continue
+              c, b = pedir(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                           {"contents": [{"parts": [{"text": "Di solo: hola"}]}]})
+              msg = ""
+              if c != 200:
+                  try:
+                      msg = json.loads(b)["error"]["message"][:90]
+                  except Exception:
+                      msg = str(b[:90])
+              print(f"MODELO {m}: {c} {msg}")
+          PY

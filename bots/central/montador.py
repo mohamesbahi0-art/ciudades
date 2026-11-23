@@ -82,12 +82,16 @@ def montar(guion, imagenes, voz, palabras_json, salida):
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy",
                         "imagen.mp4"], cwd=tmp, check=True)
         subtitulos.escribir_ass(palabras_voz, os.path.join(tmp, "s.ass"), mayus=True)
-        with open(os.path.join(tmp, "gancho.txt"), "w", encoding="utf-8") as f:
-            f.write(_gancho(guion.get("texto_pantalla") or guion["titulo"]))
+        # Una línea por drawtext: con varias líneas en un mismo texto, el ffmpeg nuevo pinta un cuadradito en el salto.
         fuente = f":fontfile={FUENTE}" if os.path.exists(FUENTE) else ""
-        filtro = ("[0:v]ass=s.ass,drawtext=textfile=gancho.txt" + fuente +
-                  ":fontsize=88:fontcolor=white:borderw=8:bordercolor=black:line_spacing=12"
-                  ":x=(w-text_w)/2:y=h*0.13:enable='lt(t,2.5)'[v]")
+        filtro = "[0:v]ass=s.ass"
+        for n, linea in enumerate(_gancho(guion.get("texto_pantalla") or guion["titulo"]).split("\n")):
+            with open(os.path.join(tmp, f"gancho{n}.txt"), "w", encoding="utf-8") as f:
+                f.write(linea)
+            filtro += (f",drawtext=textfile=gancho{n}.txt" + fuente +
+                       ":fontsize=88:fontcolor=white:borderw=8:bordercolor=black"
+                       f":x=(w-text_w)/2:y=h*0.13+{n * 104}:enable='lt(t,2.5)'")
+        filtro += "[v]"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", "imagen.mp4", "-i", os.path.abspath(voz),
                         "-filter_complex", filtro, "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
                         "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-t", f"{total:.2f}",
