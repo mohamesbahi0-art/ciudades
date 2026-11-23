@@ -1,10 +1,10 @@
 # Buscador de clips: busca con la API oficial vídeos de GTA con licencia Creative Commons (los únicos de otros creadores
 # que se pueden reutilizar sin permiso). Solo busca y apunta en el repositorio privado; no descarga nada.
-# Cada lunes y cuando Claude deja peticiones/clips.json.
+# Cada día a las 8:41 UTC (con la IA gratis recién renovada; mientras la videoteca es pequeña) y con peticiones/clips.json.
 name: Buscar clips
 on:
   schedule:
-    - cron: "23 6 * * 1"
+    - cron: "41 8 * * *"
   push:
     paths:
       - "peticiones/clips.json"

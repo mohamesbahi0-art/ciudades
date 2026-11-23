@@ -31,6 +31,7 @@ import tempfile
 from bots.comun import almacen, gemini, ia, privado
 
 ESTANTERIA = "buzon-clips"
+VIDEOTECA = "videoteca"            # las tomas ya limpias por el Portero (videoteca.py), para reutilizarlas
 LISTA = os.path.join("estado", "clips", "para_grabar.json")
 FUENTE = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 INTENTOS = 2                       # si el Juzgado lo suspende dos veces, ese clip se deja
@@ -148,8 +149,17 @@ def _de_la_rama(rama, archivo, destino):
 
 
 def bajar(m, carpeta):
-    """El clip grabado: de su rama temporal o, si no, de la estantería «buzon-clips»."""
+    """El clip grabado: ya limpio de la videoteca, de su rama temporal o de la estantería «buzon-clips»."""
     os.makedirs(carpeta, exist_ok=True)
+    if m.get("en_videoteca"):
+        nombre = f"{m['codigo']}.mp4"
+        try:
+            almacen.bajar(VIDEOTECA, nombre, carpeta)
+        except Exception:
+            pass
+        ruta = os.path.join(carpeta, nombre)
+        if os.path.exists(ruta) and _segundos(ruta) >= 2:
+            return ruta
     ruta = os.path.join(carpeta, m["archivo"])
     if not (m.get("rama") and _de_la_rama(m["rama"], m["archivo"], ruta)):
         try:

@@ -24,7 +24,7 @@ import traceback
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
-from bots.central import clips, dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
+from bots.central import clips, dibujante, escritor, huecos, montador, parasubir, reportero, subidor, videoteca  # noqa: E402
 from bots.comun import ia, privado  # noqa: E402
 from bots.juzgado import jurado, sala_ideas, tribunal  # noqa: E402
 from bots.coliseo import coliseo  # noqa: E402
@@ -245,11 +245,17 @@ def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, 
     resumen.update(clip=m.get("codigo"), formato="clip")
     paso("montador", f"clip {m.get('codigo')} grabado por el dueño: lo bajo del buzón", "bajando el clip grabado")
     ruta = clips.bajar(m, os.path.join(trabajo, "clip"))
-    paso("portero_clips", "mirando que solo salga el juego")
-    rev = clips.revisar(ruta, os.path.join(trabajo, "clip", "portero"), m)
-    cuadernos["portero_clips"].apuntar("revision", {"canal": clave, "clip": m.get("codigo"), "vale": rev["vale"],
-                                                    "recorte": bool(rev["recorte"]), "bandas": bool(rev["bandas"]),
-                                                    "sonido": rev["sonido"], "problemas": rev["problemas"]})
+    if m.get("en_videoteca"):            # el Archivero ya lo pasó por el Portero y lo guardó limpio
+        toma = next((t for t in videoteca.tomas() if t["id"] == m.get("codigo")), {})
+        rev = {"vale": True, "bandas": None, "recorte": None, "sonido": bool(toma.get("sonido")), "problemas": [],
+               "fotos": clips.fotos(ruta, os.path.join(trabajo, "clip", "fotos"), cuantas=5)}
+        paso("portero_clips", "ya estaba limpio en la videoteca")
+    else:
+        paso("portero_clips", "mirando que solo salga el juego")
+        rev = clips.revisar(ruta, os.path.join(trabajo, "clip", "portero"), m)
+        cuadernos["portero_clips"].apuntar("revision", {"canal": clave, "clip": m.get("codigo"), "vale": rev["vale"],
+                                                        "recorte": bool(rev["recorte"]), "bandas": bool(rev["bandas"]),
+                                                        "sonido": rev["sonido"], "problemas": rev["problemas"]})
     if not rev["vale"]:
         motivo = "sale algo del creador y no se puede quitar: " + (", ".join(rev["problemas"]) or "sin detalle")
         paso("portero_clips", motivo, "el clip no vale: sale algo del creador")
@@ -257,9 +263,10 @@ def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, 
             clips.descartar(m, motivo[:300])
         resumen.update(destino_resultado="suspendido", motivo="el Portero de clips lo ha descartado", resultado="hecho")
         return
-    paso("portero_clips", ("recorto lo que no es juego; " if rev["recorte"] else "")
-         + ("quito las bandas negras; " if rev["bandas"] else "")
-         + ("dejo el sonido del juego bajito" if rev["sonido"] else "quito el sonido del clip y pongo música propia"))
+    if not m.get("en_videoteca"):
+        paso("portero_clips", ("recorto lo que no es juego; " if rev["recorte"] else "")
+             + ("quito las bandas negras; " if rev["bandas"] else "")
+             + ("dejo el sonido del juego bajito" if rev["sonido"] else "quito el sonido del clip y pongo música propia"))
     largo = clips._segundos(ruta)
     vistas = rev["fotos"][::2] or rev["fotos"]        # 3 de las 5 fotos (principio, medio y final), ya recortadas
     reglas_juez = cuadernos["juez_guardia"].para_el_prompt() + "\n- " + clips.REGLA
@@ -328,6 +335,91 @@ def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, 
     resumen["resultado"] = "hecho"
 
 
+def _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, lecciones, fuentes, lista):
+    """Turno de un canal de GTA con la Videoteca: el Escritor escribe a partir de las tomas de juego de verdad (cada
+    escena enseña lo que dice la voz) y el Montador las corta en planos de 2-3 s; en GTA 5 contra GTA 6, pantalla
+    partida por rondas. Después, como todos: Jurado popular, voz, Juzgado, Coliseo y subida."""
+    disponibles = videoteca.disponibles(canal)
+    resumen.update(formato="versus_clips" if canal.get("tipo") == "versus" else "clips", tomas=len(disponibles))
+    paso("escritor", f"esta vez con clips de verdad: {len(disponibles)} tomas en la videoteca")
+    catalogo = "TOMAS DE JUEGO DISPONIBLES (el vídeo solo puede enseñar esto):\n" + videoteca.catalogo(disponibles)
+    idea, id_idea = None, None
+    if ajustes.get("sala_ideas", True):
+        try:
+            propuestas = escritor.ideas(canal, lecciones, privado.titulos_recientes(clave),
+                                        f"{fuentes}\n\n{catalogo}" if fuentes else catalogo)
+            idea, id_idea = sala_ideas.elegir(clave, canal, propuestas, tribunal._pruebas(clave, canal))
+            paso("escritor", f"la Sala de Ideas eligió «{(idea or {}).get('titulo')}» de {len(propuestas)}",
+                 f"la Sala de Ideas eligió 1 de {len(propuestas)}")
+        except Exception as e:
+            paso("escritor", f"sin Sala de Ideas hoy ({type(e).__name__})")
+    reglas_juez = cuadernos["juez_guardia"].para_el_prompt() + "\n- " + clips.REGLA
+    hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
+    aviso_juez, v, video, segundos, id_guion, g = "", {}, None, 0.0, None, {}
+    for intento in (1, 2):
+        if intento == 2:
+            paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
+        paso("escritor", "escribiendo el guion con las tomas")
+        g = videoteca.guionizar(canal, disponibles, lecciones + aviso_juez, privado.titulos_recientes(clave), fuentes, idea)
+        g, vale = _jurado_guion(clave, canal, g, paso, a, alegatos=_alegatos_idea(id_idea),
+                                reescribir=lambda extra: videoteca.guionizar(
+                                    canal, disponibles, lecciones + aviso_juez + extra, privado.titulos_recientes(clave),
+                                    fuentes, idea))
+        if not vale:
+            paso("subidor", "el jurado popular no se convence con el guion: no se graba (se ahorra la voz)")
+            resumen.update(titulo=g.get("titulo"), destino_resultado="suspendido",
+                           motivo="el jurado popular rechazó el guion", resultado="hecho")
+            return
+        if lista:
+            reportero.apuntar_usadas(clave, lista, g.get("fuentes_usadas"))
+        json.dump(g, open(os.path.join(trabajo, "guion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g["titulo"], "idea": g.get("idea"),
+                                                           "formato": g["formato"], "tomas": g["tomas_usadas"],
+                                                           "prueba": a.prueba})
+        paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas con {len(g['tomas_usadas'])} tomas)",
+             f"guion listo ({len(g['escenas'])} escenas con {len(g['tomas_usadas'])} tomas)")
+
+        paso("locutor", f"grabando la voz ({canal.get('voz')})")
+        asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
+                                    "+0Hz", trabajo))
+        quitado = locutor.apretar(trabajo)
+        cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
+        paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
+
+        paso("montador", f"bajando {len(g['tomas_usadas'])} tomas de la videoteca y montando")
+        rutas = videoteca.bajar(g["tomas_usadas"], os.path.join(trabajo, "tomas"))
+        video = videoteca.montar(g, rutas, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
+                                 os.path.join(trabajo, f"{hoy}-{clave}.mp4"), ambiente=montador.musica.ambiente_de(canal))
+        segundos = montador.duracion(video)
+        cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1),
+                                                  "formato": g["formato"], "tomas": g["tomas_usadas"]})
+        paso("montador", f"vídeo de {segundos:.1f} s con clips de verdad")
+
+        paso("juez_guardia", "juzgando el vídeo")
+        v = tribunal.juzgar(video, g, canal, reglas_juez, os.path.join(trabajo, f"juicio{intento}"),
+                            audio=os.path.join(trabajo, "voz.mp3"))
+        v["intento"] = intento
+        id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
+        id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
+                                                                 "veredicto": v["veredicto"], "total": v.get("total")})
+        cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juez de guardia", v.get("consejo", ""))
+        paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
+             f"{v['veredicto']} ({v.get('total', '-')}/100)")
+        resumen.update(titulo=g["titulo"], veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
+                       juicio=id_juicio, segundos=round(segundos, 1), intento=intento, fallos=v.get("fallos_graves"),
+                       tribunal=v.get("tribunal"), juicio_app=id_tribunal, juicio_idea=id_idea)
+        if v["veredicto"] == "aprobado" or a.prueba or not ajustes.get("segunda_oportunidad", True):
+            break
+        aviso_juez = (f"\n- (Juez de guardia, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
+                      f"{v.get('consejo', '')} Fallos: {', '.join(v.get('fallos_graves') or []) or 'ninguno grave'}. "
+                      "Escribe un guion distinto que lo corrija.)")
+    g = _coliseo(clave, canal, g, v, paso, a, resumen)
+    _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
+    if v.get("veredicto") == "aprobado" and not a.prueba:
+        videoteca.apuntar_usos(g.get("tomas_usadas") or [])
+    resumen["resultado"] = "hecho"
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--canal")
@@ -377,6 +469,9 @@ def main(argv=None):
         lecciones_escritor = _lecciones_escritor(clave, cuadernos)   # con la receta de los Influencers
         if canal.get("estudio") == "animacion":     # cuentas de vídeos animados (las del dueño): el estudio de animación
             _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones_escritor)
+            raise _Hecho()
+        if videoteca.suficientes(canal):           # canales de GTA con tomas de juego de verdad: nada de dibujos
+            _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, lecciones_escritor, fuentes, lista)
             raise _Hecho()
         idea, id_idea = None, None
         if ajustes.get("sala_ideas", True):     # la Sala de Ideas elige la mejor de 3 antes de gastar dibujos

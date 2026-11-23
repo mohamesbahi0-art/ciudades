@@ -183,6 +183,21 @@ def fusionar(ruta, suyo, nuestro):
         junto = dict(suyo, **nuestro)
         junto["momentos"] = sorted(momentos.values(), key=lambda x: -(x.get("nota") or 0))
         return junto
+    if ruta == "estado/clips/videoteca.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        tomas = {}
+        for t in (suyo.get("tomas") or []) + (nuestro.get("tomas") or []):
+            antes = tomas.get(t.get("id"))
+            if antes:
+                junto = dict(antes)
+                junto.update(t)
+                junto["usos"] = max(int(antes.get("usos") or 0), int(t.get("usos") or 0))
+                junto["ultimo_uso"] = max(antes.get("ultimo_uso") or "", t.get("ultimo_uso") or "") or None
+                t = junto
+            tomas[t.get("id")] = t
+        junto = dict(suyo)
+        junto.update(nuestro)
+        junto["tomas"] = list(tomas.values())
+        return junto
     if ruta == "estado/influencers/recetas.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         canales = {}              # la receta del Recetario, la del Radar y la del Ojeador van cada una a lo suyo
         for clave in set(suyo.get("canales") or {}) | set(nuestro.get("canales") or {}):

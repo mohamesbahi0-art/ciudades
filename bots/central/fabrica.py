@@ -18,7 +18,7 @@ import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
-from bots.central import clips, discoteca, huecos, parasubir, subidor, turno  # noqa: E402
+from bots.central import clips, discoteca, huecos, parasubir, subidor, turno, videoteca  # noqa: E402
 from bots.comun import privado  # noqa: E402
 
 SIN_HACER = {}                   # tipos de canal que todavía no se pueden hacer (y por qué)
@@ -128,6 +128,14 @@ def main():
         if subidos:
             print(f"cola: {subidos} vídeo(s) subidos", flush=True)
             guardar(f"fábrica: {subidos} vídeo(s) de la cola subidos")
+
+    if not a.prueba:
+        try:                                    # el Archivero: los clips grabados, limpios a la videoteca
+            guardados = videoteca.archivar(paso=lambda t: print(privado.limpiar(t), flush=True))
+            if guardados:
+                guardar(f"videoteca: {guardados} toma(s) nuevas")
+        except Exception as e:
+            print(f"videoteca: el Archivero no ha podido trabajar ({type(e).__name__})", flush=True)
 
     if not a.prueba:
         try:

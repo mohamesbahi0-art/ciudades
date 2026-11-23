@@ -16,8 +16,11 @@ import sys
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
 from bots.comun import privado  # noqa: E402
+from bots.central.videoteca import ETIQUETAS, juego_de  # noqa: E402
 
-BUSQUEDAS = ["GTA 6", "GTA VI gameplay", "GTA 6 momentos"]
+# (búsqueda, días hacia atrás): de GTA 6, lo último; de GTA 5 vale todo el año (para las tomas de GTA 5 contra GTA 6)
+BUSQUEDAS = [("GTA 6", 30), ("GTA VI gameplay", 30), ("GTA 6 momentos", 30), ("GTA 5 gameplay", 365),
+             ("GTA V gameplay 4K", 365)]
 
 
 def servicio():
@@ -40,28 +43,63 @@ def segundos(iso):
 MINIMA = 90          # solo los momentos que de verdad merecen la pena (la misma nota que pide el dueño para publicar)
 
 VER = """Mira este vídeo de GTA (tiene licencia Creative Commons: se puede reutilizar diciendo de quién es).
-Busca como mucho {n} momentos para Shorts de 8 a 35 segundos, pero SOLO los que de verdad se harían virales: si el vídeo
-no tiene ninguno así, no devuelvas ninguno. Para cada uno, piensa en qué canal encaja:
-- "clips": un momento gracioso, épico o increíble del juego;
-- "curios": un detalle o secreto de GTA 6 que casi nadie sabe;
-- "versus": una comparación entre GTA 5 y GTA 6.
-REGLA DE ORO: del creador solo se pone su nombre en la descripción. En el trozo elegido NO puede verse ni oírse NADA suyo:
-ni su cara, ni su webcam, ni su nombre, logo o marca de agua, ni sus textos, flechas o animaciones (suscríbete, redes),
-ni intros, anuncios o pantallas de espera. Solo el juego. Si en ese trozo sale algo suyo, NO lo elijas.
+REGLA DE ORO: del creador solo se pone su nombre en la descripción. En los trozos que elijas NO puede verse ni oírse NADA
+suyo: ni su cara, ni su webcam, ni su nombre, logo o marca de agua, ni sus textos, flechas o animaciones (suscríbete,
+redes), ni intros, anuncios o pantallas de espera. Solo el juego. Si en un trozo sale algo suyo, NO lo elijas.
+Busca dos cosas:
+1. «momentos»: como mucho {n} trozos de 8 a 35 segundos que de verdad se harían virales solos (si no hay ninguno así, no
+   devuelvas ninguno). Para cada uno, el canal: "clips" (algo gracioso, épico o increíble), "curios" (un detalle o
+   secreto que casi nadie sabe) o "versus" (algo que se puede comparar entre GTA 5 y GTA 6).
+2. «tomas»: como mucho 4 trozos de 6 a 25 segundos de juego limpio que enseñen claramente UNA cosa, para ilustrar otros
+   vídeos (lo que se ve tiene que ser lo que dice la voz). Di de qué juego es ("gta5" o "gta6"; de GTA 5, solo el juego
+   original, sin mods que cambien los gráficos) y de 1 a 3 etiquetas de esta lista: {etiquetas}.
+   Prefiere cosas que se puedan comparar entre GTA 5 y GTA 6 (agua, coches, policía, explosiones, físicas, gráficos...).
 Devuelve SOLO un JSON: {{"momentos": [{{"desde": 0, "hasta": 0, "para": "clips|curios|versus", "que_pasa": "una frase",
 "por_que_engancha": "una frase", "sale_creador": "no | sí (qué y dónde)", "habla_creador": "no | sí",
-"gancho": "texto de 2 a 5 palabras para el principio", "nota": 0}}]}}  (nota de 0 a 100: cuánto se haría viral; solo
-valen los de {minima} o más)"""
+"gancho": "texto de 2 a 5 palabras para el principio", "nota": 0}}],
+"tomas": [{{"desde": 0, "hasta": 0, "juego": "gta5|gta6", "etiquetas": ["..."], "que_se_ve": "una frase",
+"sale_creador": "no | sí (qué y dónde)", "habla_creador": "no | sí", "calidad": 0}}]}}
+(nota de 0 a 100: cuánto se haría viral, solo valen los de {minima} o más; calidad de 0 a 100: lo bien que se ve y lo
+claro que enseña su etiqueta, solo valen las de {toma_minima} o más)"""
+
+TOMA_MINIMA = 80     # las tomas son ingredientes: tienen que verse bien y enseñar claro su etiqueta
 
 
-def limpio(m):
-    """Un momento vale si no sale nada del creador y llega a la nota mínima."""
-    sale = str(m.get("sale_creador", m.get("sale_youtuber", ""))).strip().lower()
+def _numero(x):
     try:
-        nota = float(m.get("nota") or 0)
+        return float(x or 0)
     except (TypeError, ValueError):
-        nota = 0
-    return sale.startswith("no") and nota >= MINIMA
+        return 0.0
+
+
+def limpio(m, toma=False):
+    """Un momento (o una toma) vale si no sale nada del creador y llega a su nota mínima."""
+    sale = str(m.get("sale_creador", m.get("sale_youtuber", ""))).strip().lower()
+    if toma:
+        return sale.startswith("no") and _numero(m.get("calidad", m.get("nota"))) >= TOMA_MINIMA
+    return sale.startswith("no") and _numero(m.get("nota")) >= MINIMA
+
+
+def prioridades(lista):
+    """Qué grabar primero: los momentos de 90 o más; luego las tomas que completan una pareja GTA 5 / GTA 6 o traen
+    algo que la videoteca no tiene; luego lo demás."""
+    from bots.central import videoteca
+    hay = {(t.get("juego"), e) for t in videoteca.tomas() for e in t.get("etiquetas") or []}
+    for m in lista:
+        if m.get("estado") != "por_grabar":
+            continue
+        if m.get("tipo") != "toma":
+            m["prioridad"] = 1
+            continue
+        otro = "gta5" if m.get("juego") == "gta6" else "gta6"
+        etiquetas = m.get("etiquetas") or []
+        if any((m.get("juego"), e) not in hay and (otro, e) in hay for e in etiquetas):
+            m["prioridad"] = 2                  # completa una pareja para el versus
+        elif any((m.get("juego"), e) not in hay for e in etiquetas):
+            m["prioridad"] = 3                  # algo que la videoteca todavía no tiene
+        else:
+            m["prioridad"] = 4
+    return lista
 
 
 def ver_y_elegir(candidatos, cuantos=6):
@@ -74,7 +112,12 @@ def ver_y_elegir(candidatos, cuantos=6):
     vistos = {m["video"] for m in lista}
     # 2 vídeos como mucho por creador, los creadores con más suscriptores primero, vídeos de 20 s a 20 min
     por_creador, elegidos = {}, []
-    for c in sorted(candidatos, key=lambda c: (c["suscriptores_creador"], c["visitas"]), reverse=True):
+    # mitad GTA 6 y mitad GTA 5 (para las parejas del versus), y dentro de cada uno los más famosos primero
+    orden = sorted(candidatos, key=lambda c: (c["suscriptores_creador"], c["visitas"]), reverse=True)
+    seis = [c for c in orden if juego_de({"titulo_original": c["titulo"]}) == "gta6"]
+    cinco = [c for c in orden if juego_de({"titulo_original": c["titulo"]}) == "gta5"]
+    mezcla = [c for par in zip(seis, cinco) for c in par] + seis[len(cinco):] + cinco[len(seis):]
+    for c in mezcla:
         if c["id"] in vistos or not 20 <= c["segundos"] <= 1200 or por_creador.get(c["canal_id"], 0) >= 2:
             continue
         por_creador[c["canal_id"]] = por_creador.get(c["canal_id"], 0) + 1
@@ -85,7 +128,8 @@ def ver_y_elegir(candidatos, cuantos=6):
     for c in elegidos:
         try:
             r = gemini.ver_youtube(f"https://www.youtube.com/watch?v={c['id']}",
-                                   VER.format(n=2 if c["segundos"] < 90 else 3, minima=MINIMA))
+                                   VER.format(n=2 if c["segundos"] < 90 else 3, minima=MINIMA, toma_minima=TOMA_MINIMA,
+                                              etiquetas=", ".join(ETIQUETAS)))
         except gemini.SinIA:            # ningún modelo ha podido verlo hoy: el siguiente vídeo
             r = None
         for m in (r or {}).get("momentos", []) if isinstance(r, dict) else []:
@@ -103,8 +147,29 @@ def ver_y_elegir(candidatos, cuantos=6):
                           "por_que": m.get("por_que_engancha", ""), "sale_creador": "no",
                           "habla_creador": str(m.get("habla_creador", "")).lower().startswith("s"),
                           "gancho": m.get("gancho", ""), "nota": m.get("nota"), "licencia": "CC BY",
-                          "estado": "por_grabar", "elegido": privado.ahora()})
-    lista.sort(key=lambda m: (m["estado"] != "por_grabar", -(m.get("nota") or 0)))
+                          "juego": juego_de({"titulo_original": c["titulo"], "que_pasa": m.get("que_pasa", "")}),
+                          "tipo": "momento", "estado": "por_grabar", "elegido": privado.ahora()})
+        for t in (r or {}).get("tomas", []) if isinstance(r, dict) else []:
+            try:
+                desde, hasta = float(t["desde"]), float(t["hasta"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not 4 <= hasta - desde <= 30 or hasta > c["segundos"] + 1 or not limpio(t, toma=True):
+                continue
+            juego = str(t.get("juego") or "").lower().replace(" ", "")
+            numero += 1
+            lista.append({"codigo": f"C-{numero:03d}", "video": c["id"], "creador": c["canal"],
+                          "suscriptores_creador": c["suscriptores_creador"], "titulo_original": c["titulo"],
+                          "enlace": f"https://youtu.be/{c['id']}?t={int(desde)}", "desde": desde, "hasta": hasta,
+                          "para": "videoteca", "tipo": "toma",
+                          "juego": juego if juego in ("gta5", "gta6") else juego_de({"titulo_original": c["titulo"]}),
+                          "etiquetas": [e for e in t.get("etiquetas") or [] if e in ETIQUETAS][:3] or ["ciudad"],
+                          "que_pasa": t.get("que_se_ve", ""), "sale_creador": "no",
+                          "habla_creador": str(t.get("habla_creador", "")).lower().startswith("s"),
+                          "nota": t.get("calidad"), "licencia": "CC BY", "estado": "por_grabar",
+                          "elegido": privado.ahora()})
+    prioridades(lista)
+    lista.sort(key=lambda m: (m["estado"] != "por_grabar", m.get("prioridad") or 9, -_numero(m.get("nota"))))
     privado.guardar_estado("clips/para_grabar.json", {"momentos": lista})
     c = privado.cuaderno("buscador_clips")
     c.apuntar("momentos", {"vistos": len(elegidos), "momentos": len(lista) - len(anterior.get("momentos", []))})
@@ -120,11 +185,13 @@ def main():
     p.add_argument("--sin-ver", action="store_true", help="solo busca, sin que Gemini vea los vídeos")
     a = p.parse_args()
     yt = servicio()
-    desde = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=a.dias)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ahora = dt.datetime.now(dt.timezone.utc)
+    desde = (ahora - dt.timedelta(days=a.dias)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ids = []
-    for q in BUSQUEDAS:
+    for q, dias in BUSQUEDAS:
+        hace = (ahora - dt.timedelta(days=max(dias, a.dias))).strftime("%Y-%m-%dT%H:%M:%SZ")
         r = yt.search().list(part="id", q=q, type="video", videoLicense="creativeCommon", order="viewCount",
-                             publishedAfter=desde, maxResults=50).execute()
+                             publishedAfter=hace, maxResults=50).execute()
         ids += [x["id"]["videoId"] for x in r.get("items", []) if x["id"]["videoId"] not in ids]
     candidatos = []
     for i in range(0, len(ids), 50):
@@ -146,7 +213,7 @@ def main():
         subs.update({x["id"]: int(x["statistics"].get("subscriberCount", 0)) for x in r.get("items", [])})
     for c in candidatos:
         c["suscriptores_creador"] = subs.get(c["canal_id"], 0)
-    privado.guardar_estado("clips/candidatos.json", {"busquedas": BUSQUEDAS, "desde": desde, "licencia": "CC BY",
+    privado.guardar_estado("clips/candidatos.json", {"busquedas": [q for q, _ in BUSQUEDAS], "desde": desde, "licencia": "CC BY",
                                                      "candidatos": candidatos})
     if not a.sin_ver:
         momentos = ver_y_elegir(candidatos, a.videos)
