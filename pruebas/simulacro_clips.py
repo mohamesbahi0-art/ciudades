@@ -163,6 +163,9 @@ comprobar(clips._recorte_valido({"x": 0, "y": 0, "ancho": 0.8, "alto": 1}) is no
 comprobar(clips._recorte_valido({"x": 0.3, "y": 0.3, "ancho": 0.3, "alto": 0.3}) is None,
           "un recorte que deja muy poco juego no vale")
 comprobar(clips.listo_para("clips")["codigo"] == "C-001", "elige el clip grabado con más nota (no el que falta grabar)")
+cortado = clips.cortar(prueba, {"desde": 2, "hasta": 7})
+comprobar(abs(clips._segundos(cortado) - 5) < 0.3, f"si el móvil no pudo recortar, la fábrica corta el trozo ({clips._segundos(cortado):.1f} s)")
+comprobar(clips.cortar(prueba, None) == prueba, "sin corte, el clip se queda como está")
 
 # 2. Un turno entero con un clip que hay que recortar
 salida = os.path.join(TMP, "trabajo")

@@ -168,7 +168,26 @@ def bajar(m, carpeta):
             pass
     if not os.path.exists(ruta) or _segundos(ruta) < 2:
         raise RuntimeError(f"el clip {m.get('codigo')} no está en el buzón o está vacío")
-    return ruta
+    return cortar(ruta, m.get("corte"))
+
+
+def cortar(ruta, corte):
+    """Si el móvil no pudo recortar la grabación, la app la sube entera con «corte» {desde, hasta} (segundos de ese
+    archivo): aquí se queda solo ese trozo."""
+    try:
+        desde, hasta = float((corte or {})["desde"]), float((corte or {})["hasta"])
+    except (KeyError, TypeError, ValueError):
+        return ruta
+    total = _segundos(ruta)
+    desde, hasta = max(0.0, desde), min(hasta, total) if total else hasta
+    if hasta - desde < 2 or (desde < 0.1 and total and hasta > total - 0.1):
+        return ruta
+    salida = os.path.join(os.path.dirname(ruta), "cortado-" + os.path.splitext(os.path.basename(ruta))[0] + ".mp4")
+    args = ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{desde:.2f}", "-i", ruta, "-t", f"{hasta - desde:.2f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p"]
+    args += ["-c:a", "aac", "-b:a", "128k"] if _tiene_audio(ruta) else ["-an"]
+    subprocess.run(args + [salida], check=True)
+    return salida
 
 
 def soltar_rama(m):
