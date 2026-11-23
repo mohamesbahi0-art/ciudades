@@ -14,6 +14,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 os.environ.setdefault("PRIVADO", os.path.join(RAIZ, "pruebas", "privado_ejemplo"))
 os.environ.setdefault("MEMORIA_DIR", os.path.join(os.environ["PRIVADO"], "memoria"))
+os.environ["RADAR_PAUSA"] = "0"
 from bots.central import buscador_clips, subidor  # noqa: E402
 from bots.comun import gemini, privado  # noqa: E402
 from bots.influencers import estudio, radar  # noqa: E402
@@ -175,4 +176,22 @@ j = privado.fusionar("estado/influencers/recetas.json",
                                           "radar": {"fecha": "2026-11-24T08:00:00Z", "v": 2}}, "terror": {"radar": {}}}})
 assert j["canales"]["gta"]["gancho"] == "nuevo" and j["canales"]["gta"]["radar"]["v"] == 2 and "terror" in j["canales"], j
 print("  las fusiones de la cuota y de las recetas no pierden nada")
+# 7) Lo que la IA no pudo ver hoy no cuenta como visto: otro día se puede volver a elegir
+c = subidor.cuota()
+c["agotada_hasta"] = None
+subidor._guardar_cuota(c)
+json.dump(dict(aj, radar_unidades_dia=2000), open(ruta_aj, "w", encoding="utf-8"))
+
+
+def sin_ia(url, texto, **kw):
+    raise gemini.SinIA("sin cupo")
+
+
+gemini.ver_youtube = sin_ia
+radar.main(["--solo", "gta"])
+g = leer("estado/influencers/radar/gta.json")
+fallidos = [v["id"] for v in g["videos"] if v.get("sin_ver")]
+assert len(fallidos) == 3 and not set(fallidos) & set(g["vistos"]), g["vistos"]
+assert len({v["id"] for v in g["videos"]}) == len(g["videos"]), "sin vídeos repetidos en la lista"
+print("  lo que la IA no pudo ver se queda para otro día")
 print("simulacro del Radar de nichos: todo bien")

@@ -16,7 +16,8 @@ Para cada perfil (canal de YouTube o barrio de TikTok/Instagram, también en pau
    estado/influencers/radar/<alias>.json (lo copia a la app la ronda de Claude).
 
 Cuota: las subidas mandan. Gasta como mucho `radar_unidades_dia` (500) al día, lo apunta en el libro de cuota del
-Subidor y, si la cuota del día se ha acabado, no busca nada.
+Subidor y, si la cuota del día se ha acabado, no busca nada. Con Gemini va despacio (RADAR_PAUSA segundos entre vídeos)
+y lo que la IA no ha podido ver hoy no cuenta como visto.
 Uso:  python bots/influencers/radar.py [--solo barrio-2,gta] [--videos 3] [--sin-ver] [--todos]
 """
 import argparse
@@ -24,6 +25,7 @@ import datetime as dt
 import json
 import os
 import sys
+import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
@@ -33,6 +35,7 @@ from bots.comun import gemini, privado  # noqa: E402
 ROBOT = "radar_nichos"
 CARPETA = os.path.join("influencers", "radar")          # dentro de estado/
 COSTE_BUSQUEDA, COSTE_LISTA = 100, 1
+PAUSA = float(os.environ.get("RADAR_PAUSA", 25))       # segundos entre vídeo y vídeo: no comerse la IA de la fábrica
 DIAS = 14
 IDIOMAS = {"es": "español de España", "en": "inglés", "nl": "neerlandés", "fr": "francés", "pt": "portugués"}
 
@@ -168,10 +171,10 @@ def _linea(v):
             f"Por qué funciona: {a.get('por_que_funciona', '')}")[:600]
 
 
-def resumir(perfil, videos):
+def resumir(perfil, videos, lecciones=""):
     idioma = IDIOMAS.get(perfil["idioma"], perfil["idioma"])
     r = gemini.preguntar(RESUMEN.format(nombre=perfil["nombre"], tema=perfil["tema"], idioma=idioma,
-                                        videos="\n".join(_linea(v) for v in videos)),
+                                        videos="\n".join(_linea(v) for v in videos)) + lecciones,
                          temperatura=0.5, ligero_primero=True)
     if not isinstance(r, dict):
         raise gemini.SinIA("el resumen no ha salido en el formato pedido")
@@ -215,26 +218,37 @@ def pasar(yt, perfil, radar, desde, a, cuaderno):
     elegidos = elegir(lista, set(radar.get("vistos", [])), nuestros, b["idioma"], a.videos,
                       int(perfil["nicho"].get("minimo", 3000)))
     idioma = IDIOMAS.get(perfil["idioma"], perfil["idioma"])
+    print(f"radar: {privado.alias(clave)} → {len(lista)} Shorts encontrados, {len(elegidos)} nuevos para ver", flush=True)
     nuevos = []
-    for v in elegidos:
+    for n, v in enumerate(elegidos, 1):
         entrada = dict(v, busqueda=b["q"], visto=privado.ahora())
         if not a.sin_ver:
+            if n > 1:
+                time.sleep(PAUSA)
+            empieza = dt.datetime.now(dt.timezone.utc)
             try:
                 analisis = gemini.ver_youtube(f"https://www.youtube.com/watch?v={v['id']}", VER.format(
                     busqueda=b["q"], nombre=perfil["nombre"], tema=perfil["tema"], visitas=v["visitas"], dias=v["dias"],
-                    por_dia=v["visitas_dia"], idioma=idioma))
+                    por_dia=v["visitas_dia"], idioma=idioma) + a.lecciones, espera=150)   # un Short se ve rápido
                 if isinstance(analisis, dict):
                     entrada["analisis"] = analisis
             except gemini.SinIA as e:
                 entrada["sin_ver"] = str(e)[:160]
+            tarda = (dt.datetime.now(dt.timezone.utc) - empieza).total_seconds()
+            print(f"radar: {privado.alias(clave)} vídeo {n}/{len(elegidos)}: "
+                  f"{'visto' if entrada.get('analisis') else 'sin ver'} en {tarda:.0f} s", flush=True)
         nuevos.append(entrada)
     radar.update(clave=clave, alias=privado.alias(clave), nombre=perfil["nombre"], red=perfil["red"],
                  idioma=perfil["idioma"], tema=perfil["tema"], en_pausa=perfil["pausa"], siguiente=i + 1,
                  ultimo=privado.ahora(), busquedas=[x if isinstance(x, str) else x.get("q") for x in busquedas])
-    radar["vistos"] = (radar.get("vistos", []) + [v["id"] for v in nuevos])[-600:]
-    radar["videos"] = [v for v in radar.get("videos", []) + nuevos if fecha(v["visto"]) >= desde_cuando][-40:]
+    # Solo cuenta como visto lo que la IA ha visto de verdad: lo que hoy no pudo ver, se puede volver a elegir otro día
+    radar["vistos"] = (radar.get("vistos", []) + [v["id"] for v in nuevos if v.get("analisis") or a.sin_ver])[-600:]
+    ids_nuevos = {v["id"] for v in nuevos}
+    radar["videos"] = [v for v in radar.get("videos", []) if v["id"] not in ids_nuevos and fecha(v["visto"]) >= desde_cuando]
+    radar["videos"] = (radar["videos"] + nuevos)[-40:]
     radar["top_ahora"] = [{k: v[k] for k in ("titulo", "canal", "url", "visitas", "visitas_dia", "dias", "segundos")}
-                          for v in sorted((x for x in lista if x["canal_id"] not in nuestros),
+                          for v in sorted((x for x in lista if x["canal_id"] not in nuestros
+                                           and (not x["idioma"] or x["idioma"] == b["idioma"])),
                                           key=lambda x: x["visitas_dia"], reverse=True)[:5]]
     radar["historial"] = (radar.get("historial", []) + [{"fecha": privado.ahora(), "busqueda": b["q"],
                                                           "idioma": b["idioma"], "encontrados": len(lista),
@@ -243,7 +257,7 @@ def pasar(yt, perfil, radar, desde, a, cuaderno):
     vistos_ia = sum(1 for v in nuevos if v.get("analisis"))
     if vistos_ia and buenos:
         try:
-            radar["resumen"] = resumir(perfil, buenos[-12:])
+            radar["resumen"] = resumir(perfil, buenos[-12:], a.lecciones)
             receta(perfil, radar)
         except gemini.SinIA as e:
             print(f"radar: {privado.alias(clave)} sin resumen hoy ({type(e).__name__})", flush=True)
@@ -279,6 +293,7 @@ def main(argv=None):
         print("radar: hoy no le toca a ningún perfil", flush=True)
         return 0
     cuaderno = privado.cuaderno(ROBOT)
+    a.lecciones = f"\n\n{cuaderno.para_el_prompt()}" if cuaderno.datos.get("lecciones") else ""   # mandan las del dueño
     hechos, sin_cuota = [], []
     yt = None
     desde = (ahora - dt.timedelta(days=DIAS)).strftime("%Y-%m-%dT%H:%M:%SZ")

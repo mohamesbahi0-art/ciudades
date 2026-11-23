@@ -36,7 +36,8 @@ def apuntar_portero():
     anterior = privado.leer("estado/gemini.json", {}) or {}
     privado.guardar_estado("gemini.json", {"ultimo_reparto": USO, "sin_cupo": sorted(AGOTADOS),
                                            "anteriores": (anterior.get("anteriores", []) + [anterior.get("ultimo_reparto")])[-20:]
-                                           if anterior.get("ultimo_reparto") else []})
+                                           if anterior.get("ultimo_reparto") else [],
+                                           "ve_videos": VE_VIDEOS or anterior.get("ve_videos")})
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
 
@@ -115,13 +116,20 @@ def ver_youtube(url, texto, temperatura=0.3, json_salida=True, espera=300):
     clave = os.environ.get("GEMINI_API_KEY")
     if not clave:
         raise SinIA("falta el secreto GEMINI_API_KEY")
+    if VE_VIDEOS is None:            # el que supo la última vez (lo apunta el Portero): así no se pierde tiempo probando
+        try:
+            from bots.comun import privado
+            VE_VIDEOS = (privado.leer("estado/gemini.json", {}) or {}).get("ve_videos") or ""
+        except Exception:
+            VE_VIDEOS = ""
     cuerpo = {"contents": [{"role": "user", "parts": [{"file_data": {"file_uri": url}}, {"text": texto}]}],
               "generationConfig": {"temperature": temperatura}}
     if json_salida:
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"
     orden = ([VE_VIDEOS] if VE_VIDEOS else []) + [m for m in BUENOS if m != VE_VIDEOS]
-    ultimo = "sin intentar"
-    for modelo in [m for m in orden if m not in AGOTADOS]:
+    pendientes, esperado, ultimo = [m for m in orden if m not in AGOTADOS], set(), "sin intentar"
+    while pendientes:
+        modelo = pendientes.pop(0)
         req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "x-goog-api-key": clave})
         try:
@@ -134,11 +142,23 @@ def ver_youtube(url, texto, temperatura=0.3, json_salida=True, espera=300):
             return salida
         except urllib.error.HTTPError as e:
             ultimo = f"{modelo}: HTTP {e.code}"
-            if e.code in (429, 404):                  # sin cupo o modelo que ya no existe: no se vuelve a probar hoy
-                AGOTADOS.add(modelo)
+            if e.code == 429:
+                try:
+                    detalle = e.read().decode("utf-8", "replace")
+                except Exception:
+                    detalle = ""
                 _contar(modelo, "sin_cupo")
-            else:                                     # este modelo no sabe ver vídeos (o no ese): el siguiente
-                _contar(modelo, "fallos")
+                if "PerDay" in detalle:               # sin cupo hasta mañana: no se vuelve a probar hoy
+                    AGOTADOS.add(modelo)
+                    ultimo += " (sin cupo hoy)"
+                elif modelo not in esperado:          # límite por minuto (un vídeo gasta mucho): esperar y repetir
+                    esperado.add(modelo)
+                    time.sleep(60)
+                    pendientes.insert(0, modelo)
+                continue
+            if e.code == 404:                         # modelo que ya no existe
+                AGOTADOS.add(modelo)
+            _contar(modelo, "fallos")                 # este modelo no sabe ver vídeos (o no ese): el siguiente
         except (KeyError, IndexError, ValueError) as e:
             ultimo = f"{modelo}: respuesta rara ({type(e).__name__})"
             _contar(modelo, "fallos")
