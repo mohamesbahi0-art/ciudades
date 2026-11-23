@@ -56,8 +56,11 @@ class _Hecho(Exception):
 def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None):
     """Turno de una cuenta animada: el estudio hace el vídeo, el Juzgado lo juzga (con segunda oportunidad) y va a
     «Para subir». Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
-    for intento in (1, 2):
-        video, g = estudio_animacion.hacer(canal, lecciones or cuadernos["escritor"].para_el_prompt(),
+    lecciones = lecciones or cuadernos["escritor"].para_el_prompt()
+    consejo = ""
+    intentos = int(canal.get("intentos_estudio", 3))
+    for intento in range(1, intentos + 1):     # si el Juzgado lo suspende, se tira y se hace otro con su consejo
+        video, g = estudio_animacion.hacer(canal, lecciones + consejo,
                                            carpeta=os.path.join(trabajo, f"estudio{intento}"),
                                            avisar=lambda t: paso("montador", t))
         g["narracion"] = " ".join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
@@ -80,6 +83,10 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                        formato=g.get("formato"))
         if v["veredicto"] != "suspendido" or a.prueba:
             break
+        consejo = (f"\n- (El Juzgado ha suspendido el intento anterior, «{g.get('titulo', '')}»: {v.get('consejo', '')}. "
+                   "Haz otro vídeo distinto que no tenga ese fallo.)")
+        if intento < intentos:
+            paso("juez_guardia", "suspendido: se tira y se hace otro con el consejo del Juzgado")
     if a.prueba:
         paso("subidor", "es una prueba: no se sube nada")
         resumen["destino_resultado"] = "prueba"
