@@ -28,6 +28,7 @@ from bots.central import clips, dibujante, escritor, huecos, montador, parasubir
 from bots.comun import ia, privado  # noqa: E402
 from bots.juzgado import jurado, sala_ideas, tribunal  # noqa: E402
 from bots.coliseo import coliseo  # noqa: E402
+from bots.central import obras  # noqa: E402
 from bots.estudio import estudio as estudio_animacion  # noqa: E402
 import voz as locutor  # noqa: E402  (herramientas/voz.py)
 
@@ -461,12 +462,17 @@ def main(argv=None):
 
     en_curso = {"robot": "escritor"}
 
+    id_obra = f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')}-{privado.alias(clave)}".replace(".", "-")
+
     def paso(robot, texto, publico=None):
         if robot in cuadernos:
             en_curso["robot"] = robot
         hora = dt.datetime.now(dt.timezone.utc).strftime('%H:%M:%S')
         registro.append(f"[{hora}] {robot}: {texto}")
         print(privado.limpiar(f"[{hora}] {clave} · {robot}: {publico if publico is not None else texto}"), flush=True)
+        if not a.prueba:                       # «Ahora en la fábrica» (la app): qué robot lo tiene y qué hace
+            obras.apuntar(id_obra, clave, robot=robot, detalle=publico if publico is not None else texto,
+                          titulo=resumen.get("titulo"))
 
     resumen = {"canal": clave, "nombre": canal["nombre"], "destino": canal["destino"], "prueba": a.prueba,
                "empezado": privado.ahora()}
@@ -596,6 +602,16 @@ def main(argv=None):
         print(privado.limpiar("\n".join(detalle.strip().splitlines()[-12:])), flush=True)
     finally:
         resumen["terminado"] = privado.ahora()
+        if not a.prueba:                       # «Ahora en la fábrica»: cómo ha acabado
+            fin = resumen.get("destino_resultado") or resumen.get("resultado")
+            obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"),
+                          estado="atasco" if resumen.get("resultado") == "error" else
+                          "descartado" if fin == "suspendido" else "terminado",
+                          paso={"para_subir": "para_subir", "subido": "subido", "programado": "programado",
+                                "cola": "programado"}.get(fin, "sale" if fin != "suspendido" else None),
+                          detalle=("se ha atascado: lo mira la Policía" if resumen.get("resultado") == "error" else
+                                   f"no llega a la nota ({resumen.get('nota', '-')}/100): se tira" if fin == "suspendido"
+                                   else "terminado"))
         with open(os.path.join(trabajo, "registro.txt"), "w", encoding="utf-8") as f:
             f.write("\n".join(registro) + "\n")
         json.dump(resumen, open(os.path.join(trabajo, "resumen.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
