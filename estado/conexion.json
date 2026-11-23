@@ -1,8 +1,9 @@
 {
- "estado": "conectado",
- "canal": "clips",
- "pedido": "clips",
- "coincide": true,
+ "estado": "esperando",
+ "canal": "curios",
+ "codigo": "RNT-ZKH-DBVC",
+ "url": "https://www.google.com/device",
+ "caduca": "2026-11-23T02:17:46Z",
  "quedan": 6,
- "actualizado": "2026-11-23T01:47:44Z"
+ "actualizado": "2026-11-23T01:47:46Z"
 }
