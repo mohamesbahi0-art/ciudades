@@ -47,7 +47,7 @@ Lo que funciona ahora en su nicho: {nicho}
 Devuelve SOLO un JSON: {{"titulo": "...", "texto": "el texto que acompaña al vídeo: 1 a 3 frases cortas, la primera con
 gancho", "hashtags": ["#...", "#..."], "por_que": "una frase"}}"""
 
-COMBATE = """Coliseo, {ronda}. Dos salidas para el MISMO vídeo (no se sabe quién escribió cada una).
+COMBATE = """Coliseo, combate de {ronda}. Dos salidas para el MISMO vídeo (no se sabe quién escribió cada una).
 Vídeo: «{cuenta}» ({donde}, en {idioma}). Al empezar se ve: {gancho}. Cuenta: {narracion}
 SALIDA A: {a}
 SALIDA B: {b}
@@ -177,7 +177,7 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False):
     ronda = 1
     while len(luchadores) > 1:
         siguientes = []
-        nombre_ronda = {2: "final"}.get(len(luchadores), f"ronda {ronda}")
+        nombre_ronda = {8: "cuartos", 4: "semifinal", 2: "final"}.get(len(luchadores), ronda)   # como la app
         for i in range(0, len(luchadores) - 1, 2):
             x, y = luchadores[i], luchadores[i + 1]
             combate = {"ronda": nombre_ronda, "a": x["nombre"], "b": y["nombre"]}

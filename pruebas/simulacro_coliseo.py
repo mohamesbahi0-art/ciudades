@@ -35,7 +35,7 @@ def falso(texto, imagenes=(), **kw):
         carta = re.search(r"Tu carta es «([^»]+)»", texto).group(1)
         return {"titulo": f"El secreto de {carta} que nadie te ha contado 😱", "texto": f"Mira hasta el final: {carta}.",
                 "hashtags": ["#fyp", "#dinero", "dinero", "#ahorro", "#finanzas", "#motivacion", "#extra"], "por_que": "x"}
-    if "Coliseo, " in texto and "SALIDA A" in texto:
+    if "Coliseo, combate" in texto and "SALIDA A" in texto:
         LLAMADAS["combate"] += 1
         a = json.loads(texto.split("SALIDA A: ", 1)[1].split("\n", 1)[0])
         b = json.loads(texto.split("SALIDA B: ", 1)[1].split("\n", 1)[0])
@@ -72,6 +72,12 @@ comprobar(len(g["hashtags"]) <= 5 and all(h.startswith("#") for h in g["hashtags
           f"máximo 5 hashtags y sin relleno: {g['hashtags']}")
 comprobar(g["coliseo"]["titulo_antes"] == guion["titulo"] and g["coliseo"]["campeon"], "se apunta el campeón y el título de antes")
 comprobar("🔥" in g["titulo"], "la salida campeona es la corregida en los combates")
+t = json.load(open(os.path.join(TMP, "privado", "estado", "coliseo", "torneos", os.listdir(os.path.join(TMP, "privado", "estado", "coliseo", "torneos"))[0])))
+comprobar([c["ronda"] for c in t["combates"]] == ["cuartos"] * 4 + ["semifinal"] * 2 + ["final"],
+          "rondas con el nombre que entiende la app (cuartos, semifinal y final)")
+nombres = {x["nombre"] for x in t["gladiadores"]}
+comprobar(all(c["a"] in nombres and c["b"] in nombres and c["ganador"] in (c["a"], c["b"]) for c in t["combates"]),
+          "cada combate con los nombres exactos de sus gladiadores")
 r = privado.leer("estado/coliseo/resumen.json")
 comprobar(r["hoy"]["torneos"] == 1 and sum(c["ganadas"] for c in r["cartas"].values()) == 1, "se cuenta qué carta gana")
 torneos = os.listdir(os.path.join(TMP, "privado", "estado", "coliseo", "torneos"))
