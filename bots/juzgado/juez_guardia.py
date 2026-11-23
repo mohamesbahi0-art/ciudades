@@ -9,6 +9,9 @@ import sys
 from bots.comun import gemini, ia
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
+import fotogramas  # noqa: E402
+
 MINIMO = 90               # el dueño: solo se publica lo de 90 o más, en todas las plataformas
 
 PLANTILLA = """Eres el Juez de guardia del Juzgado de {donde} llamado «{nombre}». El vídeo está en {idioma}.
@@ -17,7 +20,7 @@ Te paso 7 fotogramas en orden (segundos 0,3 · 1,2 · 2,5, y al 30 %, 55 %, 80 %
 - Título: {titulo}
 - Texto en pantalla al empezar: {gancho}
 - Narración: {narracion}
-- Medidas del vídeo: {medidas}
+- Medidas del vídeo: {medidas}{formato}
 
 Lo que ha aprendido el Juzgado (síguelo; lo del dueño manda):
 {lecciones}
@@ -34,13 +37,32 @@ las pausas o un gancho flojo bajan la nota, pero no son fallos graves.
 Devuelve SOLO un JSON: {{"gancho": 0, "retencion": 0, "claridad": 0, "final": 0, "fallos_graves": [], "consejo": "una frase concreta para mejorarlo"}}"""
 
 
+def sin_musica(canal):
+    return str(canal.get("musica_estudio") or "").strip().lower() in ("ninguna", "no", "sin", "sin musica", "sin música")
+
+
+def nota_formato(canal):
+    """Lo que el juez tiene que saber para no castigar lo que el dueño hace a propósito."""
+    if not sin_musica(canal):
+        return ""
+    return ("\n- Va SIN música a propósito: el dueño le pone la música al subirlo a TikTok o Instagram. No restes por no "
+            "tener música ni por el final tranquilo de un segundo (ahí entra su música).")
+
+
+def medidas_para(datos, canal):
+    """Las medidas que ven los jueces y abogados (en palabras), con la música dicha cuando falta a propósito."""
+    medidas = fotogramas.para_jueces(datos)
+    if sin_musica(canal):
+        medidas["musica"] = "ninguna, a propósito: el dueño pone su música al subirlo (no es un fallo)"
+    return medidas
+
+
 def juzgar(video, guion, canal, lecciones, carpeta):
     subprocess.run([sys.executable, os.path.join(RAIZ, "herramientas", "fotogramas.py"), video, "--salida", carpeta],
                    check=True, capture_output=True)
     with open(os.path.join(carpeta, "datos.json"), encoding="utf-8") as f:
         datos = json.load(f)
-    medidas = {k: datos.get(k) for k in ("duracion", "cortes_por_minuto", "primer_corte", "pantallas_negras",
-                                          "silencios", "volumen_inicio_db")}
+    medidas = medidas_para(datos, canal)
     fallos = []
     negras = [n for n in datos.get("pantallas_negras") or [] if n.get("hasta", 0) - n.get("desde", 0) >= 0.8]
     if negras:                       # un fundido corto no cuenta: solo pantallas negras de casi un segundo o más
@@ -51,7 +73,7 @@ def juzgar(video, guion, canal, lecciones, carpeta):
     idioma = {"es": "español", "nl": "neerlandés", "en": "inglés"}.get(canal.get("idioma", "es")[:2], "español")
     texto = PLANTILLA.format(nombre=canal["nombre"], donde=donde, idioma=idioma, titulo=guion["titulo"], gancho=guion.get("texto_pantalla", ""),
                              narracion=guion["narracion"], medidas=json.dumps(medidas, ensure_ascii=False),
-                             lecciones=lecciones)
+                             formato=nota_formato(canal), lecciones=lecciones)
     imagenes = [os.path.join(carpeta, f["archivo"]) for f in datos["fotogramas"]]
     try:
         v = ia.preguntar(texto, papel="juez", imagenes=imagenes, solo_bueno=True, temperatura=0.3)

@@ -27,6 +27,37 @@ def tiene_audio(v):
     return bool(r.stdout.strip())
 
 
+def volumen_en_palabras(db):
+    """El volumen medio (volumedetect) dicho en palabras. Los jueces leían «-13 dB» como «bajo» y pedían «-3 dB», que
+    sonaría saturado: un vídeo normal de TikTok o YouTube (-14 LUFS) da entre -12 y -20 dB de volumen medio."""
+    if db is None:
+        return None
+    if db > -8:
+        return "muy alto: puede sonar saturado"
+    if db >= -24:
+        return "bien: suena tan alto como un vídeo normal de TikTok o YouTube (no hay que subirlo)"
+    return "bajo: cuesta oírlo"
+
+
+def para_jueces(datos):
+    """Las medidas que ven los jueces, sin cifras que confundan: el volumen en palabras y sin contar como silencio el
+    final tranquilo de menos de 1,6 s (ahí va la música que pone el dueño al subirlo)."""
+    d = float(datos.get("duracion") or 0)
+    silencios = [s for s in datos.get("silencios") or []
+                 if not (s.get("hasta", 0) >= d - 0.1 and s.get("hasta", 0) - s.get("desde", 0) < 1.6)]
+    medidas = {k: datos.get(k) for k in ("duracion", "cortes_por_minuto", "primer_corte", "pantallas_negras")}
+    medidas["silencios"] = silencios
+    if datos.get("sin_audio"):
+        medidas["volumen"] = "sin sonido"
+    else:
+        medidas["volumen"] = volumen_en_palabras(datos.get("volumen_medio_db") if datos.get("volumen_medio_db") is not None
+                                                 else datos.get("volumen_inicio_db"))
+        inicio = datos.get("volumen_inicio_db")
+        if inicio is not None and inicio < -24:
+            medidas["volumen_al_empezar"] = "bajo: los 2 primeros segundos se oyen flojos"
+    return medidas
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("video")

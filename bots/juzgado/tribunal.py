@@ -121,8 +121,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
                    check=True, capture_output=True)
     with open(os.path.join(carpeta, "datos.json"), encoding="utf-8") as f:
         datos = json.load(f)
-    medidas = {k: datos.get(k) for k in ("duracion", "cortes_por_minuto", "primer_corte", "pantallas_negras",
-                                          "silencios", "volumen_inicio_db")}
+    medidas = juez_guardia.medidas_para(datos, canal)
     fallos = []
     negras = [n for n in datos.get("pantallas_negras") or [] if n.get("hasta", 0) - n.get("desde", 0) >= 0.8]
     if negras:                       # un fundido corto no cuenta: solo pantallas negras de casi un segundo o más
@@ -135,7 +134,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
              "idioma": {"es": "español", "nl": "neerlandés"}.get(canal.get("idioma", "es")[:2], "español"),
              "titulo": guion["titulo"], "gancho": guion.get("texto_pantalla", ""),
              "medidas": json.dumps(medidas, ensure_ascii=False),
-             "exigencia": exigencia(canal)}
+             "exigencia": exigencia(canal) + juez_guardia.nota_formato(canal)}
     try:
         alegatos = ia.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal),
                                                 lecciones=lecciones, **comun), papel="juez", imagenes=imagenes,

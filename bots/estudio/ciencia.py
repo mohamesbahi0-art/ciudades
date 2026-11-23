@@ -101,7 +101,8 @@ REGLAS
 - Solo datos ciertos y comprobables; las cifras, las de verdad. Nada inventado ni exagerado.
 - RETENCIÓN, lo primero:
   · Gancho en 1,5 segundos: la escena 1 es plano "gancho" con lo MÁS sorprendente en una cifra o afirmación enorme
-    («-1 cm», «3 harten», «100.000×»). Nada de introducciones.
+    («-1 cm», «3 harten», «100.000×»). Nada de introducciones. Su frase, como mucho 6 palabras: así el primer
+    cambio de plano llega antes de los 2 segundos (los jueces lo miden).
   · Bucle de curiosidad: la escena 2 abre una pregunta (plano "pregunta", p. ej. «Maar waarom eigenlijk?») que solo
     se responde al final, justo antes del cierre.
   · 2 o 3 datos que van subiendo de nivel (del curioso al que deja con la boca abierta), mejor con cifras.

@@ -63,7 +63,7 @@ EJEMPLO = {"paleta": "menta", "escenas": [
      "resaltar": ["Álex", "Marta"], "cta": {"texto": "SÍGUEME", "opciones": ["SOY ÁLEX", "SOY MARTA"]}}]}
 
 PLANTILLA = """Eres el guionista de «{nombre}», una cuenta de TikTok e Instagram de motivación y dinero (finanzas personales,
-hábitos, mentalidad, disciplina) para gente joven de España. Haces vídeos de 30 a 45 segundos con pictogramas: una
+hábitos, mentalidad, disciplina) para gente joven de España. Haces vídeos de 20 a 35 segundos con pictogramas: una
 historia corta o una comparación que engancha desde el primer segundo y deja una idea que la gente quiere guardar.
 
 Lo que más está funcionando ahora en este nicho (Radar de nichos e Influencers):
@@ -82,10 +82,11 @@ REGLAS
 - {sin_miedo}
 - Datos de dinero ciertos y sin prometer nada: si hay rentabilidades, dilo como supuesto («con un 7 % al año») y que las
   cuentas cuadren de verdad. Si das una cifra calculada, redondéala hacia abajo y di «más de» o «casi».
-- De 9 a 14 escenas cortas, una frase por escena (de 4 a 12 palabras; si es más larga, pártela en dos escenas). Algo
+- De 8 a 12 escenas cortas, una frase por escena (de 4 a 12 palabras; si es más larga, pártela en dos escenas). Algo
   nuevo en pantalla cada 2-3 segundos: la gente se va si el vídeo se queda quieto.
 - Primera escena = el gancho, lo más importante del vídeo: una afirmación que choca, un «A contra B» o un número que
   sorprende, Y algo grande en pantalla desde el segundo 0 (dos personas enfrentadas, un contador, una etiqueta enorme).
+  Su frase, como mucho 7 palabras: así el primer cambio de plano llega antes de los 2 segundos (los jueces lo miden).
 - NINGUNA escena vacía: cada una tiene al menos una persona, un objeto o una pieza (barras, contador, gráfica, lista).
 - Última escena = pregunta a quien lo ve + "cta".
 - "voz" es lo que se dice (números escritos como se dicen); "texto" es lo que sale escrito palabra a palabra (igual,
