@@ -1,0 +1,51 @@
+# Prueba de la Ciudad Central: hace un vídeo de verdad para un canal, pero NO lo sube. Se pone en marcha cuando Claude deja
+# peticiones/prueba.json ({"canal": "<clave>"}) o a mano desde Actions. El resultado va al repositorio privado (pruebas/).
+name: Prueba de la Ciudad Central
+on:
+  push:
+    paths:
+      - "peticiones/prueba.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: prueba-central
+  cancel-in-progress: false
+jobs:
+  prueba:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          pip install -q -r requirements.txt
+      - name: Hacer el vídeo de prueba
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+        run: python bots/central/turno.py --peticion peticiones/prueba.json --prueba --salida privado/pruebas
+      - name: Guardar el resultado en el repositorio privado
+        if: always()
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          git add -A pruebas memoria estado
+          git diff --cached --quiet && exit 0
+          git commit -q -m "prueba de la Ciudad Central"
+          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((i*5)); done
+          exit 1
