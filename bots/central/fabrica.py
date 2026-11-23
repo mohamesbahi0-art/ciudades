@@ -37,6 +37,20 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
     cola_llena = len(cola) >= ajustes["cola_maxima"]
     orden = {k: i for i, k in enumerate(ajustes.get("prioridad", []))}
     candidatos, esperan = [], {}
+    hoy = ahora.strftime("%Y-%m-%d")
+    fallidos = {}
+    for r in (privado.leer(os.path.join("estado", "fabrica.json"), {}) or {}).get("rondas", []):
+        if str(r.get("empezada", "")).startswith(hoy) and not r.get("prueba"):
+            for t in r.get("turnos", []):
+                if t.get("destino") == "suspendido":
+                    fallidos[t.get("canal")] = fallidos.get(t.get("canal"), 0) + 1
+    tope = int(ajustes.get("intentos_fallidos_dia", 2))
+
+    def insiste(clave):
+        if fallidos.get(clave, 0) >= tope:
+            esperan[clave] = f"hoy ya lo ha intentado {fallidos[clave]} veces sin llegar al 90: mañana más"
+            return False
+        return True
     for clave, c in cfg.get("canales", {}).items():
         if solo and clave not in solo:
             continue
@@ -57,7 +71,8 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
         if not hora:
             esperan[clave] = f"ya tiene vídeos para {ajustes['dias_maximos']} días"
             continue
-        candidatos.append((huecos.colchon(ocupadas, ahora), orden.get(clave, 99), clave, hora))
+        if insiste(clave):
+            candidatos.append((huecos.colchon(ocupadas, ahora), orden.get(clave, 99), clave, hora))
     for clave, b in cfg.get("barrios", {}).items():
         if solo and clave not in solo:
             continue
@@ -73,7 +88,8 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
         if dias > 1.5:
             esperan[clave] = "tiene vídeos para los próximos días"
             continue
-        candidatos.append((dias, orden.get(clave, 99), clave, None))
+        if insiste(clave):
+            candidatos.append((dias, orden.get(clave, 99), clave, None))
     candidatos.sort()
     return [(clave, hora) for _, _, clave, hora in candidatos], esperan
 

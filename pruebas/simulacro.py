@@ -31,14 +31,14 @@ def falso_gemini(texto, imagenes=(), **kw):
         JUICIOS.append(1)
         if len(JUICIOS) == 1:
             return {"votos": [{"juez": "gancho", "voto": "no", "nota": 40, "razon": "flojo"}, {"juez": "reloj", "voto": "no", "nota": 42, "razon": "x"}, {"juez": "calle", "voto": "sube", "nota": 60, "razon": "y"}], "consejo": "gancho más fuerte"}
-        return {"votos": [{"juez": "gancho", "voto": "sube", "nota": 70, "razon": "bien"}, {"juez": "reloj", "voto": "sube", "nota": 66, "razon": "x"}, {"juez": "calle", "voto": "no", "nota": 50, "razon": "y"}], "consejo": "ok"}
+        return {"votos": [{"juez": "gancho", "voto": "sube", "nota": 95, "razon": "bien"}, {"juez": "reloj", "voto": "sube", "nota": 92, "razon": "x"}, {"juez": "calle", "voto": "no", "nota": 88, "razon": "y"}], "consejo": "ok"}
     if "La Sala de Ideas ha elegido ESTA idea" in texto:
         print("  (el Escritor recibió la idea elegida)")
     if texto.startswith("Eres el Juez de guardia"):
         JUICIOS.append(1)
         if len(JUICIOS) == 1:
             return {"gancho": 10, "retencion": 10, "claridad": 10, "final": 10, "fallos_graves": ["título que no pega"], "consejo": "cambia el título"}
-        return {"gancho": 20, "retencion": 18, "claridad": 20, "final": 15, "fallos_graves": [], "consejo": "más ritmo"}
+        return {"gancho": 24, "retencion": 23, "claridad": 23, "final": 22, "fallos_graves": [], "consejo": "más ritmo"}
     if "Juez de guardia, sobre la versión anterior" in texto:
         print("  (el Escritor recibió el aviso del Juez)")
     corto = "una cuenta de Instagram" in texto

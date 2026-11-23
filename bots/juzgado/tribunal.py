@@ -33,7 +33,7 @@ JUECES = {
               "especialidad": "el público: si a la gente le importa este tema ahora, si el título da ganas de verlo y si provoca comentarios"},
 }
 JEFE_INICIAL = "reloj"
-NOTA_MINIMA = 45
+NOTA_MINIMA = 90          # el dueño: solo se publica lo de 90 o más, en todas las plataformas
 
 ABOGADOS = """Eres el Juzgado de {donde} «{nombre}». Hoy se juzga si este vídeo merece subirse. El vídeo está en {idioma}.
 Título: {titulo}

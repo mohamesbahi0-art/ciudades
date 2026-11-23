@@ -9,7 +9,7 @@ import sys
 from bots.comun import gemini
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MINIMO = 50
+MINIMO = 90               # el dueño: solo se publica lo de 90 o más, en todas las plataformas
 
 PLANTILLA = """Eres el Juez de guardia del Juzgado de {donde} llamado «{nombre}». El vídeo está en {idioma}.
 Juzgas si este vídeo hará que la gente que va pasando vídeos cortos se pare y lo vea entero.

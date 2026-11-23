@@ -217,7 +217,7 @@ def main(argv=None):
                            juicio=id_juicio, segundos=round(segundos, 1), intento=intento,
                            fallos=v.get("fallos_graves"), tribunal=v.get("tribunal"), juicio_app=id_tribunal,
                            juicio_idea=id_idea)
-            if v["veredicto"] != "suspendido" or a.prueba or not ajustes.get("segunda_oportunidad", True):
+            if v["veredicto"] == "aprobado" or a.prueba or not ajustes.get("segunda_oportunidad", True):
                 break
             aviso_juez = (f"\n- (Juez de guardia, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
                           f"{v.get('consejo', '')} Fallos: {', '.join(v.get('fallos_graves') or []) or 'ninguno grave'}. "
@@ -228,8 +228,8 @@ def main(argv=None):
             resumen["destino_resultado"] = "prueba"
             if os.environ.get("ALMACEN_PRUEBAS"):   # el vídeo de prueba va a la estantería «pruebas», no al historial
                 resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video)
-        elif v["veredicto"] == "suspendido":
-            paso("subidor", "el Juzgado lo ha suspendido: no se sube")
+        elif v["veredicto"] != "aprobado":
+            paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): no se sube")
             resumen["destino_resultado"] = "suspendido"
         elif canal["destino"] == "parasubir":
             ids = parasubir.dejar(clave, canal, video, g, segundos, v)

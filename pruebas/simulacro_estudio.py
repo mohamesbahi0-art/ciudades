@@ -37,8 +37,8 @@ def falso(texto, imagenes=(), **kw):
     if "Escribe los dos alegatos" in texto:
         return {"defensa": "bien", "fiscalia": "regular", "fallos_graves": []}
     if "Tres jueces deciden" in texto:
-        return {"votos": [{"juez": "gancho", "voto": "sube", "nota": 70}, {"juez": "reloj", "voto": "sube", "nota": 66},
-                          {"juez": "calle", "voto": "no", "nota": 50}], "consejo": "ok"}
+        return {"votos": [{"juez": "gancho", "voto": "sube", "nota": 95}, {"juez": "reloj", "voto": "sube", "nota": 92},
+                          {"juez": "calle", "voto": "no", "nota": 88}], "consejo": "ok"}
     return json.loads(json.dumps(GUION))
 
 
