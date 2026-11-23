@@ -46,6 +46,10 @@ class Cuaderno:
                 self.datos = json.load(f)
         except FileNotFoundError:
             self.datos = {"robot": robot, "creado": ahora(), "lecciones": [], "diario": [], "experimentos": []}
+        self._al_abrir = self._huella()
+
+    def _huella(self):
+        return json.dumps({k: v for k, v in self.datos.items() if k != "actualizado"}, sort_keys=True, ensure_ascii=False)
 
     # --- lo que hace el robot y lo que pasa después -------------------------------------------
     def apuntar(self, accion, detalle=None):
@@ -117,12 +121,16 @@ class Cuaderno:
         self.datos["lecciones"] = del_dueno + resto
 
     def guardar(self):
+        """Guarda el cuaderno, solo si ha cambiado algo (así dos turnos a la vez no se pisan sin necesidad)."""
         self.datos["diario"] = self.datos["diario"][-MAX_DIARIO:]
+        if self._huella() == self._al_abrir and os.path.exists(self.ruta):
+            return
         self.datos["actualizado"] = ahora()
         os.makedirs(os.path.dirname(self.ruta), exist_ok=True)
         with open(self.ruta + ".tmp", "w", encoding="utf-8") as f:
             json.dump(self.datos, f, ensure_ascii=False, indent=1)
         os.replace(self.ruta + ".tmp", self.ruta)
+        self._al_abrir = self._huella()
 
 
 def main():

@@ -86,10 +86,11 @@ jobs:
         run: python bots/central/fabrica.py ${{ steps.que.outputs.args }}
       - name: Guardar lo que quede en el repositorio privado
         if: always()
+        env:
+          PRIVADO: privado
         run: |
           cd privado
-          git add -A -- . ':(exclude)*.mp4' ':(exclude)*.mp3' ':(exclude)*.webp'
-          git diff --cached --quiet && exit 0
-          git commit -q -m "fábrica: lo que quedaba de la ronda"
-          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; git rebase --abort 2>/dev/null; sleep $((i*5)); done
-          exit 1
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('fábrica: lo que quedaba de la ronda') else 1)"

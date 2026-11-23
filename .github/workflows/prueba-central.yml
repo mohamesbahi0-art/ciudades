@@ -40,12 +40,11 @@ jobs:
         run: python bots/central/turno.py --peticion peticiones/prueba.json --prueba --salida privado/pruebas
       - name: Guardar el resultado en el repositorio privado
         if: always()
+        env:
+          PRIVADO: privado
         run: |
           cd privado
           git config user.name "ciudades-bot"
           git config user.email "ciudades-bot@users.noreply.github.com"
-          git add -A pruebas memoria estado
-          git diff --cached --quiet && exit 0
-          git commit -q -m "prueba de la Ciudad Central"
-          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((i*5)); done
-          exit 1
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('prueba de la Ciudad Central') else 1)"

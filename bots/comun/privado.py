@@ -103,8 +103,52 @@ def apuntar_titulo(clave, titulo):
         json.dump(lista[-500:], f, ensure_ascii=False, indent=1)
 
 
+def _por_id(*listas, clave="id"):
+    vistos, salida = {}, []
+    for lista in listas:
+        for x in lista or []:
+            k = x.get(clave) if isinstance(x, dict) else json.dumps(x, sort_keys=True, ensure_ascii=False)
+            if k is None:
+                k = json.dumps(x, sort_keys=True, ensure_ascii=False)
+            if k in vistos:
+                salida[vistos[k]] = x          # gana la versión más nueva (la nuestra va después)
+            else:
+                vistos[k] = len(salida)
+                salida.append(x)
+    return salida
+
+
+def fusionar(ruta, suyo, nuestro):
+    """Junta dos versiones del mismo JSON cuando dos robots lo han tocado a la vez, sin perder lo de ninguno."""
+    if suyo is None:
+        return nuestro
+    if nuestro is None:
+        return suyo
+    if ruta.startswith("memoria/") and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        junto = dict(suyo, **nuestro)
+        for k in ("diario", "lecciones", "experimentos"):
+            junto[k] = _por_id(suyo.get(k, []), nuestro.get(k, []))
+        junto["diario"] = sorted(junto["diario"], key=lambda e: e.get("fecha", ""))
+        return junto
+    if ruta.startswith("parasubir/") and isinstance(suyo, dict):
+        return suyo if suyo.get("estado") in ("subido", "descartado") else nuestro   # lo que marca el dueño manda
+    if isinstance(suyo, list) and isinstance(nuestro, list):
+        if ruta.startswith("registro/"):
+            return _por_id(suyo, nuestro, clave="id")
+        if ruta.startswith("estado/historial/"):
+            return sorted(_por_id(suyo, nuestro, clave="fecha"), key=lambda x: x.get("fecha", ""))
+        return _por_id(suyo, nuestro)
+    if isinstance(suyo, dict) and isinstance(nuestro, dict) and ruta.startswith("estado/central/"):
+        junto = dict(suyo, **nuestro)
+        junto["turnos"] = sorted(_por_id(suyo.get("turnos", []), nuestro.get("turnos", []), clave="empezado"),
+                                 key=lambda t: t.get("empezado", ""))[-20:]
+        return junto
+    return nuestro
+
+
 def git_guardar(mensaje, intentos=5):
-    """Guarda en el repositorio privado lo que han cambiado los robots (commit + push, con reintentos)."""
+    """Guarda en el repositorio privado lo que han cambiado los robots (commit + push, con reintentos). Si otro turno
+    ha tocado los mismos ficheros a la vez, junta las dos versiones (fusionar) en vez de perder nada."""
     import subprocess
     import time
     c = carpeta()
@@ -113,13 +157,43 @@ def git_guardar(mensaje, intentos=5):
         return subprocess.run(["git", "-C", c, *args], capture_output=True, text=True)
 
     git("add", "-A", "--", ".", ":(exclude)*.mp4", ":(exclude)*.mp3", ":(exclude)*.webp")
-    if git("diff", "--cached", "--quiet").returncode == 0:
-        return True
-    git("commit", "-q", "-m", mensaje)
+    if git("diff", "--cached", "--quiet").returncode != 0:
+        git("commit", "-q", "-m", mensaje)
     for i in range(intentos):
+        if git("rev-list", "--count", "@{u}..HEAD").stdout.strip() in ("0", ""):
+            if git("fetch", "-q").returncode == 0 and git("rev-list", "--count", "@{u}..HEAD").stdout.strip() == "0":
+                return True
         if git("pull", "-q", "--rebase").returncode == 0 and git("push", "-q").returncode == 0:
             return True
         git("rebase", "--abort")
+        if git("fetch", "-q").returncode != 0:
+            time.sleep(5 * (i + 1))
+            continue
+        cambiados = [f for f in git("diff", "--name-only", "@{u}...HEAD").stdout.split() if f]
+        nuestros = {}
+        for f in cambiados:
+            r = git("show", f"HEAD:{f}")
+            nuestros[f] = r.stdout if r.returncode == 0 else None
+        git("reset", "-q", "--hard", "@{u}")
+        for f, texto in nuestros.items():
+            ruta = os.path.join(c, f)
+            if texto is None:                    # lo habíamos borrado nosotros (por ejemplo, un vídeo de la cola ya subido)
+                if os.path.exists(ruta):
+                    os.remove(ruta)
+                continue
+            if f.endswith(".json"):
+                try:
+                    suyo = json.load(open(ruta, encoding="utf-8")) if os.path.exists(ruta) else None
+                    texto = json.dumps(fusionar(f, suyo, json.loads(texto)), ensure_ascii=False, indent=1)
+                except ValueError:
+                    pass
+            os.makedirs(os.path.dirname(ruta), exist_ok=True)
+            with open(ruta, "w", encoding="utf-8") as fh:
+                fh.write(texto)
+        git("add", "-A", "--", ".", ":(exclude)*.mp4", ":(exclude)*.mp3", ":(exclude)*.webp")
+        git("commit", "-q", "-m", f"{mensaje} (juntado con otro turno)")
+        if git("push", "-q").returncode == 0:
+            return True
         time.sleep(5 * (i + 1))
     print("No he podido guardar en el repositorio privado: lo intentará la siguiente ronda.", flush=True)
     return False

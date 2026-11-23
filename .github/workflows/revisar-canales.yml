@@ -64,12 +64,11 @@ jobs:
         run: python bots/influencers/analista.py
       - name: Guardar en el repositorio privado
         if: always()
+        env:
+          PRIVADO: privado
         run: |
           cd privado
           git config user.name "ciudades-bot"
           git config user.email "ciudades-bot@users.noreply.github.com"
-          git add -A estado memoria
-          git diff --cached --quiet && exit 0
-          git commit -q -m "revisión de canales"
-          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((i*5)); done
-          exit 1
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('revisión de canales') else 1)"
