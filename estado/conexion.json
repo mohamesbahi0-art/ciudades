@@ -1,0 +1,8 @@
+{
+ "estado": "faltan_secretos",
+ "faltan": [
+  "YT_CLIENT_ID",
+  "YT_CLIENT_SECRET"
+ ],
+ "actualizado": "2026-11-23T01:33:41Z"
+}
