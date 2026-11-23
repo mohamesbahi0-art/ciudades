@@ -1,0 +1,28 @@
+# Oído de la Policía: compone las músicas de fondo y Gemini las escucha y las puntúa (solo imprime notas y problemas).
+# Se pone en marcha con peticiones/oir-musica.json o cuando cambia la música.
+name: Oír la música
+on:
+  push:
+    paths:
+      - "peticiones/oir-musica.json"
+      - "herramientas/musica.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  oir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Preparar
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q numpy
+      - name: Escuchar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python pruebas/oir_musica.py
