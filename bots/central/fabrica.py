@@ -18,10 +18,11 @@ import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
-from bots.central import discoteca, huecos, parasubir, subidor, turno  # noqa: E402
+from bots.central import clips, discoteca, huecos, parasubir, subidor, turno  # noqa: E402
 from bots.comun import privado  # noqa: E402
 
-SIN_HACER = {"clips": "falta la lista de creadores con permiso"}
+SIN_HACER = {}                   # tipos de canal que todavía no se pueden hacer (y por qué)
+SOLO_CON_CLIP = ("clips",)       # canales que solo trabajan cuando el dueño ha grabado un clip para ellos
 
 
 def revisiones(cfg):
@@ -45,6 +46,10 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
                 if t.get("destino") == "suspendido":
                     fallidos[t.get("canal")] = fallidos.get(t.get("canal"), 0) + 1
     tope = int(ajustes.get("intentos_fallidos_dia", 2))
+    try:
+        con_clip = clips.canales_con_clips()     # los clips que ha grabado el dueño van antes que nada
+    except Exception:
+        con_clip = set()
 
     def insiste(clave):
         if fallidos.get(clave, 0) >= tope:
@@ -56,6 +61,9 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
             continue
         if c.get("pausado"):
             esperan[clave] = "en pausa"
+            continue
+        if (c.get("tipo") in SOLO_CON_CLIP or clave in SOLO_CON_CLIP) and clave not in con_clip:
+            esperan[clave] = "esperando a que grabes un clip (la lista está en la app)"
             continue
         if c.get("tipo") in SIN_HACER or clave in SIN_HACER:
             esperan[clave] = SIN_HACER.get(c.get("tipo"), SIN_HACER.get(clave))
@@ -72,7 +80,7 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
             esperan[clave] = f"ya tiene vídeos para {ajustes['dias_maximos']} días"
             continue
         if insiste(clave):
-            candidatos.append((huecos.colchon(ocupadas, ahora), orden.get(clave, 99), clave, hora))
+            candidatos.append((clave not in con_clip, huecos.colchon(ocupadas, ahora), orden.get(clave, 99), clave, hora))
     for clave, b in cfg.get("barrios", {}).items():
         if solo and clave not in solo:
             continue
@@ -89,9 +97,9 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
             esperan[clave] = "tiene vídeos para los próximos días"
             continue
         if insiste(clave):
-            candidatos.append((dias, orden.get(clave, 99), clave, None))
+            candidatos.append((clave not in con_clip, dias, orden.get(clave, 99), clave, None))
     candidatos.sort()
-    return [(clave, hora) for _, _, clave, hora in candidatos], esperan
+    return [(clave, hora) for _, _, _, clave, hora in candidatos], esperan
 
 
 def main():
@@ -120,6 +128,14 @@ def main():
         if subidos:
             print(f"cola: {subidos} vídeo(s) subidos", flush=True)
             guardar(f"fábrica: {subidos} vídeo(s) de la cola subidos")
+
+    if not a.prueba:
+        try:
+            ramas = clips.limpiar_ramas()       # las ramas temporales de clips ya usados o descartados
+            if ramas:
+                print(f"buzón de clips: {ramas} rama(s) temporales borradas", flush=True)
+        except Exception as e:
+            print(f"buzón de clips: no he podido limpiar ({type(e).__name__})", flush=True)
 
     if not a.prueba:
         try:

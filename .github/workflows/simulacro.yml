@@ -41,3 +41,10 @@ jobs:
         run: |
           rm -rf /tmp/privado-ciencia && cp -r pruebas/privado_ejemplo /tmp/privado-ciencia
           PRIVADO=/tmp/privado-ciencia MEMORIA_DIR=/tmp/privado-ciencia/memoria python pruebas/simulacro_ciencia.py
+      - name: Clips con licencia libre (Portero, narración, crédito y rama temporal)
+        run: python pruebas/simulacro_clips.py
+      - name: Jurado popular, Coliseo y cerebro de pago de mentira
+        run: |
+          python pruebas/simulacro_jurado.py
+          python pruebas/simulacro_coliseo.py
+          python pruebas/simulacro_claude.py

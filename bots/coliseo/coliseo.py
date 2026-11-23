@@ -91,10 +91,17 @@ def _narracion(g):
     return texto.strip()[:1500]
 
 
+CREDITOS = ("🎙️ Voz:", "🎙 Voz:", "🎬 Clip:")      # menciones obligatorias: la voz gratis y el creador del clip (CC BY)
+
+
 def _credito(texto):
-    """La mención de la voz (plan gratis de ElevenLabs) tiene que seguir al final del texto."""
-    m = re.search(r"\n?🎙️ Voz:.*$", texto or "")
-    return m.group(0).strip() if m else ""
+    """Las menciones obligatorias (la voz del plan gratis de ElevenLabs y el creador de un clip con licencia CC BY)
+    tienen que seguir al final del texto, gane quien gane el torneo."""
+    return "\n".join(l.strip() for l in (texto or "").splitlines() if l.strip().startswith(CREDITOS))
+
+
+def _sin_creditos(texto):
+    return "\n".join(l for l in (texto or "").splitlines() if not l.strip().startswith(CREDITOS)).strip()
 
 
 def _limpia(salida, youtube, original):
@@ -134,7 +141,7 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False):
     idioma = IDIOMAS.get((canal.get("idioma") or "es")[:2], "español de España")
     texto_actual = g.get("descripcion") if youtube else (g.get("texto_tiktok") or g.get("texto_instagram") or "")
     credito = _credito(texto_actual)
-    texto_actual = (texto_actual or "").replace(credito, "").strip()
+    texto_actual = _sin_creditos(texto_actual)
     original = {"titulo": g.get("titulo", ""), "texto": texto_actual, "hashtags": list(g.get("hashtags") or [])}
     receta = ((privado.leer(os.path.join("estado", "influencers", "recetas.json"), {}) or {}).get("canales") or {}).get(clave) or {}
     nicho = {p: {k: (receta.get(p) or {}).get(k) for k in ("lo_que_funciona", "ganchos", "temas", "sonidos")
@@ -216,7 +223,7 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False):
     _guardar(torneo, campeon)
     s = campeon["salida"]
     nuevo = dict(g, titulo=s["titulo"], hashtags=s["hashtags"])
-    texto = s["texto"] + (f"\n{credito}" if credito else "")
+    texto = _sin_creditos(s["texto"]) + (f"\n{credito}" if credito else "")
     if youtube:
         nuevo["descripcion"] = texto
     else:

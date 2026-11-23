@@ -39,7 +39,8 @@ def falso(texto, imagenes=(), **kw):
         LLAMADAS["combate"] += 1
         a = json.loads(texto.split("SALIDA A: ", 1)[1].split("\n", 1)[0])
         b = json.loads(texto.split("SALIDA B: ", 1)[1].split("\n", 1)[0])
-        a["titulo"] = a["titulo"].replace("😱", "🔥")
+        a["titulo"] = a["titulo"].replace("😱", "🔥")      # en el combate los dos corrigen su salida
+        b["titulo"] = b["titulo"].replace("😱", "🔥")      # (el juez ciego las ve en orden al azar)
         return {"critica_a_b": "flojo", "critica_b_a": "largo", "a": a, "b": b}
     if "Juez ciego" in texto:
         LLAMADAS["juez"] += 1

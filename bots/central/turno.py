@@ -24,7 +24,7 @@ import traceback
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
-from bots.central import dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
+from bots.central import clips, dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
 from bots.comun import ia, privado  # noqa: E402
 from bots.juzgado import jurado, sala_ideas, tribunal  # noqa: E402
 from bots.coliseo import coliseo  # noqa: E402
@@ -112,6 +112,47 @@ def _coliseo(clave, canal, g, v, paso, a, resumen):
     return nuevo
 
 
+def _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen):
+    """Lo que pasa con un vídeo ya juzgado: prueba, suspendido, bandeja «Para subir» o subida a YouTube (o la cola)."""
+    if a.prueba:
+        paso("subidor", "es una prueba: no se sube nada")
+        resumen["destino_resultado"] = "prueba"
+        if os.environ.get("ALMACEN_PRUEBAS"):   # el vídeo de prueba va a la estantería «pruebas», no al historial
+            resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video)
+    elif v["veredicto"] != "aprobado":
+        paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): no se sube")
+        resumen["destino_resultado"] = "suspendido"
+    elif canal["destino"] == "parasubir":
+        ids = parasubir.dejar(clave, canal, video, g, segundos, v)
+        cuadernos["publicador"].apuntar("para_subir", {"barrio": clave, "documentos": ids, "guion": id_guion})
+        privado.apuntar_titulo(clave, g["titulo"])
+        paso("publicador", f"en la bandeja «Para subir»: {', '.join(ids)}", f"en la bandeja ({len(ids)} redes)")
+        resumen.update(destino_resultado="para_subir", documentos=ids)
+    else:
+        hora = huecos.fecha(a.hora) if a.hora else None
+        if not hora:
+            registro_subidas = privado.leer(subidor.REGISTRO, []) or []
+            revision = privado.leer(os.path.join("estado", "canales", f"{clave}.json"), {})
+            cola = subidor.en_cola()
+            hora = huecos.siguiente(canal["horas"], huecos.ocupados(revision, registro_subidas, cola, clave),
+                                    dias_maximos=ajustes["dias_maximos"])
+        if hora and subidor.hay_cupo(ajustes):
+            r = subidor.subir(clave, canal, video, g, hora)
+            paso("subidor", f"{r['resultado']}: {r['mensaje']}", f"{r['resultado']} (código {r['codigo']})")
+            resumen.update(destino_resultado=r["resultado"], hora=r.get("hora"), url=r.get("url"))
+            cuadernos["subidor"].apuntar("subida", {"canal": clave, "guion": id_guion, "codigo": r["codigo"],
+                                                    "hora": r.get("hora"), "video": r.get("id")})
+            if r["resultado"] != "subido":
+                nombre = subidor.encolar(clave, video, g, r["mensaje"], v)
+                paso("subidor", f"guardado en la cola: {nombre}", "guardado en la cola")
+                resumen.update(destino_resultado="en_cola", motivo=r["mensaje"], codigo=r["codigo"])
+        else:
+            motivo = "no hay hueco en los próximos días" if not hora else "hoy no queda cupo de subidas"
+            nombre = subidor.encolar(clave, video, g, motivo, v)
+            paso("subidor", f"{motivo}: guardado en la cola ({nombre})", f"{motivo}: guardado en la cola")
+            resumen.update(destino_resultado="en_cola", motivo=motivo)
+
+
 def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None):
     """Turno de una cuenta animada: el estudio hace el vídeo, el Juzgado lo juzga (con segunda oportunidad) y va a
     «Para subir». Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
@@ -186,6 +227,107 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
     return resumen
 
 
+def _lecciones_escritor(clave, cuadernos):
+    """Lo que ha aprendido el Escritor y la receta de los Influencers (Radar, Ojeador y Entrenador) para este canal."""
+    receta = (privado.leer(os.path.join("estado", "influencers", "recetas.json"), {}) or {}).get("canales", {}).get(clave)
+    lecciones = cuadernos["escritor"].para_el_prompt()
+    if receta:
+        lecciones += "\n- (Receta de los Influencers, de lo que funciona ahora) " + json.dumps(
+            {k: v for k, v in receta.items() if k not in ("fecha", "basada_en")}, ensure_ascii=False)
+    return lecciones
+
+
+def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, lecciones):
+    """Turno con un clip con licencia libre (CC BY) que el dueño ha grabado y subido en la app. El Portero de clips mira
+    que solo salga el juego (recorta o descarta), el Escritor lo narra mirando unas fotos, el Jurado popular vota la
+    narración, el Locutor pone la voz y el Montador de clips monta el Short. Después, como todos: Juzgado, Coliseo y
+    subida, con el crédito del creador en la descripción."""
+    resumen.update(clip=m.get("codigo"), formato="clip")
+    paso("montador", f"clip {m.get('codigo')} grabado por el dueño: lo bajo del buzón", "bajando el clip grabado")
+    ruta = clips.bajar(m, os.path.join(trabajo, "clip"))
+    paso("portero_clips", "mirando que solo salga el juego")
+    rev = clips.revisar(ruta, os.path.join(trabajo, "clip", "portero"), m)
+    cuadernos["portero_clips"].apuntar("revision", {"canal": clave, "clip": m.get("codigo"), "vale": rev["vale"],
+                                                    "recorte": bool(rev["recorte"]), "bandas": bool(rev["bandas"]),
+                                                    "sonido": rev["sonido"], "problemas": rev["problemas"]})
+    if not rev["vale"]:
+        motivo = "sale algo del creador y no se puede quitar: " + (", ".join(rev["problemas"]) or "sin detalle")
+        paso("portero_clips", motivo, "el clip no vale: sale algo del creador")
+        if not a.prueba:
+            clips.descartar(m, motivo[:300])
+        resumen.update(destino_resultado="suspendido", motivo="el Portero de clips lo ha descartado", resultado="hecho")
+        return
+    paso("portero_clips", ("recorto lo que no es juego; " if rev["recorte"] else "")
+         + ("quito las bandas negras; " if rev["bandas"] else "")
+         + ("dejo el sonido del juego bajito" if rev["sonido"] else "quito el sonido del clip y pongo música propia"))
+    largo = clips._segundos(ruta)
+    vistas = rev["fotos"][::2] or rev["fotos"]        # 3 de las 5 fotos (principio, medio y final), ya recortadas
+    reglas_juez = cuadernos["juez_guardia"].para_el_prompt() + "\n- " + clips.REGLA
+    hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
+    aviso_juez, v, video, segundos, id_guion = "", {}, None, 0.0, None
+    for intento in (1, 2):
+        if intento == 2:
+            paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
+        paso("escritor", "escribiendo la narración del clip")
+        g = dict(clips.guionizar(canal, m, lecciones + aviso_juez, segundos=largo, imagenes=vistas),
+                 cerebro=ia.quien().get("motor", "gemini"))
+        g, vale = _jurado_guion(clave, canal, g, paso, a, reescribir=lambda extra: dict(
+            clips.guionizar(canal, m, lecciones + aviso_juez + extra, segundos=largo, imagenes=vistas),
+            cerebro=ia.quien().get("motor", "gemini")))
+        if not vale:
+            paso("subidor", "el jurado popular no se convence con la narración: no se graba (se ahorra la voz)")
+            resumen.update(titulo=g.get("titulo"), destino_resultado="suspendido",
+                           motivo="el jurado popular rechazó el guion", resultado="hecho")
+            if not a.prueba:
+                clips.tras_juicio(m, False)
+            return
+        clips.guardar_guion(trabajo, g)
+        id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g["titulo"], "clip": m.get("codigo"),
+                                                           "prueba": a.prueba})
+        paso("escritor", f"«{g['titulo']}»", "narración lista")
+
+        paso("locutor", f"grabando la voz ({canal.get('voz')})")
+        asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
+                                    "+0Hz", trabajo))
+        quitado = locutor.apretar(trabajo)
+        cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
+        paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
+
+        paso("montador", "montando el Short con el clip")
+        video = clips.montar(ruta, g, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
+                             os.path.join(trabajo, f"{hoy}-{clave}.mp4"), revision=rev,
+                             ambiente=montador.musica.ambiente_de(canal))
+        segundos = montador.duracion(video)
+        cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1),
+                                                  "clip": m.get("codigo")})
+        paso("montador", f"vídeo de {segundos:.1f} s")
+
+        paso("juez_guardia", "juzgando el vídeo")
+        v = tribunal.juzgar(video, g, canal, reglas_juez, os.path.join(trabajo, f"juicio{intento}"),
+                            audio=os.path.join(trabajo, "voz.mp3"))
+        v["intento"] = intento
+        id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
+        id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion, "clip": m.get("codigo"),
+                                                                 "veredicto": v["veredicto"], "total": v.get("total")})
+        cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juez de guardia", v.get("consejo", ""))
+        paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
+             f"{v['veredicto']} ({v.get('total', '-')}/100)")
+        resumen.update(titulo=g["titulo"], veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
+                       juicio=id_juicio, segundos=round(segundos, 1), intento=intento, fallos=v.get("fallos_graves"),
+                       tribunal=v.get("tribunal"), juicio_app=id_tribunal)
+        if v["veredicto"] == "aprobado" or a.prueba or not ajustes.get("segunda_oportunidad", True):
+            break
+        aviso_juez = (f"\n- (Juez de guardia, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
+                      f"{v.get('consejo', '')} Fallos: {', '.join(v.get('fallos_graves') or []) or 'ninguno grave'}. "
+                      "Escribe una narración distinta que lo corrija.)")
+    g = _coliseo(clave, canal, g, v, paso, a, resumen)
+    _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
+    if not a.prueba:
+        clips.tras_juicio(m, v.get("veredicto") == "aprobado", nota=v.get("total"), titulo=g.get("titulo"),
+                          destino=resumen.get("destino_resultado"))
+    resumen["resultado"] = "hecho"
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--canal")
@@ -216,6 +358,13 @@ def main(argv=None):
     resumen = {"canal": clave, "nombre": canal["nombre"], "destino": canal["destino"], "prueba": a.prueba,
                "empezado": privado.ahora()}
     try:
+        clip = None if canal.get("estudio") == "animacion" else clips.listo_para(clave)
+        if clip:                    # el dueño ha grabado un clip para este canal: va antes que nada
+            cuadernos["portero_clips"] = privado.cuaderno("portero_clips")
+            nombres["portero_clips"] = "portero_clips"
+            _turno_clip(clave, canal, clip, cuadernos, ajustes, trabajo, paso, resumen, a,
+                        _lecciones_escritor(clave, cuadernos))
+            raise _Hecho()
         fuentes, lista = None, []
         if canal.get("tipo") in CON_FUENTES and canal.get("fuentes"):
             paso("reportero_gta6", "buscando fuentes")
@@ -225,11 +374,7 @@ def main(argv=None):
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
             paso("reportero_gta6", f"{len(lista)} fuentes")
 
-        receta = (privado.leer(os.path.join("estado", "influencers", "recetas.json"), {}) or {}).get("canales", {}).get(clave)
-        lecciones_escritor = cuadernos["escritor"].para_el_prompt()
-        if receta:                               # la receta de los Influencers (y del Radar de nichos) para este canal
-            lecciones_escritor += "\n- (Receta de los Influencers, de lo que funciona ahora) " + json.dumps(
-                {k: v for k, v in receta.items() if k not in ("fecha", "basada_en")}, ensure_ascii=False)
+        lecciones_escritor = _lecciones_escritor(clave, cuadernos)   # con la receta de los Influencers
         if canal.get("estudio") == "animacion":     # cuentas de vídeos animados (las del dueño): el estudio de animación
             _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones_escritor)
             raise _Hecho()
@@ -314,43 +459,7 @@ def main(argv=None):
                           "Escribe un guion distinto que lo corrija.")
 
         g = _coliseo(clave, canal, g, v, paso, a, resumen)
-        if a.prueba:
-            paso("subidor", "es una prueba: no se sube nada")
-            resumen["destino_resultado"] = "prueba"
-            if os.environ.get("ALMACEN_PRUEBAS"):   # el vídeo de prueba va a la estantería «pruebas», no al historial
-                resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video)
-        elif v["veredicto"] != "aprobado":
-            paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): no se sube")
-            resumen["destino_resultado"] = "suspendido"
-        elif canal["destino"] == "parasubir":
-            ids = parasubir.dejar(clave, canal, video, g, segundos, v)
-            cuadernos["publicador"].apuntar("para_subir", {"barrio": clave, "documentos": ids, "guion": id_guion})
-            privado.apuntar_titulo(clave, g["titulo"])
-            paso("publicador", f"en la bandeja «Para subir»: {', '.join(ids)}", f"en la bandeja ({len(ids)} redes)")
-            resumen.update(destino_resultado="para_subir", documentos=ids)
-        else:
-            hora = huecos.fecha(a.hora) if a.hora else None
-            if not hora:
-                registro_subidas = privado.leer(subidor.REGISTRO, []) or []
-                revision = privado.leer(os.path.join("estado", "canales", f"{clave}.json"), {})
-                cola = subidor.en_cola()
-                hora = huecos.siguiente(canal["horas"], huecos.ocupados(revision, registro_subidas, cola, clave),
-                                        dias_maximos=ajustes["dias_maximos"])
-            if hora and subidor.hay_cupo(ajustes):
-                r = subidor.subir(clave, canal, video, g, hora)
-                paso("subidor", f"{r['resultado']}: {r['mensaje']}", f"{r['resultado']} (código {r['codigo']})")
-                resumen.update(destino_resultado=r["resultado"], hora=r.get("hora"), url=r.get("url"))
-                cuadernos["subidor"].apuntar("subida", {"canal": clave, "guion": id_guion, "codigo": r["codigo"],
-                                                        "hora": r.get("hora"), "video": r.get("id")})
-                if r["resultado"] != "subido":
-                    nombre = subidor.encolar(clave, video, g, r["mensaje"], v)
-                    paso("subidor", f"guardado en la cola: {nombre}", "guardado en la cola")
-                    resumen.update(destino_resultado="en_cola", motivo=r["mensaje"], codigo=r["codigo"])
-            else:
-                motivo = "no hay hueco en los próximos días" if not hora else "hoy no queda cupo de subidas"
-                nombre = subidor.encolar(clave, video, g, motivo, v)
-                paso("subidor", f"{motivo}: guardado en la cola ({nombre})", f"{motivo}: guardado en la cola")
-                resumen.update(destino_resultado="en_cola", motivo=motivo)
+        _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
         resumen["resultado"] = "hecho"
     except _Hecho:
         pass

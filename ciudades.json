@@ -765,6 +765,30 @@
    "lote": 2,
    "codigo": "nuevo",
    "tipo": "bot"
+  },
+  {
+   "id": "buscador_clips",
+   "nombre": "Buscador de clips",
+   "ciudad": "central",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Busca vídeos de GTA con licencia libre (Creative Commons) y elige solo los trozos de 90 o más en los que no sale nada del creador. Solo busca: no descarga.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "portero_clips",
+   "nombre": "Portero de clips",
+   "ciudad": "central",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Mira cada clip grabado: quita las bandas negras, recorta lo que no sea juego y quita la voz del creador. Si el creador sale en medio, lo descarta.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
   }
  ]
 }

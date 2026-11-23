@@ -166,6 +166,23 @@ def fusionar(ruta, suyo, nuestro):
         junto["otros"] = otros
         junto["agotada_hasta"] = max([x for x in (suyo.get("agotada_hasta"), nuestro.get("agotada_hasta")) if x] or [None])
         return junto
+    if ruta == "estado/clips/para_grabar.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        # la lista de clips la tocan el Buscador (momentos nuevos), el Comisario (grabado por el dueño) y la fábrica
+        # (usado o descartado): de cada momento gana la versión más avanzada, sin perder datos de la otra
+        orden = {"por_grabar": 0, "grabado": 1, "usado": 2, "descartado": 2}
+        momentos = {}
+        for m in (suyo.get("momentos") or []) + (nuestro.get("momentos") or []):
+            antes = momentos.get(m.get("codigo"))
+            if antes is None:
+                momentos[m.get("codigo")] = m
+                continue
+            mas, menos = (m, antes) if orden.get(m.get("estado"), 0) >= orden.get(antes.get("estado"), 0) else (antes, m)
+            junto = dict(menos, **mas)
+            junto["suspensos"] = max(int(antes.get("suspensos") or 0), int(m.get("suspensos") or 0))
+            momentos[m.get("codigo")] = junto
+        junto = dict(suyo, **nuestro)
+        junto["momentos"] = sorted(momentos.values(), key=lambda x: -(x.get("nota") or 0))
+        return junto
     if ruta == "estado/influencers/recetas.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         canales = {}              # la receta del Recetario, la del Radar y la del Ojeador van cada una a lo suyo
         for clave in set(suyo.get("canales") or {}) | set(nuestro.get("canales") or {}):

@@ -37,21 +37,37 @@ def segundos(iso):
     return sum(int(x or 0) * k for x, k in zip(m.groups(), (3600, 60, 1))) if m else 0
 
 
+MINIMA = 90          # solo los momentos que de verdad merecen la pena (la misma nota que pide el dueño para publicar)
+
 VER = """Mira este vídeo de GTA (tiene licencia Creative Commons: se puede reutilizar diciendo de quién es).
-Busca los {n} MEJORES momentos para Shorts de 8 a 35 segundos. Para cada uno, piensa en qué canal encaja:
+Busca como mucho {n} momentos para Shorts de 8 a 35 segundos, pero SOLO los que de verdad se harían virales: si el vídeo
+no tiene ninguno así, no devuelvas ninguno. Para cada uno, piensa en qué canal encaja:
 - "clips": un momento gracioso, épico o increíble del juego;
 - "curios": un detalle o secreto de GTA 6 que casi nadie sabe;
 - "versus": una comparación entre GTA 5 y GTA 6.
-Prefiere momentos donde NO se vea la cara del youtuber (o se vea poco). No elijas trozos con anuncios, intros ni
-pantallas de espera.
+REGLA DE ORO: del creador solo se pone su nombre en la descripción. En el trozo elegido NO puede verse ni oírse NADA suyo:
+ni su cara, ni su webcam, ni su nombre, logo o marca de agua, ni sus textos, flechas o animaciones (suscríbete, redes),
+ni intros, anuncios o pantallas de espera. Solo el juego. Si en ese trozo sale algo suyo, NO lo elijas.
 Devuelve SOLO un JSON: {{"momentos": [{{"desde": 0, "hasta": 0, "para": "clips|curios|versus", "que_pasa": "una frase",
-"por_que_engancha": "una frase", "sale_youtuber": "no | poco (dónde) | mucho", "gancho": "texto de 2 a 5 palabras para el principio",
-"nota": 0}}]}}  (nota de 0 a 100: cuánto crees que engancharía)"""
+"por_que_engancha": "una frase", "sale_creador": "no | sí (qué y dónde)", "habla_creador": "no | sí",
+"gancho": "texto de 2 a 5 palabras para el principio", "nota": 0}}]}}  (nota de 0 a 100: cuánto se haría viral; solo
+valen los de {minima} o más)"""
+
+
+def limpio(m):
+    """Un momento vale si no sale nada del creador y llega a la nota mínima."""
+    sale = str(m.get("sale_creador", m.get("sale_youtuber", ""))).strip().lower()
+    try:
+        nota = float(m.get("nota") or 0)
+    except (TypeError, ValueError):
+        nota = 0
+    return sale.startswith("no") and nota >= MINIMA
 
 
 def ver_y_elegir(candidatos, cuantos=6):
     """Gemini «ve» por su enlace los vídeos de los creadores más famosos y elige los mejores momentos (no se descarga
-    nada). Deja la lista en estado/clips/para_grabar.json; el dueño los graba con el móvil y los deja en el buzón."""
+    nada): solo los de 90 o más y donde no sale nada del creador (ni cara, ni webcam, ni nombre, ni logo). Deja la lista
+    en estado/clips/para_grabar.json; el dueño los graba con el móvil y los sube en la app."""
     from bots.comun import gemini
     anterior = privado.leer(os.path.join("estado", "clips", "para_grabar.json"), {}) or {}
     lista = anterior.get("momentos", [])
@@ -68,7 +84,8 @@ def ver_y_elegir(candidatos, cuantos=6):
     numero = max([int(m["codigo"][2:]) for m in lista] + [0])
     for c in elegidos:
         try:
-            r = gemini.ver_youtube(f"https://www.youtube.com/watch?v={c['id']}", VER.format(n=2 if c["segundos"] < 90 else 3))
+            r = gemini.ver_youtube(f"https://www.youtube.com/watch?v={c['id']}",
+                                   VER.format(n=2 if c["segundos"] < 90 else 3, minima=MINIMA))
         except gemini.SinIA:            # ningún modelo ha podido verlo hoy: el siguiente vídeo
             r = None
         for m in (r or {}).get("momentos", []) if isinstance(r, dict) else []:
@@ -76,14 +93,15 @@ def ver_y_elegir(candidatos, cuantos=6):
                 desde, hasta = float(m["desde"]), float(m["hasta"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if not 5 <= hasta - desde <= 45 or hasta > c["segundos"] + 1:
-                continue
+            if not 5 <= hasta - desde <= 45 or hasta > c["segundos"] + 1 or not limpio(m):
+                continue        # sale algo del creador o no llega a la nota: no se graba
             numero += 1
             lista.append({"codigo": f"C-{numero:03d}", "video": c["id"], "creador": c["canal"],
                           "suscriptores_creador": c["suscriptores_creador"], "titulo_original": c["titulo"],
                           "enlace": f"https://youtu.be/{c['id']}?t={int(desde)}", "desde": desde, "hasta": hasta,
                           "para": m.get("para", "clips"), "que_pasa": m.get("que_pasa", ""),
-                          "por_que": m.get("por_que_engancha", ""), "sale_youtuber": m.get("sale_youtuber", ""),
+                          "por_que": m.get("por_que_engancha", ""), "sale_creador": "no",
+                          "habla_creador": str(m.get("habla_creador", "")).lower().startswith("s"),
                           "gancho": m.get("gancho", ""), "nota": m.get("nota"), "licencia": "CC BY",
                           "estado": "por_grabar", "elegido": privado.ahora()})
     lista.sort(key=lambda m: (m["estado"] != "por_grabar", -(m.get("nota") or 0)))
