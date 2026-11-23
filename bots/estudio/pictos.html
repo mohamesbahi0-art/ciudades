@@ -364,7 +364,11 @@ function dibujaEscena(e, tl, idx, T) {
   const d = e.fin - e.inicio, ps = colocar(e);
   const cx = ps.length ? ps.reduce((a, o) => a + o._x, 0) / ps.length : 540;
   let s = fondo(e, T, cx);
-  const z = 1 + 0.03 * suave(lim(tl / Math.max(d, 0.1))) + 0.04 * (1 - salida(tramo(tl, 0, 0.35)));
+  const marcadas = new Set();
+  for (const r of e.resaltar || []) for (const parte of String(r).split(/\s+/)) marcadas.add(normal(parte));
+  let golpes = 0;
+  for (const p of palabrasDe(e)) if (marcadas.has(normal(p.w))) { const u = (T - p.a) / 0.22; if (u > -1 && u < 3) golpes = Math.max(golpes, Math.exp(-u * u)); }
+  const z = 1 + 0.05 * suave(lim(tl / Math.max(d, 0.1))) + 0.05 * (1 - salida(tramo(tl, 0, 0.35))) + 0.045 * golpes;
   let m = "";
   const previa = idx > 0 ? (GUION.escenas[idx - 1].personas || []).map(o => o.id) : [];
   // objetos (iconos) en el suelo o en el aire
@@ -405,9 +409,8 @@ function dibujaEscena(e, tl, idx, T) {
   if (e.lista) m += lista(e.lista, tl, e);
   if (e.cta) m += cta(e.cta, tl, T);
   (e.etiquetas || []).forEach((t, i) => { m += etiqueta(posX(t.pos, 540), t.y || 760, t.texto, t.color || "oro", tramo(tl, t.cuando ? cuandoDice(e, t.cuando, 0.4) : 0.4 + i * 0.2, 0.35), t.tam || 34); });
-  s += `<g transform="translate(540 1150) scale(${z.toFixed(4)}) translate(-540 -1150)">${m}</g>`;
-  s += `<rect width="1080" height="1920" fill="url(#vineta)"/>`;
-  return s + textoArriba(e, tl, T, idx);
+  return { fondo: s, contenido: `<g transform="translate(540 1150) scale(${z.toFixed(4)}) translate(-540 -1150)">${m}</g>`,
+           texto: textoArriba(e, tl, T, idx) };
 }
 
 window.pintar = function (t) {
@@ -415,8 +418,15 @@ window.pintar = function (t) {
   let i = E.findIndex(e => t < e.fin);
   if (i < 0) i = E.length - 1;
   const e = E[i], tl = t - e.inicio;
-  let s = dibujaEscena(e, tl, i, t);
-  if (i > 0 && tl < 0.14) { const pe = E[i - 1]; s += `<g opacity="${f2(1 - tl / 0.14)}">${dibujaEscena(pe, pe.fin - pe.inicio, i - 1, t)}</g>`; }
+  const dir = i % 2 ? 1 : -1, ahora = dibujaEscena(e, tl, i, t);
+  let s = ahora.fondo;
+  if (i > 0 && tl < 0.24) {       // barrido: los dibujos de antes se van de lado y entran los nuevos; fondo y texto quietos
+    const k = salida(tl / 0.24), pe = E[i - 1], antes = dibujaEscena(pe, pe.fin - pe.inicio, i - 1, t);
+    s += `<g transform="translate(${f1(dir * -300 * k)} 0)" opacity="${f2(1 - k)}">${antes.contenido}</g>`;
+    s += `<g transform="translate(${f1(dir * 300 * (1 - k))} 0)" opacity="${f2(0.3 + 0.7 * k)}">${ahora.contenido}</g>`;
+  } else s += ahora.contenido;
+  // el texto cambia de golpe (como los subtítulos), sin mezclarse con el anterior
+  s += `<rect width="1080" height="1920" fill="url(#vineta)"/>` + (i > 0 && tl < 0.05 ? dibujaEscena(E[i - 1], E[i - 1].fin - E[i - 1].inicio, i - 1, t).texto : ahora.texto);
   if (t > g.duracion - 0.4) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.4)) / 0.4))}"/>`;
   document.getElementById("escena").innerHTML = s;
 };

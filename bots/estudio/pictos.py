@@ -81,9 +81,13 @@ Ya hechos (no repitas tema):
 REGLAS
 - {sin_miedo}
 - Datos de dinero ciertos y sin prometer nada: si hay rentabilidades, dilo como supuesto («con un 7 % al año») y que las
-  cuentas cuadren de verdad.
-- De 8 a 12 escenas, una frase por escena (de 5 a 16 palabras). Primera escena = gancho fuerte (una afirmación que
-  choca, un «A contra B», un número que sorprende). Última escena = pregunta a quien lo ve + "cta".
+  cuentas cuadren de verdad. Si das una cifra calculada, redondéala hacia abajo y di «más de» o «casi».
+- De 9 a 14 escenas cortas, una frase por escena (de 4 a 12 palabras; si es más larga, pártela en dos escenas). Algo
+  nuevo en pantalla cada 2-3 segundos: la gente se va si el vídeo se queda quieto.
+- Primera escena = el gancho, lo más importante del vídeo: una afirmación que choca, un «A contra B» o un número que
+  sorprende, Y algo grande en pantalla desde el segundo 0 (dos personas enfrentadas, un contador, una etiqueta enorme).
+- NINGUNA escena vacía: cada una tiene al menos una persona, un objeto o una pieza (barras, contador, gráfica, lista).
+- Última escena = pregunta a quien lo ve + "cta".
 - "voz" es lo que se dice (números escritos como se dicen); "texto" es lo que sale escrito palabra a palabra (igual,
   pero con cifras); "resaltar" son 1-2 palabras de "texto"; "color" de lo resaltado: "oro" (dinero, bueno), "rojo"
   (malo) o "verde" (lo que hay que hacer).
@@ -176,7 +180,8 @@ def limpiar(g):
         if objetos:
             x["objetos"] = objetos
         etiquetas = [{"texto": _corta(t.get("texto"), 22).upper(), "color": _color(t.get("color"), "oro"),
-                      "y": int(max(620, min(1100, _num(t.get("y"), 780)))), **({"cuando": _corta(t["cuando"], 30)} if t.get("cuando") else {})}
+                      "y": int(max(620, min(1100, _num(t.get("y"), 780)))), **({"cuando": _corta(t["cuando"], 30)} if t.get("cuando") else {}),
+                      **({"tam": int(max(26, min(64, _num(t["tam"], 34))))} if t.get("tam") else {})}
                      for t in (e.get("etiquetas") or [])[:2] if isinstance(t, dict) and t.get("texto")]
         if etiquetas:
             x["etiquetas"] = etiquetas
@@ -205,6 +210,14 @@ def limpiar(g):
                    if isinstance(f, dict) and f.get("de") in POSICIONES and f.get("a") in POSICIONES and f["de"] != f["a"]]
         if flechas:
             x["flechas"] = flechas
+        visible = any(k in x for k in ("personas", "fila", "objetos", "etiquetas", "barras", "contador", "grafica", "lista"))
+        if not visible:
+            previa = escenas[-1] if escenas else None
+            if previa and previa.get("personas"):
+                x["personas"] = [dict(p, accion=p.get("accion", "quieto")) for p in previa["personas"]]
+            else:
+                grande = (x["resaltar"][0] if x["resaltar"] else " ".join(texto.split()[:2])).upper()[:22]
+                x["etiquetas"] = [{"texto": grande, "color": "oro" if x["color"] != "rojo" else "rojo", "y": 900, "tam": 58}]
         escenas.append(x)
     if len(escenas) < 4:
         raise ValueError("el guion tiene muy pocas escenas")
