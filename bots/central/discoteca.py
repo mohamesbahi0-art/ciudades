@@ -86,8 +86,15 @@ def llenar(por_ambiente=6, avisar=print):
     if not re.search(r"public domain|cc0|creative commons zero", portada, flags=re.I):
         raise RuntimeError("La web ya no dice que su música sea de dominio público: no se baja nada.")
     avisar("discoteca: la web confirma que su música es de dominio público")
-    paginas = [p for p in _enlaces(portada, WEB, ".php") if _ambiente(p)]
-    avisar(f"discoteca: secciones útiles: {', '.join(p.rsplit('/', 1)[-1] for p in paginas)}")
+    todos = []
+    for h in re.findall(r'href\s*=\s*["\']([^"\']+)["\']', portada, flags=re.I):
+        url = urllib.parse.urljoin(WEB, h)
+        if url.startswith(WEB) and url not in todos:
+            todos.append(url)
+    paginas = [p for p in todos if _ambiente(p) and not p.lower().endswith(".mp3")]
+    avisar(f"discoteca: secciones útiles: {', '.join(p.rsplit('/', 1)[-1] for p in paginas) or 'ninguna'}")
+    if not paginas:                        # la web ha cambiado: se enseña su índice para arreglarlo
+        avisar("discoteca: enlaces de la portada: " + " | ".join(u[len(WEB):] for u in todos[:80]))
     lista = privado.leer(LISTA, {}) or {}
     pistas = {p["fuente"]: p for p in lista.get("pistas", [])}
     cuenta = {a: sum(1 for p in pistas.values() if p.get("vale") and p.get("ambiente") == a) for a in USOS}
