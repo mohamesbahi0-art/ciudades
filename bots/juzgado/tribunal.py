@@ -194,7 +194,8 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "votos": [{"juez": x["juez"], "voto": x["voto"], "nota": x["nota"], "razon": x["razon"]} for x in v["votos"]],
         "sentencia": "sube" if v["veredicto"] == "aprobado" else "no_sube", "juez": v["juez_mayor"],
         "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"), "resumen": resumen, "consejo": v.get("consejo"),
-        "fallos_graves": v.get("fallos_graves"), "prueba": prueba})
+        "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
+        "nota": v["total"], "minimo": NOTA_MINIMA})
     for robot, que in (("detectives", "pruebas"), ("abogados", "alegatos"), ("jueces_sala", "votos"),
                        ("juez_mayor", "sentencia")):
         c = privado.cuaderno(robot)

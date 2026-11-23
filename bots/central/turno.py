@@ -73,6 +73,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         audio = os.path.join(trabajo, f"estudio{intento}", "voz.mp3")
         v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                             os.path.join(trabajo, f"juicio{intento}"), audio=audio if os.path.exists(audio) else None)
+        v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
                                                                  "veredicto": v["veredicto"], "total": v.get("total")})
@@ -207,6 +208,7 @@ def main(argv=None):
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                                 os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"))
+            v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
             id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
             id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
                                                                      "veredicto": v["veredicto"], "total": v.get("total")})
