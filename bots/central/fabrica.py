@@ -168,10 +168,18 @@ def main():
     for clave, motivo in esperan.items():
         print(privado.limpiar(f"  {privado.alias(clave)}: {motivo}"), flush=True)
 
+    # los que necesitaban vídeo y no han cabido en esta ronda (la Jefa de Máquinas avisa si pasa a menudo)
+    ronda["sin_sitio"] = [k for k, _ in plan[maximo:]]
+    sin_ia = 0                       # turnos seguidos en los que la IA no ha contestado
     for clave, hora in plan[:maximo]:
         if (time.time() - inicio) / 60 > ajustes["minutos_por_ronda"]:
             print("se acaba el tiempo de la ronda: lo que falta, en la siguiente", flush=True)
+            ronda["sin_sitio"] += [k for k, _ in plan[:maximo] if k not in {t["canal"] for t in ronda["turnos"]}]
             break
+        if sin_ia:                   # la IA estaba saturada: un respiro antes del siguiente turno, en vez de perderlo
+            respiro = int(ajustes.get("respiro_ia_segundos", 180))
+            print(f"la IA no contestaba: espero {respiro // 60} min antes del siguiente turno", flush=True)
+            time.sleep(respiro)
         args = ["--canal", clave, "--salida", trabajo] + (["--hora", huecos.iso(hora)] if hora else [])
         if a.prueba:
             args.append("--prueba")
@@ -183,11 +191,19 @@ def main():
         privado.guardar_estado("fabrica.json", dict(ronda, cuota=subidor.cuota(), cola=len(subidor.en_cola()),
                                                     rondas=rondas))
         guardar(f"fábrica: turno de {clave} ({ultimo.get('destino_resultado') or ultimo.get('resultado')})")
+        sin_ia = sin_ia + 1 if codigo != 0 and str(ultimo.get("error") or "").startswith("SinIA") else 0
+        if sin_ia >= 2:              # dos veces seguidas sin IA: el resto espera a la siguiente ronda (no se gasta en balde)
+            hechos = {t["canal"] for t in ronda["turnos"]}
+            for k, _ in plan[:maximo]:
+                if k not in hechos:
+                    ronda["esperan"][k] = "la IA no contesta ahora: lo intenta en la siguiente ronda"
+            print("la IA no ha contestado dos turnos seguidos: lo demás, en la siguiente ronda", flush=True)
+            break
 
     from bots.comun import gemini
     gemini.apuntar_portero()
     ronda["terminada"] = privado.ahora()
-    resumen_ronda = {k: ronda.get(k) for k in ("empezada", "terminada", "plan", "turnos", "cola_subidos")}
+    resumen_ronda = {k: ronda.get(k) for k in ("empezada", "terminada", "plan", "turnos", "cola_subidos", "sin_sitio")}
     privado.guardar_estado("fabrica.json", dict(ronda, cuota=subidor.cuota(), cola=len(subidor.en_cola()),
                                                 rondas=(rondas + [resumen_ronda])[-30:]))
     guardar("fábrica: fin de la ronda")

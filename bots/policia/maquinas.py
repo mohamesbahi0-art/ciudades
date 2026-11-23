@@ -63,6 +63,14 @@ def main():
     simulacro = turnos.get("simulacro.yml", {}).get("ultimas", [])
     if simulacro and simulacro[0]["estado"] == "completed" and simulacro[0]["resultado"] == "failure":
         problemas.append("simulacro.yml: el último cambio del código rompe la ronda de mentira (mirar antes de la de verdad)")
+    # ¿Hay más trabajo que manos? Si en 4 de las 6 últimas rondas se quedan canales sin turno, hace falta más fábrica
+    # (más vídeos por ronda o turnos a la vez). Si no pasa, duplicar robots solo gastaría antes la IA gratis.
+    rondas = ((privado.leer(os.path.join("estado", "fabrica.json"), {}) or {}).get("rondas") or [])[-6:]
+    apretadas = [r for r in rondas if r.get("sin_sitio")]
+    if len(rondas) >= 6 and len(apretadas) >= 4:
+        faltan = sorted({privado.alias(k) for r in apretadas for k in r["sin_sitio"]})
+        problemas.append(f"fabrica.yml: hay más trabajo que manos ({len(apretadas)} de las 6 últimas rondas dejan sin "
+                         f"turno a {', '.join(faltan)}): subir videos_por_ronda o hacer turnos a la vez")
     privado.guardar_estado("maquinas.json", {"turnos": turnos, "problemas": problemas})
     jefa = privado.cuaderno("jefa_maquinas")
     jefa.apuntar("revision", {"turnos": len(turnos), "problemas": problemas})
