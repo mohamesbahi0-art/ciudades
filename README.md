@@ -22,6 +22,7 @@ Fábrica de vídeos cortos (YouTube Shorts, TikTok y Reels) que funciona sola en
 | `herramientas/fotogramas.py` | Mide un vídeo (ritmo, silencios, pantallas negras, volumen) y saca 7 fotogramas para juzgarlo |
 | `herramientas/recortar.py` | Recorta un trozo de un vídeo y lo pasa a vertical 1080x1920 |
 | `herramientas/subir.py` | Sube a YouTube en privado y programado, comprobando canal, tope y cuota |
+| `herramientas/conectar_canal.py` | Conecta los canales de YouTube sin ordenador (código en google.com/device) y guarda los permisos en los secretos de GitHub |
 | `herramientas/avisar.py` | Avisos al móvil gratis (ntfy o Telegram) |
 | `herramientas/analizar.py` | Desmonta un vídeo viral para aprender de él |
 

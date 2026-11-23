@@ -1,0 +1,37 @@
+# Conecta los canales de YouTube sin ordenador. Se pone en marcha cuando Claude deja peticiones/conectar.json
+# en el repositorio (o a mano, desde Actions). El código para google.com/device aparece en estado/conexion.json.
+# Los permisos van directos a los secretos de GitHub: nunca pasan por el repositorio.
+name: Conectar canales
+on:
+  push:
+    paths:
+      - "peticiones/conectar.json"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: conectar-canales
+  cancel-in-progress: true
+jobs:
+  conectar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Herramientas
+        run: pip install -q pynacl
+      - name: Conectar canales
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: |
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          python herramientas/conectar_canal.py

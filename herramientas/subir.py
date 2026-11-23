@@ -6,8 +6,9 @@ Uso:
                   --descripcion "..." --etiquetas "gta 6,shorts" --hora "2026-11-25T13:00:00+01:00" \
                   --registro registro_subidas.json [--portada p.jpg] [--ia] [--prueba]
 
-Secretos (variables de entorno, nunca en el código): YT_CLIENT_ID, YT_CLIENT_SECRET y
-YT_REFRESH_<CANAL> (por ejemplo YT_REFRESH_GTA), el permiso de ese canal.
+Secretos (variables de entorno, nunca en el código): YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_<CANAL> (el permiso
+del canal, por ejemplo YT_REFRESH_GTA) y YT_ID_<CANAL> (su id). Los dos últimos los guarda conectar_canal.py.
+Si no se da --id-canal, se usa YT_ID_<CANAL>.
 
 Sale con: 0 subido (o ya estaba en el registro) · 2 tope de subidas del canal (esperar 1 hora) ·
 3 sin cuota de la API hoy · 4 el permiso es de otro canal (no sube nada) · 5 permiso caducado o revocado · 1 otro error.
@@ -35,7 +36,7 @@ def motivo(err):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--canal", required=True, help="clave del canal (gta, clips, curios…)")
-    p.add_argument("--id-canal", dest="id_canal", required=True, help="id de YouTube esperado (UC…)")
+    p.add_argument("--id-canal", dest="id_canal", help="id de YouTube esperado (UC…); por defecto, el del permiso")
     p.add_argument("--video", required=True)
     p.add_argument("--titulo", required=True)
     p.add_argument("--descripcion", default="")
@@ -79,13 +80,18 @@ def main():
     from googleapiclient.errors import HttpError
     from googleapiclient.http import MediaFileUpload
 
-    clave_secreto = "YT_REFRESH_" + a.canal.upper()
-    falta = [v for v in ("YT_CLIENT_ID", "YT_CLIENT_SECRET", clave_secreto) if not os.environ.get(v)]
+    falta = [v for v in ("YT_CLIENT_ID", "YT_CLIENT_SECRET") if not os.environ.get(v)]
     if falta:
         sys.exit("Faltan secretos: " + ", ".join(falta))
-    cred = Credentials(None, refresh_token=os.environ[clave_secreto], client_id=os.environ["YT_CLIENT_ID"],
-                       client_secret=os.environ["YT_CLIENT_SECRET"], token_uri="https://oauth2.googleapis.com/token",
-                       scopes=SCOPES)
+    refresh = os.environ.get("YT_REFRESH_" + a.canal.upper())
+    if not refresh:
+        print(f"El canal {a.canal} todavía no está conectado (falta el secreto YT_REFRESH_{a.canal.upper()}).")
+        return 5
+    a.id_canal = a.id_canal or os.environ.get("YT_ID_" + a.canal.upper())
+    if not a.id_canal:
+        sys.exit("No sé qué id de canal esperar: pásalo con --id-canal.")
+    cred = Credentials(None, refresh_token=refresh, client_id=os.environ["YT_CLIENT_ID"],
+                       client_secret=os.environ["YT_CLIENT_SECRET"], token_uri="https://oauth2.googleapis.com/token")
     yt = build("youtube", "v3", credentials=cred, cache_discovery=False)
     try:
         mios = yt.channels().list(part="id", mine=True).execute().get("items", [])
