@@ -1,4 +1,4 @@
-"""Formato «pictos» del estudio (Grow Up): historias de motivación y dinero con pictogramas, en versión mejorada del
+"""Formato «pictos» del estudio (cuenta de motivación): historias de motivación y dinero con pictogramas, en versión mejorada del
 estilo del dueño. Fondo oscuro con brillo, monigotes lisos, iconos de línea, barras, contadores, gráficas, listas y texto
 que sale palabra a palabra con la voz (pictos.html lo dibuja).
 

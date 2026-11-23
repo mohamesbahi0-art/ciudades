@@ -189,7 +189,7 @@ def arreglos(v, minimo, canal):
 
 def cuenta_de(valor):
     """La clave de la cuenta, venga como venga de la app: la clave («terror»), el alias («barrio-2»), la cuenta con o
-    sin @ («@grow.up.only») o su nombre («Overleef Dit»)."""
+    sin @ («@cuenta») o su nombre («Nombre de la cuenta»)."""
     v = str(valor or "").strip().lstrip("@")
     clave = privado.resolver(v)
     cfg = privado.config()
