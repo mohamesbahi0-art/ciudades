@@ -119,6 +119,10 @@ REGLAS
   salvo que se siga hablando de lo mismo.
 - Temas que enganchan de verdad: el propio cuerpo de quien lo ve, cosas cotidianas con un dato que choca, récords
   y comparaciones con cifras. Mejor «3 dingen die je niet wist over …» que un solo dato suelto.
+- Si el tema es un clásico muy visto (por qué el estómago no se digiere, las uñas, las arañas…), no lo cuentes como
+  siempre: dale un giro que casi nadie sabe (un dato extremo, una comparación chocante, un experimento). Los jueces
+  castigan lo «muy visto».
+- Que nada se pise: en cada escena, la ilustración, la etiqueta y la cifra van en sitios distintos y caben enteras.
 
 Lo que puedes usar:
 {vocabulario}
@@ -147,7 +151,14 @@ def _num(v, defecto, a=None, b=None):
 
 
 def _texto(v, n):
-    return str(v or "").strip()[:n]
+    """Recorta a n caracteres sin dejar media palabra («DANI FUMADOR EMP» → «DANI FUMADOR»): los jueces lo ven."""
+    t = str(v or "").strip()
+    if len(t) <= n:
+        return t
+    if " " not in t[:n + 1]:
+        return t[:n]
+    corte = t[:n + 1].rsplit(" ", 1)[0].rstrip(" ,.;:-–")
+    return corte if len(corte) >= max(3, n // 3) else t[:n]
 
 
 def _ilustracion(v):

@@ -580,7 +580,8 @@ function texto(e, t, idx = 1) {
     DEFS[id] = `<clipPath id="${id}" clipPathUnits="userSpaceOnUse"><rect x="0" y="${y - 98}" width="1080" height="130"/></clipPath>`;
     let linea = "";
     L.forEach(o => {
-      const adelanto = idx === 0 ? 0.12 : 0.06, q = salida(tramo(t, o.x.a - adelanto, 0.22));
+      const adelanto = idx === 0 ? 0.12 : 0.06;
+      const q = idx === 0 && i === 0 ? 1 : salida(tramo(t, o.x.a - adelanto, 0.22));   // la primera frase, entera desde el fotograma 0
       if (q > 0) {
         const dy = (1 - q) * 124, cx = x + o.w / 2;
         if (o.k) {
@@ -643,10 +644,10 @@ function camara(e, tl, d, idx) {
   if (u >= 0) z += 0.065 * Math.exp(-u / 0.24) * Math.cos(u * 9);
   if (idx === 0) z += 0.38 * (1 - expo(lim(tl / 0.42)));
   if (d > 2.4) {   // reencuadre: la cámara se acerca y se desplaza a mitad de escena (también en el cierre)
-    const r = expo(tramo(tl, 1.5, 0.38)), fuerte = ["gancho", "numero", "pregunta"].includes(e.plano) ? 0.1 : 0.26;
+    const r = tl >= 1.5 ? 1 : 0, fuerte = ["gancho", "numero", "pregunta"].includes(e.plano) ? 0.12 : 0.26;   // corte de zoom
     z += fuerte * r; x += lado * 85 * r; y -= 50 * r;
     if (d > 3.1) {     // escenas largas: tercer golpe de cámara, hacia el otro lado
-      const r2 = expo(tramo(tl, 2.55, 0.35));
+      const r2 = tl >= 2.55 ? 1 : 0;
       z -= 0.14 * r2; x -= lado * 170 * r2; y += 40 * r2;
     }
   }
@@ -838,8 +839,27 @@ window.pintar = function (t) {
   s += `<text x="540" y="168" text-anchor="middle" font-weight="600" font-size="24" letter-spacing="10" fill="#8B93A3">${esc(g.cabecera || "WIST JE DAT")}</text>`;
   s += `<rect x="440" y="192" width="200" height="4" rx="2" fill="#FFFFFF" opacity="0.12"/><rect x="440" y="192" width="${f1(200 * pr)}" height="4" rx="2" fill="#5ED3F3"/>`;
   if (t > g.duracion - 0.35) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.35)) / 0.35))}"/>`;
-  document.getElementById("scene").innerHTML = `<defs>${Object.values(DEFS).join("")}</defs>` + s;
+  const raiz = document.getElementById("scene");
+  raiz.innerHTML = `<defs>${Object.values(DEFS).join("")}</defs>` + s;
+  if (i === 0 || tl >= 0.45) enMarco(raiz);         // durante el corte entre escenas los dibujos salen de lado a propósito
 };
+// Red de seguridad: ningún texto se sale de la pantalla (los jueces castigan las palabras cortadas en el borde).
+// Si un texto es más ancho que la pantalla, se hace más pequeño; si se sale por un lado, se mete hacia dentro.
+function enMarco(raiz, margen = 30) {
+  for (const el of raiz.querySelectorAll("text")) {
+    let r = el.getBoundingClientRect();
+    if (!r.width) continue;
+    let bb; try { bb = el.getBBox(); } catch (e) { continue; }
+    const k = bb.width ? r.width / bb.width : 1, libre = 1080 - 2 * margen;
+    if (r.width > libre) {
+      const fs = parseFloat(el.getAttribute("font-size") || "0");
+      if (fs) { el.setAttribute("font-size", (fs * libre / r.width * 0.97).toFixed(1)); r = el.getBoundingClientRect(); }
+    }
+    const dx = r.left < margen ? margen - r.left : r.right > 1080 - margen ? 1080 - margen - r.right : 0;
+    if (Math.abs(dx) > 0.5) el.setAttribute("transform", `translate(${(dx / (k || 1)).toFixed(1)} 0) ${el.getAttribute("transform") || ""}`);
+  }
+}
+
 window.listo = Promise.all([300, 600, 700, 800].map(w => document.fonts.load(`${w} 60px Poppins`))).then(() => document.fonts.ready);
 </script>
 </body></html>

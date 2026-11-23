@@ -289,8 +289,10 @@ function contador(c, tl, y, d = 4) {
   const dura = c.dura ?? lim(d * 0.55, 1.2, 3.0);
   const q = salida(tramo(tl, c.empieza ?? 0.3, dura));
   const v = (+c.desde || 0) + ((+c.hasta || 0) - (+c.desde || 0)) * q;
-  const txt = `${c.prefijo || ""}${numeroBonito(v, c.decimales || 0)}${c.sufijo || ""}`;
-  const color = col(c.color || "oro"), tam = txt.length > 10 ? 120 : 150;
+  const pre = String(c.prefijo || "").trim(), suf = String(c.sufijo || "").trim();
+  const txt = (pre ? pre + (/[\p{L}]$/u.test(pre) ? " " : "") : "") + numeroBonito(v, c.decimales || 0) +
+              (suf ? (/^[\p{L}€$£]/u.test(suf) ? " " : "") + suf : "");      // «MÁS 170.000 €», no «MÁS170.000€»
+  const color = col(c.color || "oro"), tam = Math.min(150, 960 / Math.max(1, ancho(txt, 900, 100) / 100));
   const golpe = q >= 1 ? 1 + 0.06 * Math.exp(-(tl - (c.empieza ?? 0.3) - dura) * 6) : 1;
   let s = `<g transform="translate(540 ${y}) scale(${f2(golpe)})">`;
   s += `<text x="0" y="0" text-anchor="middle" font-weight="900" font-size="${tam}" fill="${color}" opacity="0.45" filter="url(#b20)">${esc(txt)}</text>`;
@@ -305,7 +307,9 @@ function grafica(gr, tl) {
   if (gr.eje) s += `<text x="${x1}" y="${y1 + 46}" text-anchor="end" font-weight="800" font-size="28" letter-spacing="4" fill="#8590A6">${esc(String(gr.eje).toUpperCase())}</text>`;
   const forma = { exponencial: u => Math.pow(u, 2.6), recta: u => u * 0.55, plana: u => 0.04 + 0.02 * Math.sin(u * 9), baja: u => 0.45 * (1 - u), sube: u => u * 0.85 };
   (gr.lineas || []).slice(0, 3).forEach((l, i) => {
-    const f = forma[l.forma] || forma.recta, c = col(l.color || (i ? "rojo" : "main"));
+    const base = forma[l.forma] || forma.recta, c = col(l.color || (i ? "rojo" : "main"));
+    const e0 = lim(+l.empieza || 0, 0, 0.9), alto = l.altura != null ? lim(+l.altura, 0.05, 1) : null;   // quien empieza más tarde
+    const fin = base(1) || 1, f = u => u < e0 ? 0 : (alto == null ? base((u - e0) / (1 - e0)) : base((u - e0) / (1 - e0)) / fin * alto);
     const pts = [];
     for (let k = 0; k <= 60 * q; k++) { const u = k / 60; pts.push(`${f1(x0 + (x1 - x0) * u)},${f1(y1 - 20 - (y1 - y0 - 40) * f(u))}`); }
     if (pts.length > 1) {
@@ -368,7 +372,8 @@ function dibujaEscena(e, tl, idx, T) {
   for (const r of e.resaltar || []) for (const parte of String(r).split(/\s+/)) marcadas.add(normal(parte));
   let golpes = 0;
   for (const p of palabrasDe(e)) if (marcadas.has(normal(p.w))) { const u = (T - p.a) / 0.22; if (u > -1 && u < 3) golpes = Math.max(golpes, Math.exp(-u * u)); }
-  const z = 1 + 0.05 * suave(lim(tl / Math.max(d, 0.1))) + 0.05 * (1 - salida(tramo(tl, 0, 0.35))) + 0.045 * golpes;
+  const z = 1 + 0.05 * suave(lim(tl / Math.max(d, 0.1))) + 0.05 * (1 - salida(tramo(tl, 0, 0.35))) + 0.045 * golpes
+            + (d > 3 && tl > d / 2 ? 0.12 : 0);      // escena larga: un corte de zoom a la mitad (algo nuevo cada 2-3 s)
   let m = "";
   const previa = idx > 0 ? (GUION.escenas[idx - 1].personas || []).map(o => o.id) : [];
   // objetos (iconos) en el suelo o en el aire
@@ -404,7 +409,8 @@ function dibujaEscena(e, tl, idx, T) {
   });
   // piezas grandes
   if (e.barras) m += barras(e.barras, tl, e.barras_y || 640);
-  if (e.contador) m += contador(e.contador, tl, e.contador_y || 860, d);
+  if (e.contador) m += contador(idx === 0 ? { ...e.contador, empieza: 0, dura: Math.min(0.6, e.contador.dura ?? 0.6) } : e.contador,
+                              tl, e.contador_y || 860, d);           // en el gancho, la cifra entera desde el primer segundo
   if (e.grafica) m += grafica(e.grafica, tl);
   if (e.lista) m += lista(e.lista, tl, e);
   if (e.cta) m += cta(e.cta, tl, T);
@@ -428,8 +434,27 @@ window.pintar = function (t) {
   // el texto cambia de golpe (como los subtítulos), sin mezclarse con el anterior
   s += `<rect width="1080" height="1920" fill="url(#vineta)"/>` + (i > 0 && tl < 0.05 ? dibujaEscena(E[i - 1], E[i - 1].fin - E[i - 1].inicio, i - 1, t).texto : ahora.texto);
   if (t > g.duracion - 0.4) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.4)) / 0.4))}"/>`;
-  document.getElementById("escena").innerHTML = s;
+  const raiz = document.getElementById("escena");
+  raiz.innerHTML = s;
+  if (i === 0 || tl >= 0.3) enMarco(raiz);          // durante el barrido entre escenas los dibujos salen de lado a propósito
 };
+// Red de seguridad: ningún texto se sale de la pantalla (los jueces castigan las palabras cortadas en el borde).
+// Si un texto es más ancho que la pantalla, se hace más pequeño; si se sale por un lado, se mete hacia dentro.
+function enMarco(raiz, margen = 30) {
+  for (const el of raiz.querySelectorAll("text")) {
+    let r = el.getBoundingClientRect();
+    if (!r.width) continue;
+    let bb; try { bb = el.getBBox(); } catch (e) { continue; }
+    const k = bb.width ? r.width / bb.width : 1, libre = 1080 - 2 * margen;
+    if (r.width > libre) {
+      const fs = parseFloat(el.getAttribute("font-size") || "0");
+      if (fs) { el.setAttribute("font-size", (fs * libre / r.width * 0.97).toFixed(1)); r = el.getBoundingClientRect(); }
+    }
+    const dx = r.left < margen ? margen - r.left : r.right > 1080 - margen ? 1080 - margen - r.right : 0;
+    if (Math.abs(dx) > 0.5) el.setAttribute("transform", `translate(${(dx / (k || 1)).toFixed(1)} 0) ${el.getAttribute("transform") || ""}`);
+  }
+}
+
 window.listo = Promise.all([700, 800, 900].map(w => document.fonts.load(`${w} 60px Montserrat`))).then(() => document.fonts.ready);
 </script>
 </body></html>

@@ -40,7 +40,12 @@ VOCABULARIO = f"""Cada escena es un plano con pocas cosas, que ENSEÑAN lo que d
 - "barras": [{{"texto": "LO QUE PUSO", "valor": 0.3, "etiqueta": "36.000 €", "color": "blanco"}}] (hasta 3; valor de 0 a 1).
 - "contador": {{"desde": 0, "hasta": 121997, "prefijo": "", "sufijo": " €", "texto": "EN 30 AÑOS", "color": "oro"}}.
 - "grafica": {{"eje": "años", "lineas": [{{"nombre": "MARTA", "color": "main", "forma": "exponencial"}}, {{"nombre": "ÁLEX",
-  "color": "rojo", "forma": "plana"}}]}} (formas: {", ".join(FORMAS)}).
+  "color": "rojo", "forma": "exponencial", "empieza": 0.33, "altura": 0.48}}]}} (formas: {", ".join(FORMAS)}). "empieza"
+  (de 0 a 0,9): en qué parte del eje empieza esa línea (quien empieza más tarde no sale desde el principio); "altura" (de 0
+  a 1): a qué altura acaba, en proporción a las cifras de verdad (si una acaba con la mitad de dinero, la mitad de alto).
+  La gráfica tiene que contar lo mismo que la voz.
+- Las cifras de "contador", "barras" y "etiquetas" son EXACTAMENTE las que dice la voz y salen en "texto" (si la voz dice
+  «más de ciento sesenta mil euros», el contador llega a 160000). Nada de cifras que no cuadren.
 - "lista": [{{"texto": "EL PROFE MIRA EL MÓVIL", "icono": "movil", "cuando": "palabra"}}] (2-4 puntos numerados).
 - "flechas": [{{"de": "izq", "a": "der"}}] (una cosa lleva a otra).
 - "cta": {{"texto": "SÍGUEME", "opciones": ["SOY ÁLEX", "SOY MARTA"]}} (solo en la última escena).
@@ -111,6 +116,29 @@ def _normal(s):
     return re.sub(r"[^a-z0-9ñ%€$]", "", "".join(c for c in s if unicodedata.category(c) != "Mn"))
 
 
+def _cifras(texto):
+    """Las cifras escritas en un texto («160.000 €», «7 %», «1,5»): 160000.0, 7.0, 1.5."""
+    import re
+    salida = []
+    for m in re.findall(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?", str(texto or "")):
+        try:
+            salida.append(float(m.replace(".", "").replace(",", ".")))
+        except ValueError:
+            pass
+    return salida
+
+
+def _cifra_que_dice(e, hasta):
+    """Si el texto de la escena trae una cifra grande y el contador no llega a ella, el contador se corrige: los jueces
+    castigan que la pantalla diga una cosa y la voz otra."""
+    objetivo = _num(hasta, 0)
+    grandes = [x for x in _cifras(e.get("texto")) if x >= 100]
+    if not grandes or objetivo <= 0:
+        return objetivo
+    cerca = min(grandes, key=lambda x: abs(x - objetivo))
+    return objetivo if abs(cerca - objetivo) <= 0.02 * max(cerca, objetivo) else max(grandes)
+
+
 def _num(x, defecto=0.0):
     try:
         return float(x)
@@ -123,7 +151,14 @@ def _color(c, defecto="main"):
 
 
 def _corta(x, n):
-    return str(x or "").strip()[:n]
+    """Recorta a n caracteres sin dejar media palabra («DANI FUMADOR EMP» → «DANI FUMADOR»): los jueces lo ven."""
+    t = str(x or "").strip()
+    if len(t) <= n:
+        return t
+    if " " not in t[:n + 1]:
+        return t[:n]
+    corte = t[:n + 1].rsplit(" ", 1)[0].rstrip(" ,.;:-–")
+    return corte if len(corte) >= max(3, n // 3) else t[:n]
 
 
 def limpiar(g):
@@ -193,6 +228,7 @@ def limpiar(g):
             x["barras"] = barras
         c = e.get("contador")
         if isinstance(c, dict) and c.get("hasta") is not None:
+            c = dict(c, hasta=_cifra_que_dice(e, c.get("hasta")))     # el contador llega a la cifra que se lee y se oye
             x["contador"] = {"desde": _num(c.get("desde"), 0), "hasta": _num(c.get("hasta"), 0), "prefijo": _corta(c.get("prefijo"), 4),
                              "sufijo": _corta(c.get("sufijo"), 8), "texto": _corta(c.get("texto"), 32),
                              "color": _color(c.get("color"), "oro"), "decimales": int(max(0, min(2, _num(c.get("decimales"), 0))))}
@@ -200,7 +236,9 @@ def limpiar(g):
         if isinstance(gr, dict) and gr.get("lineas"):
             x["grafica"] = {"eje": _corta(gr.get("eje"), 14), "lineas": [
                 {"nombre": _corta(l.get("nombre"), 14).upper(), "color": _color(l.get("color"), "main" if i == 0 else "rojo"),
-                 "forma": l.get("forma") if l.get("forma") in FORMAS else "recta"}
+                 "forma": l.get("forma") if l.get("forma") in FORMAS else "recta",
+                 **({"empieza": max(0.0, min(0.9, _num(l.get("empieza"), 0)))} if l.get("empieza") is not None else {}),
+                 **({"altura": max(0.05, min(1.0, _num(l.get("altura"), 1)))} if l.get("altura") is not None else {})}
                 for i, l in enumerate(gr["lineas"][:3]) if isinstance(l, dict)]}
         lista = [{"texto": _corta(it.get("texto"), 26), **({"icono": it["icono"]} if it.get("icono") in ICONOS else {}),
                   **({"cuando": _corta(it["cuando"], 30)} if it.get("cuando") else {})}
