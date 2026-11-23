@@ -38,6 +38,19 @@ jobs:
           modelos = [m["name"].split("/")[1] for m in json.loads(b).get("models", [])
                      if "generateContent" in m.get("supportedGenerationMethods", [])
                      and "image" not in m["name"] and "tts" not in m["name"] and "embedding" not in m["name"]]
+          # ¿Puede Gemini ver un vídeo de YouTube por su enlace (sin descargarlo)?
+          for m in ("gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview"):
+              c, b = pedir(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                           {"contents": [{"parts": [{"file_data": {"file_uri": "https://www.youtube.com/watch?v=QdBZY2fkU-0"}},
+                                                    {"text": "En 2 frases: qué se ve y en qué segundo está el momento más llamativo."}]}]})
+              try:
+                  r = json.loads(b)
+                  txt = r["candidates"][0]["content"]["parts"][0]["text"][:160] if c == 200 else r["error"]["message"][:120]
+              except Exception:
+                  txt = str(b[:120])
+              print(f"VIDEO {m}: {c} {txt}")
+              if c == 200:
+                  break
           print("MODELOS:", ", ".join(modelos))
           for m in modelos:
               if not any(x in m for x in ("flash", "pro", "gemma")) or any(x in m for x in ("robotics", "computer", "transcribe", "customtools")):
