@@ -7,7 +7,9 @@ menos llamadas a la IA (2 en vez de 10), para que quepa en el cupo gratis.
    mirando los fotogramas).
 3. Salas: la jueza Carmen Gancho (los 2 primeros segundos), el juez Ramón Reloj (que se vea entero) y la jueza Lola Calle
    (si a la gente le importa) votan sube o no, con nota de 0 a 100 (1 llamada).
-4. Juez Mayor: el juez que más acierta en la Liga (al principio, Ramón Reloj) dicta la sentencia: manda la mayoría y, si
+4. Jurado popular (jurado.py): si los jueces lo suben, doce jurados con pieles distintas leen los dos alegatos y votan
+   por separado, sin ver a los demás; si 9 o más dicen «culpable», no sube.
+5. Juez Mayor: el juez que más acierta en la Liga (al principio, Ramón Reloj) dicta la sentencia: manda la mayoría y, si
    hay empate, su voto. Fallo grave (pantalla negra, sin voz…) = no sube.
 
 Si la IA no contesta, juicio rápido del Juez de guardia; si tampoco, el vídeo pasa sin juicio (ningún canal se queda sin
@@ -21,7 +23,7 @@ import subprocess
 import sys
 
 from bots.comun import gemini, ia, privado
-from bots.juzgado import juez_guardia
+from bots.juzgado import juez_guardia, jurado
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 JUECES = {
@@ -171,8 +173,20 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     sube = (a_favor * 2 > len(votos)) or (a_favor * 2 == len(votos) and voto_jefe == "sube")
     if fallos or total < minima(canal):
         sube = False
+    jurado_v, consejo_jurado = None, ""
+    if sube:                       # el jurado popular solo se reúne si los jueces lo suben (así no se gasta IA de más)
+        try:
+            jurado_v = jurado.deliberar(guion, canal, alegatos, comun)
+        except Exception:
+            jurado_v = None
+        if jurado_v and jurado_v["rechaza"]:
+            sube = False
+            razones = "; ".join(x["porque"] for x in jurado_v["votos"] if x["voto"] == "culpable")[:400]
+            consejo_jurado = (f"El jurado popular lo rechaza ({jurado_v['culpable']} de {len(jurado_v['votos'])} votan "
+                              f"culpable): {razones}")
     veredicto = "aprobado" if sube else "suspendido"
-    resultado = {"veredicto": veredicto, "total": total, "fallos_graves": fallos, "consejo": sala.get("consejo", ""),
+    resultado = {"veredicto": veredicto, "total": total, "fallos_graves": fallos,
+                 "consejo": " · ".join(x for x in (sala.get("consejo", ""), consejo_jurado) if x), "jurado": jurado_v,
                  "defensa": alegatos.get("defensa", ""), "fiscalia": alegatos.get("fiscalia", ""), "votos": votos,
                  "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo",
                  "cerebro": ia.quien().get("motor", "gemini")}
@@ -188,7 +202,10 @@ def guardar_juicio(clave, guion, v, prueba=False):
     ahora = dt.datetime.now(dt.timezone.utc)
     id_juicio = f"{ahora.strftime('%Y%m%d-%H%M%S')}-{clave}".replace(".", "-")
     a_favor = sum(1 for x in v["votos"] if x["voto"] == "sube")
-    resumen = (f"{a_favor} de {len(v['votos'])} jueces votaron que sube. Nota media {v['total']}/100. "
+    j = v.get("jurado") or {}
+    del_jurado = (f" Jurado popular: {j.get('inocente')} inocente y {j.get('culpable')} culpable."
+                  if j.get("votos") else "")
+    resumen = (f"{a_favor} de {len(v['votos'])} jueces votaron que sube. Nota media {v['total']}/100.{del_jurado} "
                f"Sentencia del {v['juez_mayor']}: {'se sube' if v['veredicto'] == 'aprobado' else 'no se sube'}.")
     privado.guardar_estado(f"juzgado/juicios/{id_juicio}.json", {
         "canal": clave, "tipo": "video", "titulo": guion["titulo"], "defensa": v["defensa"], "fiscalia": v["fiscalia"],
@@ -196,7 +213,7 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "sentencia": "sube" if v["veredicto"] == "aprobado" else "no_sube", "juez": v["juez_mayor"],
         "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"), "resumen": resumen, "consejo": v.get("consejo"),
         "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
-        "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro")})
+        "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro"), "jurado": v.get("jurado")})
     for robot, que in (("detectives", "pruebas"), ("abogados", "alegatos"), ("jueces_sala", "votos"),
                        ("juez_mayor", "sentencia")):
         c = privado.cuaderno(robot)

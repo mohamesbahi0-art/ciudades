@@ -753,6 +753,18 @@
    "lote": 2,
    "codigo": "nuevo",
    "tipo": "bot"
+  },
+  {
+   "id": "jurado_popular",
+   "nombre": "Jurado popular",
+   "ciudad": "juzgado",
+   "donde": "ciudad",
+   "grupo": "Quién trabaja aquí",
+   "hace": "Doce jurados, cada uno con su piel (el del scroll de madrugada, fan del tema, el que odia el tema, un chaval de 15, una madre de 45, un creador rival, el algoritmo, la que comprueba los datos, el que lo ve sin sonido, una anunciante, el que comenta todo y un contable), leen los dos alegatos y votan por separado sin ver a los demás. Si 9 o más dicen culpable, el vídeo no se sube aunque los jueces le den 90.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
   }
  ]
 }
