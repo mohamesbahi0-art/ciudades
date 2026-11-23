@@ -276,6 +276,7 @@ def voz_por_escenas(g, carpeta, canal, hueco=0.28, entrada=0.12, cola=1.4):
         locutor.apretar(d, hueco_max=0.3)
         palabras = json.load(open(os.path.join(d, "palabras.json"), encoding="utf-8"))
         largo = palabras[-1]["fin"] + 0.12 if palabras else _duracion(os.path.join(d, "voz.mp3"))
+        e["palabras"] = [{"p": w["palabra"], "a": round(t + w["inicio"], 3), "b": round(t + w["fin"], 3)} for w in palabras]
         e["inicio"] = 0.0 if i == 0 else round(t - hueco / 2, 3)
         partes.append((os.path.join(d, "voz.mp3"), t))
         t += largo + hueco
@@ -328,8 +329,9 @@ def _sonidos(carpeta):
     return rutas
 
 
-def efectos(g, carpeta):
-    """Pista de efectos: whoosh en cada cambio de escena, pop cuando aparece alguien o algo, brillo, golpe y tics."""
+def eventos_famoso(g):
+    """Los sonidos del plató «famoso»: whoosh en cada cambio de escena, pop cuando aparece alguien o algo, brillo, golpe
+    y tics. Devuelve [(sonido, segundo, volumen)]."""
     eventos, antes = [], set()
     for i, e in enumerate(g["escenas"]):
         a = e["inicio"]
@@ -349,6 +351,14 @@ def efectos(g, carpeta):
             if o["tipo"] == "checklist":
                 eventos += [("tic", a + 0.75 + 0.5 * k, 0.5) for k in range(o.get("marcados", 2))]
         antes = {x["id"] for x in e["actores"]}
+    return eventos
+
+
+def efectos(g, carpeta, eventos=None):
+    """Pista de efectos a partir de [(sonido, segundo, volumen)]: whoosh, pop, brillo, golpe o tic."""
+    eventos = eventos if eventos is not None else eventos_famoso(g)
+    if not eventos:
+        eventos = [("tic", 0.0, 0.0)]
     rutas = _sonidos(carpeta)
     entradas, filtros = [], []
     for n, (nombre, cuando, vol) in enumerate(eventos):
@@ -363,12 +373,25 @@ def efectos(g, carpeta):
     return salida
 
 
+def formato_de(canal, pedido=None):
+    """(nombre, módulo) del formato: «famoso» (este fichero), «pictos» (pictogramas) o «ciencia» (Wist je dat)."""
+    nombre = pedido or canal.get("formato_estudio") or "famoso"
+    if nombre == "pictos":
+        from bots.estudio import pictos as modulo
+    elif nombre == "ciencia":
+        from bots.estudio import ciencia as modulo
+    else:
+        nombre, modulo = "famoso", sys.modules[__name__]
+    return nombre, modulo
+
+
 def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=None):
     """Hace un vídeo completo. Devuelve (ruta del mp4, guion)."""
     carpeta = carpeta or tempfile.mkdtemp(prefix="estudio-")
     os.makedirs(carpeta, exist_ok=True)
-    avisar("estudio: guion «famoso»")
-    g = limpiar(json.loads(json.dumps(guion))) if guion else guionizar(canal, lecciones)
+    nombre, m = formato_de(canal, formato or (guion or {}).get("formato"))
+    avisar(f"estudio: guion «{nombre}»")
+    g = m.limpiar(json.loads(json.dumps(guion))) if guion else m.guionizar(canal, lecciones)
     avisar("estudio: voz escena a escena")
     voz = voz_por_escenas(g, carpeta, canal)
     g["voz_motor"] = locutor.MOTOR.get("motor", "edge")
@@ -384,8 +407,9 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     subprocess.run(["node", os.path.join(AQUI, "render.js"), os.path.join(carpeta, "guion_estudio.json"), mudo, "30"],
                    check=True)
     avisar("estudio: música y efectos")
-    pista = musica.crear(canal.get("musica_estudio", "inspira"), g["duracion"], os.path.join(carpeta, "musica.m4a"))
-    fx = efectos(g, carpeta)
+    pista = musica.crear(canal.get("musica_estudio") or getattr(m, "MUSICA", "inspira"), g["duracion"],
+                         os.path.join(carpeta, "musica.m4a"))
+    fx = efectos(g, carpeta, m.eventos(g) if hasattr(m, "eventos") else eventos_famoso(g))
     mezcla = ("[1:a]volume=1.0[v];[2:a]volume=0.42[m];[3:a]volume=0.8[f];"
               "[v][m][f]amix=inputs=3:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5[a]")
     salida = os.path.join(carpeta, "video.mp4")
