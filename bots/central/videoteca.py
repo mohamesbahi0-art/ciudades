@@ -379,8 +379,8 @@ def _rotulo(carpeta, k, texto, y):
 def _plano_uno(carpeta, k, ruta, inicio, d, rotulo):
     filtro = ("[0:v]fps=30,split=2[f][p];"
               "[f]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:2,eq=brightness=-0.15[fondo];"
-              "[p]scale=1080:1500:force_original_aspect_ratio=decrease[c];"
-              f"[fondo][c]overlay=(W-w)/2:(H-h)/2-40{_rotulo(carpeta, k, rotulo, 150)},format=yuv420p[v]")
+              "[p]crop='min(iw,ih)':'min(iw,ih)',scale=1080:1080[c];"       # un cuadrado grande, centrado en la acción
+              f"[fondo][c]overlay=0:330{_rotulo(carpeta, k, rotulo, 150)},format=yuv420p[v]")
     salida = os.path.join(carpeta, f"p{k:03d}.mp4")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-ss", f"{inicio:.2f}", "-i", ruta,
                     "-filter_complex", filtro, "-map", "[v]", "-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset",
@@ -458,8 +458,8 @@ def montar(g, rutas, voz, palabras_json, salida, ambiente=None):
                         "imagen.mp4"], cwd=tmp, check=True)
         if versus:                              # subtítulos en la franja del medio, entre los dos juegos
             subtitulos.escribir_ass(palabras, os.path.join(tmp, "s.ass"), mayus=True, tamano=80, altura=905)
-        else:
-            subtitulos.escribir_ass(palabras, os.path.join(tmp, "s.ass"), mayus=True, altura=380)
+        else:                                   # debajo del cuadrado del clip
+            subtitulos.escribir_ass(palabras, os.path.join(tmp, "s.ass"), mayus=True, altura=300)
         fuente = f":fontfile={clips.FUENTE}" if os.path.exists(clips.FUENTE) else ""
         filtro = "[0:v]ass=s.ass"
         for n, linea in enumerate(montador._gancho(g.get("texto_pantalla") or g["titulo"]).split("\n")):

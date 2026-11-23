@@ -19,6 +19,9 @@ PREGUNTA = ('Contesta SOLO este JSON, con un saludo de tres palabras en español
 def main():
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("Falta el secreto ANTHROPIC_API_KEY: el dueño tiene que ponerlo en GitHub (Settings → Secrets → Actions).")
+        e = privado.leer(claude.ESTADO, {}) or {}
+        e["prueba"] = {"fecha": privado.ahora(), "bien": False, "motivo": "falta la llave ANTHROPIC_API_KEY en GitHub"}
+        privado.guardar_estado("claude.json", e)
         return 0
     try:
         r = claude.preguntar(PREGUNTA, "ideas", donde="prueba")
