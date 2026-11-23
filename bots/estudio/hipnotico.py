@@ -2,7 +2,7 @@
 bote las hace crecer y deja una onda, y de vez en cuando nace otra bola. Encima va la historia narrada, con los
 subtítulos grandes al ritmo de la voz y el gancho los primeros segundos. Lo dibuja hipnotico.html.
 
-Sirve para las historias (terror, supervivencia, nivel oculto...): el fondo hipnótico engancha la vista mientras la voz
+Sirve para las historias (terror, supervivencia, misterio...): el fondo hipnótico engancha la vista mientras la voz
 cuenta. El guion lo escribe el Escritor de siempre (escritor.escribir) y aquí se adapta al estudio.
 """
 from bots.central import escritor
