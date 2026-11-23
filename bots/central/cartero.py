@@ -4,7 +4,7 @@
 - Cada tarde (cartero.yml, 19:41 UTC = 20:41 en España): el resumen del día (vídeos subidos, los que esperan, clips
   nuevos de la Videoteca y lo que lleva gastado Claude).
 Los avisos no llevan nombres de cuentas ni nada privado, solo cifras y frases en sencillo. De noche (de 00:00 a 08:00
-en España) solo salen los urgentes; si no hay tema configurado, no hace nada y la fábrica sigue igual.
+en España) llegan sin sonido ni vibración; si no hay tema configurado, no hace nada y la fábrica sigue igual.
 
 El tema va en config/fabrica.json → "cartero": {"ntfy_tema": "...", "encendido": true} del repositorio privado (o en la
 variable NTFY_TEMA). El dueño se suscribe a ese tema en la app ntfy.
@@ -51,7 +51,7 @@ def avisar(titulo, mensaje, prioridad="normal", urgente=False, etiqueta="city_su
     if not t:
         return False
     if dt.datetime.now(ZoneInfo("Europe/Madrid")).hour < 8 and not urgente:
-        return False                           # de noche, solo lo urgente
+        prioridad = "baja"                     # de noche llega igual, pero sin sonido ni vibración (no despierta)
     opciones = {"title": titulo, "priority": PRIORIDAD.get(prioridad, "3"),
                 "tags": "rotating_light" if urgente else etiqueta}
     if abrir_app and ajustes().get("enlace_app"):
@@ -122,7 +122,7 @@ def resumen(prueba=False):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("que", choices=["resumen", "aviso"])
+    p.add_argument("que", choices=["resumen", "aviso", "bienvenida"])
     p.add_argument("titulo", nargs="?")
     p.add_argument("mensaje", nargs="?")
     p.add_argument("--urgente", action="store_true")
@@ -131,8 +131,14 @@ def main():
     if not tema():
         print("cartero: no hay tema de ntfy configurado; no se manda nada")
         return 0
-    hecho = resumen(a.prueba) if a.que == "resumen" else avisar(a.titulo or "Aviso", a.mensaje or "", urgente=a.urgente,
-                                                                 prueba=a.prueba)
+    if a.que == "bienvenida":                  # para comprobar que el móvil recibe los avisos
+        hecho = avisar("🔔 ¡Ya estás conectado a tu fábrica!",
+                       "Desde ahora te llegan aquí, en directo, lo que opinan el Jurado, los jueces y los gladiadores de "
+                       "cada vídeo, los vídeos nuevos para subir y el resumen de cada tarde.", urgente=True, etiqueta="tada",
+                       prueba=a.prueba)
+    else:
+        hecho = resumen(a.prueba) if a.que == "resumen" else avisar(a.titulo or "Aviso", a.mensaje or "",
+                                                                     urgente=a.urgente, prueba=a.prueba)
     print("cartero: aviso enviado" if hecho else "cartero: no se ha mandado (de noche o sin tema)")
     return 0
 

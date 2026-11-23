@@ -29,4 +29,9 @@ jobs:
         env:
           PRIVADO: privado
           NTFY_TEMA: ${{ secrets.NTFY_TEMA }}
-        run: python bots/central/cartero.py resumen
+        run: |
+          que=resumen
+          if [ "${{ github.event_name }}" = "push" ] && [ -f peticiones/cartero.json ]; then
+            que=$(python -c "import json;print(json.load(open('peticiones/cartero.json')).get('que','resumen'))" | tr -cd 'a-z')
+          fi
+          python bots/central/cartero.py ${que:-resumen}
