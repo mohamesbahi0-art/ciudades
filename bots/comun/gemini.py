@@ -83,7 +83,21 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                 return salida
             except urllib.error.HTTPError as e:
                 ultimo = f"{modelo}: HTTP {e.code}"
-                if e.code in (429, 404, 403):          # sin cupo, modelo que no existe o sin permiso: siguiente modelo
+                if e.code == 429:
+                    try:
+                        detalle = e.read().decode("utf-8", "replace")
+                    except Exception:
+                        detalle = ""
+                    _contar(modelo, "sin_cupo")
+                    if "PerDay" in detalle:            # sin cupo hasta mañana: no se vuelve a probar en esta ronda
+                        AGOTADOS.add(modelo)
+                        ultimo += " (sin cupo hoy)"
+                        break
+                    if intento >= 1:                   # límite por minuto y ya ha esperado una vez: el siguiente modelo
+                        break
+                    time.sleep(25)                     # límite por minuto: esperar un poco y repetir con este modelo
+                    continue
+                if e.code in (404, 403):               # modelo que no existe o sin permiso: siguiente modelo
                     AGOTADOS.add(modelo)
                     _contar(modelo, "sin_cupo")
                     break
