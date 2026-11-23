@@ -1,15 +1,15 @@
 # Radar de nichos (Influencers): cada día mira en YouTube Shorts (API oficial) lo que más crece en el nicho de cada perfil
 # (canales de YouTube y barrios de TikTok/Instagram). Gemini ve los mejores por su enlace (no se descarga nada) y lo que
 # funciona va a las recetas de los guionistas. Gasta como mucho unas 500 unidades de cuota al día: las subidas mandan.
-# Corre una vez al día, poco antes de que se renueve la cuota de YouTube y de Gemini (medianoche de California): GitHub
-# suele arrancarlo con una hora de retraso, así que normalmente trabaja con la cuota recién renovada y entre dos rondas
-# de la fábrica. Entre vídeo y vídeo espera unos segundos para no comerse la IA gratis de los demás.
+# Corre una vez al día, justo después de que se renueve la cuota de YouTube y de Gemini (medianoche de California, las
+# 08:00 UTC): así trabaja siempre con la cuota recién renovada, aunque GitHub lo arranque con retraso (antes corría a las
+# 07:23 y, si GitHub llegaba puntual, se encontraba la IA gratis gastada del día anterior). Entre vídeo y vídeo espera unos segundos para no comerse la IA gratis de los demás.
 # También con peticiones/radar.json ({"solo": "barrio-2", "videos": 3, "todos": true}; usa alias, nunca el nombre de la
 # cuenta). Con "todos" mira todos los perfiles aunque no les toque hoy (siempre respetando la cuota).
 name: Radar de nichos
 on:
   schedule:
-    - cron: "23 7 * * *"
+    - cron: "23 8 * * *"
   push:
     paths:
       - "peticiones/radar.json"
