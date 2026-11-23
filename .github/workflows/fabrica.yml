@@ -41,8 +41,9 @@ jobs:
           cache: pip
       - name: Herramientas
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-inter
           pip install -q -r requirements.txt
+          npm install --no-save --silent playwright@1.63.0 && npx playwright install --with-deps chromium > /dev/null
           cd privado
           git config user.name "ciudades-bot"
           git config user.email "ciudades-bot@users.noreply.github.com"

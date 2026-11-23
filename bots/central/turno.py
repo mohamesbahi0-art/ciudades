@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
 from bots.central import dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
 from bots.comun import privado  # noqa: E402
 from bots.juzgado import sala_ideas, tribunal  # noqa: E402
+from bots.estudio import estudio as estudio_animacion  # noqa: E402
 import voz as locutor  # noqa: E402  (herramientas/voz.py)
 
 ROBOTS = ("reportero_gta6", "escritor", "locutor", "dibujante", "montador", "juez_guardia", "subidor", "publicador")
@@ -46,6 +47,56 @@ def puestos(clave, canal):
         nombres.update(EN_MAPAS)
     return nombres
 CON_FUENTES = ("noticias", "datos", "versus")
+
+
+class _Hecho(Exception):
+    """El turno ya está terminado (lo ha hecho el estudio de animación)."""
+
+
+def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a):
+    """Turno de una cuenta animada: el estudio hace el vídeo, el Juzgado lo juzga (con segunda oportunidad) y va a
+    «Para subir». Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
+    for intento in (1, 2):
+        video, g = estudio_animacion.hacer(canal, cuadernos["escritor"].para_el_prompt(),
+                                           carpeta=os.path.join(trabajo, f"estudio{intento}"),
+                                           avisar=lambda t: paso("montador", t))
+        g["narracion"] = " ".join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
+        g["texto_pantalla"] = g["escenas"][0].get("texto", "")
+        id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g.get("titulo"),
+                                                           "formato": g.get("formato"), "prueba": a.prueba})
+        segundos = montador.duracion(video)
+        cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1),
+                                                  "estudio": g.get("formato")})
+        audio = os.path.join(trabajo, f"estudio{intento}", "voz.mp3")
+        v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
+                            os.path.join(trabajo, f"juicio{intento}"), audio=audio if os.path.exists(audio) else None)
+        id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
+        id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
+                                                                 "veredicto": v["veredicto"], "total": v.get("total")})
+        paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
+             f"{v['veredicto']} ({v.get('total', '-')}/100)")
+        resumen.update(titulo=g.get("titulo"), veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
+                       juicio=id_juicio, juicio_app=id_tribunal, segundos=round(segundos, 1), intento=intento,
+                       formato=g.get("formato"))
+        if v["veredicto"] != "suspendido" or a.prueba:
+            break
+    if a.prueba:
+        paso("subidor", "es una prueba: no se sube nada")
+        resumen["destino_resultado"] = "prueba"
+        if os.environ.get("ALMACEN_PRUEBAS"):
+            resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video, f"{os.path.basename(trabajo)}.mp4")
+    elif v["veredicto"] == "suspendido":
+        paso("subidor", "el Juzgado lo ha suspendido: no se sube")
+        resumen["destino_resultado"] = "suspendido"
+    else:
+        ids = parasubir.dejar(clave, canal, video, g, segundos, v)
+        cuadernos["publicador"].apuntar("para_subir", {"barrio": clave, "documentos": ids, "guion": id_guion})
+        privado.apuntar_titulo(clave, g.get("titulo", ""))
+        estudio_animacion.apuntar(clave, g)
+        paso("publicador", f"en la bandeja «Para subir»: {', '.join(ids)}", f"en la bandeja ({len(ids)} redes)")
+        resumen.update(destino_resultado="para_subir", documentos=ids)
+    resumen["resultado"] = "hecho"
+    return resumen
 
 
 def main(argv=None):
@@ -87,6 +138,9 @@ def main(argv=None):
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
             paso("reportero_gta6", f"{len(lista)} fuentes")
 
+        if canal.get("estudio") == "animacion":     # cuentas de vídeos animados (las del dueño): el estudio de animación
+            _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a)
+            raise _Hecho()
         receta = (privado.leer(os.path.join("estado", "influencers", "recetas.json"), {}) or {}).get("canales", {}).get(clave)
         lecciones_escritor = cuadernos["escritor"].para_el_prompt()
         if receta:                               # la receta de los Influencers para este canal
@@ -200,6 +254,8 @@ def main(argv=None):
                 paso("subidor", f"{motivo}: guardado en la cola ({nombre})", f"{motivo}: guardado en la cola")
                 resumen.update(destino_resultado="en_cola", motivo=motivo)
         resumen["resultado"] = "hecho"
+    except _Hecho:
+        pass
     except Exception as e:  # el turno nunca se queda a medias sin contarlo
         resumen.update(resultado="error", error=f"{type(e).__name__}: {e}", robot=nombres[en_curso["robot"]])
         cuadernos[en_curso["robot"]].apuntar("error", {"canal": clave, "error": f"{type(e).__name__}: {str(e)[:300]}"})

@@ -105,7 +105,8 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     medidas = {k: datos.get(k) for k in ("duracion", "cortes_por_minuto", "primer_corte", "pantallas_negras",
                                           "silencios", "volumen_inicio_db")}
     fallos = []
-    if datos.get("pantallas_negras"):
+    negras = [n for n in datos.get("pantallas_negras") or [] if n.get("hasta", 0) - n.get("desde", 0) >= 0.8]
+    if negras:                       # un fundido corto no cuenta: solo pantallas negras de casi un segundo o más
         fallos.append("pantalla negra")
     if datos.get("sin_audio"):
         fallos.append("sin voz")
