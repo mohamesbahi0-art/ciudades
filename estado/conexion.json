@@ -1,8 +1,15 @@
 {
- "estado": "conectado",
- "canal": "nivshorts",
- "pedido": "nivshorts",
- "coincide": true,
- "quedan": 0,
- "actualizado": "2026-11-23T01:56:15Z"
+ "estado": "terminado",
+ "conectados": [
+  "clips",
+  "curios",
+  "gta",
+  "mapas",
+  "nivshorts",
+  "sobshorts",
+  "terror",
+  "versus"
+ ],
+ "rechazados": [],
+ "actualizado": "2026-11-23T01:56:17Z"
 }
