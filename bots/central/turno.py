@@ -53,11 +53,11 @@ class _Hecho(Exception):
     """El turno ya está terminado (lo ha hecho el estudio de animación)."""
 
 
-def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a):
+def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None):
     """Turno de una cuenta animada: el estudio hace el vídeo, el Juzgado lo juzga (con segunda oportunidad) y va a
     «Para subir». Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
     for intento in (1, 2):
-        video, g = estudio_animacion.hacer(canal, cuadernos["escritor"].para_el_prompt(),
+        video, g = estudio_animacion.hacer(canal, lecciones or cuadernos["escritor"].para_el_prompt(),
                                            carpeta=os.path.join(trabajo, f"estudio{intento}"),
                                            avisar=lambda t: paso("montador", t))
         g["narracion"] = " ".join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
@@ -138,14 +138,14 @@ def main(argv=None):
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
             paso("reportero_gta6", f"{len(lista)} fuentes")
 
-        if canal.get("estudio") == "animacion":     # cuentas de vídeos animados (las del dueño): el estudio de animación
-            _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a)
-            raise _Hecho()
         receta = (privado.leer(os.path.join("estado", "influencers", "recetas.json"), {}) or {}).get("canales", {}).get(clave)
         lecciones_escritor = cuadernos["escritor"].para_el_prompt()
-        if receta:                               # la receta de los Influencers para este canal
+        if receta:                               # la receta de los Influencers (y del Radar de nichos) para este canal
             lecciones_escritor += "\n- (Receta de los Influencers, de lo que funciona ahora) " + json.dumps(
                 {k: v for k, v in receta.items() if k not in ("fecha", "basada_en")}, ensure_ascii=False)
+        if canal.get("estudio") == "animacion":     # cuentas de vídeos animados (las del dueño): el estudio de animación
+            _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones_escritor)
+            raise _Hecho()
         idea, id_idea = None, None
         if ajustes.get("sala_ideas", True):     # la Sala de Ideas elige la mejor de 3 antes de gastar dibujos
             paso("escritor", "proponiendo ideas a la Sala de Ideas")

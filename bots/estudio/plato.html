@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Plató</title>
+<!-- El plató: dibuja cada fotograma de los vídeos «famoso» con el estilo de las cuentas del dueño (escenario azul con
+     suelo y focos, futbolista dibujado, maniquíes grises, objetos de verdad y texto arriba). Lo usa render.js:
+     window.GUION = guion; await window.listo; window.pintar(t) para cada fotograma. -->
+<style>
+@font-face{font-family:"Montserrat";font-weight:700;src:url("fuentes/montserrat-700.woff2") format("woff2")}
+@font-face{font-family:"Montserrat";font-weight:800;src:url("fuentes/montserrat-800.woff2") format("woff2")}
+@font-face{font-family:"Montserrat";font-weight:900;src:url("fuentes/montserrat-900.woff2") format("woff2")}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#0A1122}
+svg{display:block;font-family:"Montserrat",sans-serif}
+</style></head><body>
+<svg id="v" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+<defs>
+  <linearGradient id="pared" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#090F21"/><stop offset="0.7" stop-color="#15203F"/><stop offset="1" stop-color="#1B2749"/></linearGradient>
+  <linearGradient id="suelo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#18213F"/><stop offset="1" stop-color="#070A16"/></linearGradient>
+  <linearGradient id="cesped" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17603A"/><stop offset="1" stop-color="#061F10"/></linearGradient>
+  <linearGradient id="haz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E3EAFF" stop-opacity="0.30"/><stop offset="1" stop-color="#E3EAFF" stop-opacity="0.05"/></linearGradient>
+  <radialGradient id="charco"><stop offset="0" stop-color="#EEF2FF" stop-opacity="0.36"/><stop offset="1" stop-color="#EEF2FF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="halo"><stop offset="0" stop-color="#2B3C72" stop-opacity="0.55"/><stop offset="1" stop-color="#2B3C72" stop-opacity="0"/></radialGradient>
+  <radialGradient id="sombra"><stop offset="0" stop-color="#000" stop-opacity="0.6"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  <radialGradient id="brilloOro"><stop offset="0" stop-color="#FFD866" stop-opacity="0.6"/><stop offset="1" stop-color="#FFD866" stop-opacity="0"/></radialGradient>
+  <radialGradient id="foco1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.7"/><stop offset="1" stop-color="#DDE6FF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="vineta" cx="0.5" cy="0.46" r="0.78"><stop offset="0.62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
+  <radialGradient id="volumenBalon" cx="0.36" cy="0.3" r="0.85"><stop offset="0.5" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.38"/></radialGradient>
+  <radialGradient id="cabezaManiqui" cx="0.38" cy="0.32" r="0.78"><stop offset="0" stop-color="#B9BFD2"/><stop offset="1" stop-color="#4F546A"/></radialGradient>
+  <linearGradient id="cuerpoManiqui" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0" stop-color="#959CB2"/><stop offset="1" stop-color="#525870"/></linearGradient>
+  <radialGradient id="articulacion" cx="0.38" cy="0.35" r="0.75"><stop offset="0" stop-color="#A7ADC2"/><stop offset="1" stop-color="#565C71"/></radialGradient>
+  <linearGradient id="oro" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE98F"/><stop offset="0.55" stop-color="#F6C431"/><stop offset="1" stop-color="#CF8A10"/></linearGradient>
+  <linearGradient id="tarjeta" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DDE3ED"/></linearGradient>
+  <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#03060F"/><stop offset="0.45" stop-color="#0B1430"/><stop offset="1" stop-color="#16224A"/></linearGradient>
+  <linearGradient id="ocaso" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#070B1C"/><stop offset="0.55" stop-color="#1A1840"/><stop offset="1" stop-color="#3A2452"/></linearGradient>
+  <linearGradient id="bruma" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0B1330" stop-opacity="0.75"/><stop offset="1" stop-color="#0B1330" stop-opacity="0.05"/></linearGradient>
+  <linearGradient id="led" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2B59FF"/><stop offset="0.35" stop-color="#9B3BFF"/><stop offset="0.7" stop-color="#FF3B6B"/><stop offset="1" stop-color="#FFB02E"/></linearGradient>
+  <linearGradient id="asfalto" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E222D"/><stop offset="1" stop-color="#090B10"/></linearGradient>
+  <linearGradient id="farola" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD48A" stop-opacity="0.55"/><stop offset="1" stop-color="#FFD48A" stop-opacity="0"/></linearGradient>
+  <filter id="desenfoque" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="2.6"/></filter>
+  <filter id="b4" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
+  <filter id="b10" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
+  <filter id="b24" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="24"/></filter>
+  <filter id="sombraTexto" x="-10%" y="-40%" width="120%" height="180%"><feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#000" flood-opacity="0.6"/></filter>
+  <filter id="brillo" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="sombraTarjeta" x="-25%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000" flood-opacity="0.5"/></filter>
+  <clipPath id="recorteSuelo"><rect x="0" y="1400" width="1080" height="520"/></clipPath>
+</defs>
+<g id="escena"></g>
+</svg>
+<script>
+"use strict";
+const W = 1080, H = 1920, SUELO = 1400, R = Math.PI / 180;
+const lim = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const tramo = (t, a, d) => lim((t - a) / d);
+const suave = x => x * x * (3 - 2 * x);
+const salida = x => 1 - Math.pow(1 - x, 3);
+const rebote = x => { if (x <= 0) return 0; const c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const azar = i => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const f1 = n => Math.round(n * 10) / 10;
+const f2 = n => Math.round(n * 100) / 100;
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const POS = { centro: 540, izq: 330, der: 750, izq2: 175, der2: 905, izq3: 90, der3: 990 };
+const posX = (p, def = 540) => typeof p === "number" ? p : (POS[p] ?? def);
+
+// ---------- colores ----------
+function rgb(h) { h = String(h || "#888").replace("#", ""); if (h.length === 3) h = h.split("").map(c => c + c).join(""); const n = parseInt(h, 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+const hex = c => "#" + c.map(v => Math.round(lim(v, 0, 255)).toString(16).padStart(2, "0")).join("");
+const mezcla = (a, b, p) => { const x = rgb(a), y = rgb(b); return hex(x.map((v, i) => v + (y[i] - v) * p)); };
+const claro = (c, p) => mezcla(c, "#ffffff", p), oscuro = (c, p) => mezcla(c, "#000000", p);
+let DEFS = {};
+function degradado(c) {
+  const k = "d" + rgb(c).join("-");
+  if (!DEFS[k]) DEFS[k] = `<linearGradient id="${k}" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="${claro(c, 0.2)}"/><stop offset="0.5" stop-color="${c}"/><stop offset="1" stop-color="${oscuro(c, 0.3)}"/></linearGradient>`;
+  return `url(#${k})`;
+}
+
+// ---------- texto ----------
+const lienzo = document.createElement("canvas").getContext("2d");
+function ancho(texto, peso, tam) { lienzo.font = `${peso} ${tam}px Montserrat`; return lienzo.measureText(texto).width; }
+const normal = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9ñ]/g, "");
+
+function textoArriba(e, tl) {
+  const texto = String(e.texto || "").trim();
+  if (!texto) return "";
+  const tam = texto.length > 64 ? 52 : 58, alto = Math.round(tam * 1.3), max = 960;
+  const palabras = texto.split(/\s+/);
+  const marcadas = palabras.map(() => false);
+  for (const r of e.resaltar || []) {
+    const rp = String(r).split(/\s+/).map(normal).filter(Boolean);
+    if (!rp.length) continue;
+    for (let i = 0; i + rp.length <= palabras.length; i++)
+      if (rp.every((w, j) => normal(palabras[i + j]) === w)) { for (let j = 0; j < rp.length; j++) marcadas[i + j] = true; break; }
+  }
+  const esp = ancho(" ", 800, tam), anchos = palabras.map(p => ancho(p, 800, tam));
+  const partir = tope => { const L = [[]]; let w = 0; palabras.forEach((p, i) => { if (L[L.length - 1].length && w + esp + anchos[i] > tope) { L.push([]); w = 0; } const l = L[L.length - 1]; w += (l.length ? esp : 0) + anchos[i]; l.push({ p, i, pw: anchos[i] }); }); return L; };
+  const n = partir(max).length;
+  let lo = Math.max(...anchos), hi = max;
+  for (let it = 0; it < 16 && n > 1; it++) { const mid = (lo + hi) / 2; if (partir(mid).length <= n) hi = mid; else lo = mid; }
+  const lineas = partir(n > 1 ? hi + 1 : max);
+  const color = e.color === "rojo" ? "#FF4747" : "#F7C53B";
+  const ap = salida(tramo(tl, 0, 0.3));
+  const y0 = 292 - (lineas.length > 2 ? 34 : 0);
+  let s = `<g opacity="${f2(ap)}" transform="translate(0 ${f1((1 - ap) * 16)})" filter="url(#sombraTexto)">`;
+  lineas.forEach((L, li) => {
+    const total = L.reduce((a, x) => a + x.pw, 0) + esp * (L.length - 1);
+    let x = 540 - total / 2;
+    const y = y0 + li * alto;
+    L.forEach((q, k) => {
+      const m = marcadas[q.i];
+      s += `<text x="${f1(x)}" y="${y}" font-weight="800" font-size="${tam}" fill="${m ? color : "#FFFFFF"}">${esc(q.p)}</text>`;
+      if (m) {
+        const sig = L[k + 1] && marcadas[L[k + 1].i];
+        const limpio = q.p.replace(/^[¿¡"«]+/u, "").replace(/[.,;:!?»"]+$/u, "");
+        const ini = ancho(q.p.slice(0, q.p.indexOf(limpio)), 800, tam);
+        const largo = (sig ? q.pw - ini + esp : ancho(limpio, 800, tam)) * salida(tramo(tl, 0.3 + k * 0.04, 0.4));
+        s += `<rect x="${f1(x + ini)}" y="${y + 13}" width="${f1(largo)}" height="6" rx="3" fill="${color}"/>`;
+      }
+      x += q.pw + esp;
+    });
+  });
+  return s + "</g>";
+}
+
+function etiqueta(x, y, texto, estilo, pop) {
+  const tam = 33, w = ancho(texto, 800, tam) + 52, h = 62;
+  const est = { nombre: ["#070A12", "#FFFFFF", "#FFFFFF"], rojo: ["#2B0709", "#FF3B3B", "#FF5050"], oro: ["#1E1705", "#F7C53B", "#F7C53B"] }[estilo] || ["#070A12", "#FFFFFF", "#FFFFFF"];
+  const sc = rebote(pop);
+  let s = `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f2(sc)})" opacity="${f2(lim(pop * 2.5))}">`;
+  if (estilo === "rojo") s += `<rect x="${f1(-w / 2 - 8)}" y="${-h / 2 - 8}" width="${f1(w + 16)}" height="${h + 16}" rx="${h / 2 + 8}" fill="#FF2020" opacity="0.28" filter="url(#b10)"/>`;
+  if (estilo === "oro") s += `<rect x="${f1(-w / 2 - 8)}" y="${-h / 2 - 8}" width="${f1(w + 16)}" height="${h + 16}" rx="${h / 2 + 8}" fill="#F7C53B" opacity="0.2" filter="url(#b10)"/>`;
+  s += `<rect x="${f1(-w / 2)}" y="${-h / 2}" width="${f1(w)}" height="${h}" rx="${h / 2}" fill="${est[0]}" stroke="${est[1]}" stroke-width="3"/>`;
+  s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${tam}" fill="${est[2]}"${estilo === "rojo" ? ' filter="url(#brillo)"' : ""}>${esc(texto)}</text>`;
+  return s + "</g>";
+}
+
+// ---------- escenario ----------
+let PATRONES = null;
+function patrones() {
+  if (PATRONES) return PATRONES;
+  const camisetas = ["#C8102E", "#F2C230", "#E9EDF5", "#1B2A5C", "#C8102E", "#2E6BD9", "#F2C230", "#7A1E2C", "#E9EDF5", "#2B2F3A"];
+  const pieles = ["#E2B08B", "#C68B5E", "#8A5A3B", "#5E3B26", "#F0C9A6"];
+  let s = "";
+  for (let v = 0; v < 3; v++) {
+    s += `<pattern id="publico${v}" width="220" height="46" patternUnits="userSpaceOnUse">`;
+    for (let i = 0; i < 14; i++) {
+      const x = 8 + i * 15.4 + azar(v * 50 + i) * 5, y = 22 + azar(v * 70 + i) * 7;
+      s += `<rect x="${f1(x - 7)}" y="${f1(y)}" width="14" height="22" rx="6" fill="${camisetas[Math.floor(azar(v * 90 + i) * camisetas.length)]}"/>` +
+           `<circle cx="${f1(x)}" cy="${f1(y - 5)}" r="6" fill="${pieles[Math.floor(azar(v * 110 + i) * pieles.length)]}"/>`;
+    }
+    s += `</pattern>`;
+  }
+  s += `<pattern id="asientos" width="24" height="30" patternUnits="userSpaceOnUse"><rect x="3" y="9" width="18" height="13" rx="3" fill="#24355F"/><rect x="3" y="21" width="18" height="5" rx="2" fill="#192749"/></pattern>`;
+  return (PATRONES = s);
+}
+
+function estadio(T, lleno) {
+  let s = `<rect width="1080" height="${SUELO}" fill="url(#cielo)"/>`;
+  for (const [x, lado] of [[105, 1], [975, -1]]) {
+    if (!lleno && lado < 0) continue;
+    s += `<rect x="${x - 7}" y="140" width="14" height="500" fill="#070B16"/><rect x="${x - 56}" y="96" width="112" height="62" rx="7" fill="#1A2238"/>`;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) s += `<rect x="${x - 50 + i * 26}" y="${102 + j * 27}" width="22" height="22" rx="3" fill="#F4F8FF"/>`;
+    s += `<circle cx="${x}" cy="127" r="280" fill="url(#foco1)" opacity="${lleno ? 0.5 : 0.3}"/>`;
+  }
+  s += `<path d="M 0 600 Q 540 548 1080 600 L 1080 652 Q 540 602 0 652 Z" fill="#04060D"/>`;
+  [[652, 250, 0.62], [930, 214, 0.8], [1172, 200, 1.0]].forEach(([y0, h, k], i) => {
+    s += `<rect x="0" y="${y0}" width="1080" height="${h}" fill="${lleno ? "#0E1530" : "#0C1328"}"/>`;
+    const dy = lleno ? Math.sin(T * 5.5 + i * 1.3) * 1.6 : 0;
+    s += `<g transform="translate(0 ${f1(y0 + dy)}) scale(${k})"><rect x="0" y="0" width="${f1(1080 / k)}" height="${f1(h / k)}" fill="url(#${lleno ? "publico" + i : "asientos"})" opacity="${lleno ? 0.8 : 0.85}"/></g>`;
+    s += `<rect x="0" y="${y0}" width="1080" height="${h}" fill="url(#bruma)"/>`;
+    s += `<rect x="0" y="${y0 + h}" width="1080" height="16" fill="${lleno ? "url(#led)" : "#141C33"}" opacity="0.9"/>`;
+    if (lleno) s += `<rect x="0" y="${y0 + h - 6}" width="1080" height="28" fill="url(#led)" opacity="0.3" filter="url(#b10)"/>`;
+  });
+  if (lleno) for (let i = 0; i < 34; i++) {
+    const tw = Math.sin(T * (2 + azar(i + 900) * 3) + i * 2.1);
+    if (tw > 0.55) s += `<circle cx="${f1(azar(i + 950) * 1080)}" cy="${f1(670 + azar(i + 990) * 690)}" r="${f1(3 + tw * 4)}" fill="#FFFFFF" opacity="${f2(tw)}" filter="url(#b4)"/>`;
+  }
+  return `<g filter="url(#desenfoque)">${s}</g>`;
+}
+
+function barrio(T) {
+  let s = `<rect width="1080" height="${SUELO}" fill="url(#ocaso)"/>`;
+  s += `<circle cx="160" cy="560" r="170" fill="url(#foco1)" opacity="0.3"/><circle cx="160" cy="560" r="46" fill="#F3EEDB" opacity="0.92"/>`;
+  const fila = (semilla, colorBase, yBase, altoMin, altoMax, anchoMin, anchoMax, luz) => {
+    let x = -30, i = 0, r = "";
+    while (x < 1100) {
+      const w = anchoMin + azar(semilla + i) * (anchoMax - anchoMin), h = altoMin + azar(semilla + 40 + i) * (altoMax - altoMin);
+      const y = yBase - h, color = mezcla(colorBase, "#000000", azar(semilla + 80 + i) * 0.25);
+      r += `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h + 4)}" fill="${color}"/>`;
+      if (azar(semilla + 120 + i) > 0.5) r += `<rect x="${f1(x + w * 0.6)}" y="${f1(y - 26)}" width="26" height="20" fill="${color}"/><line x1="${f1(x + w * 0.25)}" y1="${f1(y)}" x2="${f1(x + w * 0.25)}" y2="${f1(y - 44)}" stroke="${color}" stroke-width="3"/>`;
+      for (let cx = x + 18; cx < x + w - 22; cx += 36) for (let cy = y + 26; cy < yBase - 30; cy += 50) {
+        const n = Math.floor(cx * 7 + cy * 13 + semilla), encendida = azar(n) < luz * (0.85 + 0.15 * Math.sin(T * 0.7 + n));
+        r += `<rect x="${f1(cx)}" y="${f1(cy)}" width="16" height="25" rx="2" fill="${encendida ? (azar(n + 3) > 0.3 ? "#FFC76A" : "#9FD0FF") : "#1B2544"}" opacity="${encendida ? 0.9 : 0.8}"/>`;
+      }
+      x += w + 6; i++;
+    }
+    return r;
+  };
+  s += `<g opacity="0.55">${fila(300, "#1A2147", 1250, 330, 560, 110, 170, 0.18)}</g>`;
+  s += fila(500, "#0E142D", SUELO, 380, 720, 170, 250, 0.32);
+  s += `<rect x="0" y="0" width="1080" height="${SUELO}" fill="url(#bruma)" opacity="0.35"/>`;
+  return `<g filter="url(#desenfoque)">${s}</g>`;
+}
+
+function farola(x) {
+  return `<g><rect x="${x - 7}" y="${SUELO - 560}" width="14" height="560" fill="#0A0D16"/><path d="M ${x} ${SUELO - 552} Q ${x} ${SUELO - 600} ${x - 70} ${SUELO - 600}" fill="none" stroke="#0A0D16" stroke-width="12"/>` +
+    `<rect x="${x - 112}" y="${SUELO - 612}" width="64" height="20" rx="8" fill="#1C2233"/><polygon points="${x - 106},${SUELO - 594} ${x - 54},${SUELO - 594} ${x + 60},${SUELO} ${x - 220},${SUELO}" fill="url(#farola)" opacity="0.55"/>` +
+    `<ellipse cx="${x - 80}" cy="${SUELO - 590}" rx="40" ry="12" fill="#FFE2A6" filter="url(#b4)"/></g>`;
+}
+
+function fondo(e, T, focoX) {
+  if (e.fondo === "estadio" || e.fondo === "gradas") return estadio(T, e.fondo === "estadio");
+  if (e.fondo === "barrio") return barrio(T) + farola(930);
+  let s = `<rect width="1080" height="1920" fill="url(#pared)"/>`;
+  s += `<ellipse cx="${f1(focoX)}" cy="1080" rx="560" ry="640" fill="url(#halo)"/>`;
+  if (e.pared === "columnas" || e.suelo === "vestuario")
+    for (const x of [70, 1010]) s += `<rect x="${x - 60}" y="0" width="120" height="${SUELO}" fill="#0C1326" opacity="0.9"/>`;
+  for (let i = 0; i < 70; i++) {
+    const x = azar(i) * 1080, y0 = azar(i + 99) * 1360;
+    const y = ((y0 - T * (5 + azar(i + 7) * 9)) % 1360 + 1360) % 1360;
+    const r = 1 + azar(i + 199) * 2.3;
+    const o = (0.1 + 0.36 * azar(i + 299)) * (0.6 + 0.4 * Math.sin(T * (1 + azar(i + 3) * 2) + i));
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="#C9D6FF" opacity="${f2(o)}"/>`;
+  }
+  if (e.suelo === "cesped")
+    for (const x of [70, 1010]) s += `<circle cx="${x}" cy="120" r="230" fill="url(#foco1)" opacity="0.32"/><circle cx="${x}" cy="120" r="18" fill="#F4F7FF" filter="url(#b4)"/>`;
+  return s;
+}
+
+function foco(x, k = 1) {
+  return `<g opacity="${f2(k)}"><polygon points="${f1(x - 110)},-20 ${f1(x + 110)},-20 ${f1(x + 350)},${SUELO} ${f1(x - 350)},${SUELO}" fill="url(#haz)" filter="url(#b24)"/>` +
+    `<polygon points="${f1(x - 58)},-20 ${f1(x + 58)},-20 ${f1(x + 200)},${SUELO} ${f1(x - 200)},${SUELO}" fill="url(#haz)" opacity="0.5" filter="url(#b10)"/></g>`;
+}
+const charco = (x, k = 1) => `<ellipse cx="${f1(x)}" cy="${SUELO + 10}" rx="370" ry="80" fill="url(#charco)" opacity="${f2(k)}"/>`;
+
+function suelo(e) {
+  if (e.suelo === "calle") {
+    let c = `<rect y="${SUELO}" width="1080" height="${H - SUELO}" fill="url(#asfalto)"/><rect y="${SUELO}" width="1080" height="46" fill="#2B303E"/><rect y="${SUELO + 46}" width="1080" height="8" fill="#3A4052"/>`;
+    for (let k = -3; k <= 3; k++) c += `<line x1="${540 + k * 34}" y1="${SUELO + 60}" x2="${540 + k * 520}" y2="${H}" stroke="#FFFFFF" stroke-opacity="${k ? 0 : 0.5}" stroke-width="10" stroke-dasharray="40 50"/>`;
+    return c;
+  }
+  const cesped = e.suelo === "cesped";
+  let s = `<rect y="${SUELO}" width="1080" height="${H - SUELO}" fill="url(#${cesped ? "cesped" : "suelo"})"/><g clip-path="url(#recorteSuelo)">`;
+  const vx = 540, vy = 860, xs = [];
+  for (let k = -18; k <= 18; k++) xs.push(540 + k * 140);
+  if (cesped) {
+    for (let k = 0; k < xs.length - 1; k += 2) s += `<polygon points="${vx},${vy} ${xs[k]},${H} ${xs[k + 1]},${H}" fill="#2A8A54" opacity="0.22"/>`;
+    s += `<ellipse cx="540" cy="1575" rx="330" ry="70" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="5"/>`;
+    s += `<line x1="0" y1="1575" x2="1080" y2="1575" stroke="#FFFFFF" stroke-opacity="0.11" stroke-width="5"/>`;
+  } else {
+    for (const x of xs) s += `<line x1="${vx}" y1="${vy}" x2="${x}" y2="${H}" stroke="#93A6DD" stroke-opacity="0.075" stroke-width="2"/>`;
+    for (let k = 1; k <= 11; k++) { const y = SUELO + 520 * Math.pow(k / 11, 1.9); s += `<line x1="0" y1="${f1(y)}" x2="1080" y2="${f1(y)}" stroke="#93A6DD" stroke-opacity="0.06" stroke-width="2"/>`; }
+  }
+  s += `</g><rect y="${SUELO - 2}" width="1080" height="4" fill="${cesped ? "#2F9A5E" : "#2D3B67"}" opacity="0.9"/>`;
+  return s;
+}
+
+// ---------- personajes ----------
+function pose(nombre, T, a = {}) {
+  const b = { torso: 0, cabeza: 0, hI: 24, cI: 4, hD: 24, cD: 4, pI: 5, rI: 0, pD: 5, rD: 0, y: 0, manos: false };
+  const ola = Math.sin(T * 2.1);
+  switch (nombre) {
+    case "magia": Object.assign(b, { hI: 52 + 6 * Math.sin(T * 2.4), cI: 14, hD: 52 + 6 * Math.sin(T * 2.4 + 1.1), cD: 14, manos: true }); break;
+    case "trofeo": { const s = Math.abs(Math.sin(T * 4.2)); Object.assign(b, { hI: 176, cI: 26, hD: 176, cD: 26, largo: 1.3, y: -16 * s, pI: 7, pD: 7, cabeza: 0, boca: true }); break; }
+    case "celebra": { const s = Math.abs(Math.sin(T * 4.2)); Object.assign(b, { hI: 150 + 8 * s, cI: 10, hD: 150 + 8 * s, cD: 10, y: -18 * s, boca: true }); break; }
+    case "senala_der": Object.assign(b, { hD: 68 + 2 * ola, cD: -6, hI: 20, cI: 6, torso: 3 }); break;
+    case "senala_izq": Object.assign(b, { hI: 68 + 2 * ola, cI: -6, hD: 20, cD: 6, torso: -3 }); break;
+    case "brazos_cruzados": Object.assign(b, { hI: 18, cI: -118, hD: 18, cD: -118, cruzados: true }); break;
+    case "pensando": Object.assign(b, { hD: 30, cD: -150, hI: 20, cI: 4, cabeza: 6 }); break;
+    case "cansado": Object.assign(b, { hI: 8, cI: 0, hD: 8, cD: 0, torso: 0, cabeza: 12, y: 0 }); break;
+    case "regate": {
+      const f = T * 2 * Math.PI * 2.1, s = Math.sin(f), d = a.dir || 1;
+      Object.assign(b, { hI: 36 + 24 * s, cI: 26, hD: 36 - 24 * s, cD: 26, pI: 7 + 20 * Math.max(0, s), rI: -12 * Math.max(0, s),
+        pD: 7 + 20 * Math.max(0, -s), rD: -12 * Math.max(0, -s), torso: 5 * d, y: -10 * Math.abs(s) }); break;
+    }
+    case "corre": {
+      const f = T * 2 * Math.PI * 2.4, s = Math.sin(f), d = a.dir || 1;
+      Object.assign(b, { hI: 30 + 30 * s, cI: 40, hD: 30 - 30 * s, cD: 40, pI: 8 + 24 * Math.max(0, s), rI: -18 * Math.max(0, s),
+        pD: 8 + 24 * Math.max(0, -s), rD: -18 * Math.max(0, -s), torso: 7 * d, y: -14 * Math.abs(s) }); break;
+    }
+    case "tumbado": break;
+    default: Object.assign(b, { hI: 24 + 3 * ola, hD: 24 - 3 * ola });
+  }
+  b.respira = Math.sin(T * 2) * 3;
+  return b;
+}
+
+function esqueleto(P) {
+  const pierna = (sx, a, k) => {
+    const a1 = a * R, a2 = (a + k) * R, c = [sx * 44, -262];
+    const r = [c[0] + sx * Math.sin(a1) * 112, c[1] + Math.cos(a1) * 112];
+    const t = [r[0] + sx * Math.sin(a2) * 124, r[1] + Math.cos(a2) * 124];
+    return { c, r, t, ang: sx * (a + k), sx };
+  };
+  const pI = pierna(-1, P.pI, P.rI), pD = pierna(1, P.pD, P.rD);
+  return { pI, pD, dy: -(Math.max(pI.t[1], pD.t[1]) + 28) + P.y };
+}
+function brazo(sx, a, b, largo = 1) {
+  const h = [sx * 97, -497], a1 = a * R, a2 = (a + b) * R;
+  const c = [h[0] + sx * Math.sin(a1) * 102 * largo, h[1] + Math.cos(a1) * 102 * largo];
+  const m = [c[0] + sx * Math.sin(a2) * 94 * largo, c[1] + Math.cos(a2) * 94 * largo];
+  return { h, c, m };
+}
+const linea = (a, b, w, c, extra = "") => `<line x1="${f1(a[0])}" y1="${f1(a[1])}" x2="${f1(b[0])}" y2="${f1(b[1])}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"${extra ? " " + extra : ""}/>`;
+
+function bota(p, ang, sx, color) {
+  return `<g transform="translate(${f1(p[0])} ${f1(p[1])}) rotate(${f1(ang * 0.3)}) scale(${sx} 1)">` +
+    `<path d="M -25 -8 L 8 -8 Q 22 -2 33 12 Q 49 17 47 25 L 47 27 L -25 27 Q -30 27 -30 21 L -30 -2 Q -30 -8 -25 -8 Z" fill="${color}"/>` +
+    `<rect x="-31" y="23" width="80" height="7" rx="3.5" fill="#E8EBF2"/></g>`;
+}
+
+function pelo(F) {
+  const c = F.color_pelo || "#1A1310", cl = claro(c, 0.16);
+  switch (F.pelo) {
+    case "rizado": {
+      let s = `<path d="M -54 -614 Q -57 -662 0 -668 Q 57 -662 54 -614 Q 30 -640 0 -641 Q -30 -640 -54 -614 Z" fill="${c}"/>`;
+      for (let i = 0; i < 9; i++) { const g = Math.PI * (1.04 + 0.92 * i / 8); s += `<circle cx="${f1(Math.cos(g) * 47)}" cy="${f1(-622 + Math.sin(g) * 44)}" r="15.5" fill="${c}"/>`; }
+      return s;
+    }
+    case "rapado": {
+      let s = `<path d="M -54 -606 Q -57 -664 0 -667 Q 57 -664 54 -606 Q 50 -626 40 -630 Q 20 -640 0 -639 Q -20 -640 -40 -630 Q -50 -626 -54 -606 Z" fill="${c}"/>`;
+      for (let i = 0; i < 22; i++) { const x = -40 + azar(i + 31) * 80, y = -660 + azar(i + 57) * 24 + Math.abs(x) * 0.25; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(3.5 + azar(i + 77) * 3)}" fill="${cl}" opacity="0.45"/>`; }
+      return s;
+    }
+    case "engominado": return `<path d="M -54 -612 Q -63 -668 -8 -682 Q 46 -690 61 -648 Q 61 -626 54 -612 Q 34 -646 -54 -612 Z" fill="${c}"/><path d="M -20 -672 Q 20 -684 46 -662" fill="none" stroke="${cl}" stroke-width="5" opacity="0.6" stroke-linecap="round"/>`;
+    case "largo": return `<path d="M -56 -560 Q -66 -670 0 -674 Q 66 -670 56 -560 L 44 -566 Q 50 -626 26 -640 Q 0 -628 -26 -640 Q -50 -626 -44 -566 Z" fill="${c}"/>`;
+    case "calvo": return "";
+    default: return `<path d="M -54 -610 Q -59 -669 0 -673 Q 59 -669 54 -610 Q 50 -637 27 -641 Q 6 -628 -24 -643 Q -49 -636 -54 -610 Z" fill="${c}"/>`;
+  }
+}
+
+function cabeza(F, P, T) {
+  const piel = F.piel, hs = F.nino ? 1.22 : 1;
+  let s = `<g transform="rotate(${f1(P.cabeza || 0)} 0 -556) translate(0 -548) scale(${hs}) translate(0 548)">`;
+  s += `<circle cx="-51" cy="-600" r="11" fill="${oscuro(piel, 0.1)}"/><circle cx="51" cy="-600" r="11" fill="${oscuro(piel, 0.1)}"/>`;
+  s += `<ellipse cx="0" cy="-606" rx="52" ry="58" fill="${degradado(piel)}"/>`;
+  s += pelo(F);
+  const parpadeo = ((T + (F.semilla || 0)) % 3.7) < 0.12 ? 0.15 : 1;
+  for (const sx of [-1, 1]) s += `<ellipse cx="${sx * 18}" cy="-604" rx="5.6" ry="${f1(7.2 * parpadeo)}" fill="#1D130F"/>`;
+  if (P.boca) s += `<path d="M -15 -583 Q 0 -585 15 -583 Q 13 -562 0 -561 Q -13 -562 -15 -583 Z" fill="#3A1712"/><path d="M -9 -568 Q 0 -563 9 -568" fill="none" stroke="#C4545A" stroke-width="5" stroke-linecap="round"/>`;
+  else s += `<path d="${P.cansado ? "M -12 -576 Q 0 -582 12 -576" : "M -13 -580 Q 0 -569 13 -580"}" fill="none" stroke="${oscuro(piel, 0.55)}" stroke-width="4.5" stroke-linecap="round"/>`;
+  return s + "</g>";
+}
+
+function futbolista(a, P, T) {
+  const F = Object.assign({ piel: "#C68B5E", pelo: "corto", color_pelo: "#1A1310", camiseta: "#2F6FD6", detalle: "#FFFFFF",
+    dorsal: "10", color_dorsal: "#FFFFFF", pantalon: "#FFFFFF", medias: "#FFFFFF", botas: "#15171C" }, (window.GUION.famoso || {}), a.ropa || {}, { nino: a.nino });
+  const E = esqueleto(P), piel = F.piel;
+  let s = "";
+  for (const p of [E.pI, E.pD]) {
+    s += linea(p.c, p.r, 42, piel);
+    s += linea(p.r, p.t, 46, F.medias);
+    const v = [p.t[0] - p.r[0], p.t[1] - p.r[1]];
+    s += linea([p.r[0] + v[0] * 0.02, p.r[1] + v[1] * 0.02], [p.r[0] + v[0] * 0.13, p.r[1] + v[1] * 0.13], 48, oscuro(F.medias, 0.14));
+    s += bota(p.t, p.ang, p.sx, F.botas);
+  }
+  s += `<path d="M -84 -344 L 84 -344 L 93 -262 Q 93 -253 84 -253 L 12 -253 L 0 -270 L -12 -253 L -84 -253 Q -93 -253 -93 -262 Z" fill="${degradado(F.pantalon)}"/>`;
+  const BI = brazo(-1, P.hI, P.cI, P.largo || 1), BD = brazo(1, P.hD, P.cD, P.largo || 1);
+  let u = `<rect x="-19" y="-562" width="38" height="52" rx="10" fill="${oscuro(piel, 0.16)}"/>`;
+  const brazoSvg = B => linea(B.h, B.c, 32, piel) + linea(B.c, B.m, 30, piel) + `<circle cx="${f1(B.m[0])}" cy="${f1(B.m[1])}" r="18" fill="${piel}"/>`;
+  if (!P.cruzados) u += brazoSvg(BI) + brazoSvg(BD);
+  u += `<path d="M -100 -500 Q -100 -527 -78 -529 L -35 -531 Q 0 -500 35 -531 L 78 -529 Q 100 -527 100 -500 L 86 -352 Q 85 -338 72 -338 L -72 -338 Q -85 -338 -86 -352 Z" fill="${degradado(F.camiseta)}" stroke="${oscuro(F.camiseta, 0.38)}" stroke-width="3"/>`;
+  if (F.rayas) for (const x of [-56, 0, 56]) u += `<path d="M ${x - 14} -527 L ${x + 14} -527 L ${x + 12} -340 L ${x - 12} -340 Z" fill="${F.rayas}" opacity="0.85"/>`;
+  u += `<path d="M -36 -530 Q 0 -497 36 -530" fill="none" stroke="${F.detalle}" stroke-width="7" stroke-linecap="round"/>`;
+  for (const B of [BI, BD]) {
+    const fin = [B.h[0] + (B.c[0] - B.h[0]) * 0.34, B.h[1] + (B.c[1] - B.h[1]) * 0.34];
+    u += linea(B.h, fin, 62, F.mangas || F.camiseta) + linea(fin, fin, 62, "none");
+    u += `<circle cx="${f1(fin[0])}" cy="${f1(fin[1])}" r="31" fill="none" stroke="${F.detalle}" stroke-width="0"/>`;
+  }
+  u += `<text x="0" y="-392" text-anchor="middle" font-weight="900" font-size="104" letter-spacing="-3" fill="${F.color_dorsal}" stroke="${oscuro(F.camiseta, 0.5)}" stroke-width="5" paint-order="stroke">${esc(F.dorsal)}</text>`;
+  if (P.cruzados) {
+    u += linea([-92, -492], [-70, -400], 32, piel) + linea([92, -492], [70, -400], 32, piel);
+    u += linea([-74, -404], [64, -432], 30, oscuro(piel, 0.06)) + linea([74, -420], [-64, -446], 30, piel);
+    for (const B of [[-97, -497], [97, -497]]) u += linea(B, [B[0] * 0.95, B[1] + 34], 62, F.mangas || F.camiseta);
+  }
+  if (P.manos) for (const B of [BI, BD]) u += `<circle cx="${f1(B.m[0])}" cy="${f1(B.m[1])}" r="46" fill="url(#brilloOro)"/><circle cx="${f1(B.m[0])}" cy="${f1(B.m[1])}" r="18" fill="#FFE9A8" opacity="0.65"/>`;
+  u += cabeza(F, P, T);
+  let extra = "";
+  let cima = -676;
+  if (a.accion === "trofeo") {
+    const mx = (BI.m[0] + BD.m[0]) / 2, my = Math.min(BI.m[1], BD.m[1]);
+    extra = trofeo(mx, my - 16, 1.05);
+    for (const B of [BI, BD]) extra += `<circle cx="${f1(B.m[0])}" cy="${f1(B.m[1])}" r="18" fill="${piel}"/>`;
+    cima = my - 175;
+  }
+  s += `<g transform="rotate(${f1(P.torso)} 0 -330)"><g transform="translate(0 ${f1(P.respira * 0.6)})">${u}${extra}</g></g>`;
+  return { svg: `<g transform="translate(0 ${f1(E.dy)})">${s}</g>`, cima: cima + E.dy };
+}
+
+function cilindro(a, b, w) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+  let nx = -dy / L, ny = dx / L;
+  if (nx > 0) { nx = -nx; ny = -ny; }
+  const o = w * 0.2;
+  return linea(a, b, w, "#5D637A") + linea([a[0] + nx * o, a[1] + ny * o], [b[0] + nx * o, b[1] + ny * o], f1(w * 0.42), "#959BB1", 'opacity="0.7"');
+}
+const articulacion = (p, r) => `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${r}" fill="url(#articulacion)"/>`;
+
+function maniqui(a, P, T) {
+  const E = esqueleto(P);
+  let s = "";
+  for (const p of [E.pI, E.pD]) {
+    s += cilindro(p.c, p.r, 38) + cilindro(p.r, p.t, 34) + articulacion(p.r, 21);
+    s += `<g transform="translate(${f1(p.t[0])} ${f1(p.t[1])}) scale(${p.sx} 1)"><path d="M -22 -4 Q -22 -12 -12 -12 L 14 -12 Q 40 -4 42 16 Q 42 26 32 26 L -18 26 Q -26 26 -26 18 Z" fill="#3D4252"/></g>`;
+  }
+  s += `<path d="M -70 -342 L 70 -342 L 62 -262 Q 60 -250 48 -250 L -48 -250 Q -60 -250 -62 -262 Z" fill="url(#cuerpoManiqui)" stroke="#3E4254" stroke-width="3"/>`;
+  s += articulacion(E.pI.c, 22) + articulacion(E.pD.c, 22);
+  const BI = brazo(-1, P.hI, P.cI, 0.98), BD = brazo(1, P.hD, P.cD, 0.98);
+  let u = `<rect x="-14" y="-568" width="28" height="52" rx="8" fill="#4A4F62"/>`;
+  for (const B of [BI, BD]) u += cilindro(B.h, B.c, 30) + cilindro(B.c, B.m, 27) + articulacion(B.c, 17) + `<circle cx="${f1(B.m[0])}" cy="${f1(B.m[1])}" r="17" fill="url(#articulacion)"/>`;
+  u += `<path d="M -98 -508 Q -98 -532 -74 -532 L 74 -532 Q 98 -532 98 -508 L 82 -412 Q 80 -400 66 -400 L -66 -400 Q -80 -400 -82 -412 Z" fill="url(#cuerpoManiqui)" stroke="#3E4254" stroke-width="3"/>`;
+  u += `<path d="M -80 -520 Q -40 -526 -10 -524" fill="none" stroke="#C3C8D8" stroke-width="6" opacity="0.35" stroke-linecap="round"/>`;
+  u += `<path d="M -62 -394 L 62 -394 L 58 -348 Q 56 -340 46 -340 L -46 -340 Q -56 -340 -58 -348 Z" fill="#646A80" stroke="#3E4254" stroke-width="3"/>`;
+  for (const B of [BI, BD]) u += articulacion(B.h, 25);
+  u += `<circle cx="0" cy="-614" r="50" fill="url(#cabezaManiqui)"/>`;
+  s += `<g transform="rotate(${f1(P.torso)} 0 -330)"><g transform="translate(0 ${f1(P.respira * 0.6)})">${u}</g></g>`;
+  let svg = `<g transform="translate(0 ${f1(E.dy)})">${s}</g>`;
+  if (a.accion === "tumbado") svg = `<g transform="translate(-20 -40) rotate(-88)">${svg}</g>`;
+  return { svg, cima: a.accion === "tumbado" ? -150 : -666 + E.dy };
+}
+
+function posActor(a, tl, d) {
+  if (a.accion === "regate" || a.accion === "corre" || a.desde !== undefined) {
+    const x0 = posX(a.desde ?? "izq2"), x1 = posX(a.hasta ?? "der2");
+    return x0 + (x1 - x0) * suave(lim(tl / Math.max(d, 0.1)));
+  }
+  return posX(a.pos);
+}
+const dirActor = a => Math.sign(posX(a.hasta ?? "der2") - posX(a.desde ?? "izq2")) || 1;
+
+function actor(a, e, tl, d, idx) {
+  const T = tl + e.inicio, x = posActor(a, tl, d);
+  const antes = idx > 0 ? (GUION.escenas[idx - 1].actores || []).find(b => b.id && b.id === a.id) : null;
+  const p = antes ? 1 : salida(tramo(tl, 0, 0.35));
+  const P = pose(a.accion, T + (a.desfase || 0), { dir: dirActor(a) });
+  const k = a.escala || 1;
+  const cuerpo = a.tipo === "maniqui" ? maniqui(a, P, T) : futbolista(a, P, T);
+  let s = `<g opacity="${f2(lim(p * 1.6) * (a.fantasma ? 0.4 : 1))}" transform="translate(${f1(x)} ${f1(SUELO + (1 - p) * 50)})">`;
+  s += `<ellipse cx="0" cy="4" rx="${f1(118 * k)}" ry="${f1(17 * k)}" fill="url(#sombra)"/>`;
+  s += `<g transform="scale(${k})">${cuerpo.svg}</g>`;
+  const etiquetas = [];
+  const nombre = a.tipo === "famoso" ? (a.nombre ?? (GUION.famoso || {}).nombre) : a.nombre;
+  if (nombre) etiquetas.push([nombre, "nombre"]);
+  if (a.etiqueta) etiquetas.push([a.etiqueta, a.color_etiqueta || (a.tipo === "maniqui" ? "rojo" : "oro")]);
+  let y = cuerpo.cima * k - 44;
+  const mismo = antes && antes.etiqueta === a.etiqueta;
+  etiquetas.forEach(([txt, est], i) => {
+    const pop = mismo || (antes && est === "nombre") ? 1 : tramo(tl, 0.22 + i * 0.12, 0.3);
+    s += etiqueta(0, y, txt, est, pop);
+    y -= 72;
+  });
+  return s + "</g>";
+}
+
+// ---------- objetos ----------
+function balon(x, y, r = 26, giro = 0) {
+  const k = "cb" + r;
+  if (!DEFS[k]) DEFS[k] = `<clipPath id="${k}"><circle r="${r}"/></clipPath>`;
+  const pent = (cx, cy, rr, rot) => { let d = ""; for (let i = 0; i < 5; i++) { const g = rot + i * 72 * R - Math.PI / 2; d += (i ? "L" : "M") + f1(cx + Math.cos(g) * rr) + " " + f1(cy + Math.sin(g) * rr); } return `<path d="${d}Z" fill="#1A1C22"/>`; };
+  let s = `<g transform="translate(${f1(x)} ${f1(y)})"><circle r="${r}" fill="#F6F7FA"/><g clip-path="url(#${k})"><g transform="rotate(${f1(giro)})">`;
+  s += pent(0, 0, r * 0.36, 0);
+  for (let i = 0; i < 5; i++) { const g = i * 72 * R - Math.PI / 2 + Math.PI / 5; s += pent(Math.cos(g) * r * 0.98, Math.sin(g) * r * 0.98, r * 0.33, Math.PI / 5 + i * 72 * R); }
+  s += `</g></g><circle r="${r}" fill="url(#volumenBalon)"/><circle r="${r}" fill="none" stroke="#0F1116" stroke-opacity="0.35" stroke-width="2"/></g>`;
+  return s;
+}
+const sombraBalon = (x, y) => { const h = lim((SUELO - 26 - y) / 300); return `<ellipse cx="${f1(x)}" cy="${SUELO + 3}" rx="${f1(28 * (1 - 0.5 * h))}" ry="${f1(7 * (1 - 0.5 * h))}" fill="#000" opacity="${f2(0.4 * (1 - 0.6 * h))}"/>`; };
+
+function cono(x) {
+  return `<g transform="translate(${f1(x)} ${SUELO})"><ellipse cx="0" cy="3" rx="44" ry="9" fill="#000" opacity="0.35"/>` +
+    `<rect x="-38" y="-12" width="76" height="14" rx="3" fill="#C24E0C"/><path d="M -27 -12 L -8 -84 L 8 -84 L 27 -12 Z" fill="#FF7A1F"/>` +
+    `<path d="M -21 -34 L -15 -56 L 15 -56 L 21 -34 Z" fill="#FFFFFF" opacity="0.92"/><path d="M -8 -84 L 0 -84 L -12 -12 L -27 -12 Z" fill="#FFFFFF" opacity="0.13"/></g>`;
+}
+
+function trofeo(x, y, k = 1) {
+  return `<g transform="translate(${f1(x)} ${f1(y)}) scale(${k})">` +
+    `<path d="M -44 -128 Q -82 -126 -78 -90 Q -74 -60 -36 -54" fill="none" stroke="#E7B126" stroke-width="12"/>` +
+    `<path d="M 44 -128 Q 82 -126 78 -90 Q 74 -60 36 -54" fill="none" stroke="#E7B126" stroke-width="12"/>` +
+    `<path d="M -56 -138 L 56 -138 Q 56 -46 0 -34 Q -56 -46 -56 -138 Z" fill="url(#oro)"/>` +
+    `<rect x="-11" y="-38" width="22" height="30" fill="#D9961A"/><rect x="-40" y="-12" width="80" height="14" rx="4" fill="url(#oro)"/>` +
+    `<rect x="-48" y="0" width="96" height="30" rx="5" fill="#3B2715"/><rect x="-26" y="8" width="52" height="12" rx="3" fill="#E7B126" opacity="0.8"/>` +
+    `<path d="M -36 -126 Q -38 -78 -16 -52" fill="none" stroke="#FFF6D0" stroke-width="8" opacity="0.6" stroke-linecap="round"/></g>`;
+}
+
+function chispa(x, y, s, o = 1) {
+  return `<g transform="translate(${f1(x)} ${f1(y)})" opacity="${f2(o)}"><circle r="${f1(s * 2.5)}" fill="url(#brilloOro)"/>` +
+    `<path d="M 0 ${f1(-s)} Q 0 0 ${f1(s)} 0 Q 0 0 0 ${f1(s)} Q 0 0 ${f1(-s)} 0 Q 0 0 0 ${f1(-s)} Z" fill="#FFF3C4"/></g>`;
+}
+function chispas(cx, T) {
+  let s = "";
+  [[-160, -650], [150, -630], [-205, -410], [195, -380], [-130, -250], [128, -540]].forEach(([dx, dy], i) => {
+    const tw = 0.5 + 0.5 * Math.sin(T * 3.1 + i * 1.7);
+    s += chispa(cx + dx + Math.sin(T * 0.8 + i) * 12, SUELO + dy + Math.cos(T * 0.9 + i) * 12, 14 + 8 * tw, 0.55 + 0.45 * tw);
+  });
+  return s;
+}
+
+function confeti(T) {
+  let s = "";
+  const cols = ["#F7C53B", "#FFFFFF", "#E8344A", "#F7C53B", "#4FA3FF"];
+  for (let i = 0; i < 54; i++) {
+    const x = azar(i + 500) * 1080 + Math.sin(T * 2 + i) * 26;
+    const y = -60 + ((T * (240 + azar(i + 600) * 200) + azar(i + 700) * 1500) % 1500);
+    const g = T * 260 * (azar(i + 800) - 0.5) + i * 40;
+    s += `<rect x="${f1(x)}" y="${f1(y)}" width="13" height="22" rx="2" fill="${cols[i % 5]}" opacity="0.9" transform="rotate(${f1(g)} ${f1(x + 6)} ${f1(y + 11)})"/>`;
+  }
+  return s;
+}
+
+function numeroGrande(x, y, texto, tl, sub) {
+  const tam = Math.min(230, 470 / Math.max(1, String(texto).length) * 1.45);
+  x = Math.min(x, 1080 - 40 - ancho(String(texto), 900, tam) / 2);
+  const p = tramo(tl, 0.35, 0.5), k = rebote(p), late = 1 + 0.03 * Math.sin(tl * 4);
+  let s = `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f2(k * late)})" opacity="${f2(lim(p * 3))}">`;
+  s += `<text x="0" y="0" text-anchor="middle" font-weight="900" font-size="${f1(tam)}" fill="#F7C53B" opacity="0.5" filter="url(#b24)">${esc(texto)}</text>`;
+  s += `<text x="0" y="0" text-anchor="middle" font-weight="900" font-size="${f1(tam)}" fill="url(#oro)" stroke="#6E4505" stroke-width="6" paint-order="stroke">${esc(texto)}</text>`;
+  if (sub) s += `<text x="0" y="74" text-anchor="middle" font-weight="800" font-size="38" letter-spacing="3" fill="#FFFFFF" opacity="${f2(tramo(tl, 0.8, 0.4))}">${esc(sub)}</text>`;
+  return s + "</g>";
+}
+
+function calendario(x, y, texto, tl, sub) {
+  const k = rebote(tramo(tl, 0.3, 0.45));
+  return `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f2(k)})"><g filter="url(#sombraTarjeta)"><rect x="-140" y="-160" width="280" height="310" rx="28" fill="url(#tarjeta)"/></g>` +
+    `<path d="M -140 -132 Q -140 -160 -112 -160 L 112 -160 Q 140 -160 140 -132 L 140 -74 L -140 -74 Z" fill="#E5484D"/>` +
+    `<rect x="-76" y="-184" width="20" height="50" rx="10" fill="#2B3142"/><rect x="56" y="-184" width="20" height="50" rx="10" fill="#2B3142"/>` +
+    `<text x="0" y="-103" text-anchor="middle" font-weight="800" font-size="34" letter-spacing="4" fill="#FFFFFF">${esc(sub || "AÑO")}</text>` +
+    `<text x="0" y="62" text-anchor="middle" font-weight="900" font-size="${String(texto).length > 3 ? 92 : 120}" fill="#1E2433">${esc(texto)}</text></g>`;
+}
+
+function checklist(x, y, n, marcados, tl) {
+  const k = rebote(tramo(tl, 0.2, 0.45));
+  const alto = 70 + n * 84;
+  let s = `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f2(k)})"><g filter="url(#sombraTarjeta)"><rect x="-155" y="${-alto / 2}" width="310" height="${alto}" rx="26" fill="url(#tarjeta)"/></g>`;
+  for (let i = 0; i < n; i++) {
+    const yy = -alto / 2 + 77 + i * 84;
+    s += `<rect x="-122" y="${yy - 27}" width="54" height="54" rx="11" fill="none" stroke="#2B3142" stroke-width="6"/>`;
+    s += `<rect x="-46" y="${yy - 8}" width="${170 - (i % 2) * 30}" height="15" rx="7.5" fill="#C3CCDB"/>`;
+    const q = tramo(tl, 0.7 + i * 0.5, 0.32);
+    if (i < marcados && q > 0) s += `<path d="M -110 ${yy} L -98 ${yy + 13} L -74 ${yy - 15}" fill="none" stroke="#22B455" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="64" stroke-dashoffset="${f1(64 * (1 - q))}"/>`;
+  }
+  return s + "</g>";
+}
+
+function bocadillo(x, y, texto, tl) {
+  const k = rebote(tramo(tl, 0.9, 0.35)), b = Math.sin(tl * 3) * 7;
+  return `<g transform="translate(${f1(x)} ${f1(y + b)}) scale(${f2(k)})"><path d="M -52 -48 Q -52 -70 -30 -70 L 30 -70 Q 52 -70 52 -48 L 52 2 Q 52 24 30 24 L -2 24 L -26 50 L -20 24 L -30 24 Q -52 24 -52 2 Z" fill="#F7C53B"/>` +
+    `<text x="0" y="1" text-anchor="middle" font-weight="900" font-size="68" fill="#15171C">${esc(texto)}</text></g>`;
+}
+
+function porteria(x) {
+  let s = `<g transform="translate(${f1(x)} ${SUELO})">`;
+  for (let i = 0; i <= 8; i++) s += `<line x1="${-150 + i * 37.5}" y1="-230" x2="${-150 + i * 37.5}" y2="0" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="2.5"/>`;
+  for (let j = 0; j <= 6; j++) s += `<line x1="-150" y1="${-230 + j * 38.3}" x2="150" y2="${-230 + j * 38.3}" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="2.5"/>`;
+  return s + `<path d="M -150 0 L -150 -230 L 150 -230 L 150 0" fill="none" stroke="#F4F6FA" stroke-width="12" stroke-linejoin="round"/></g>`;
+}
+
+function objeto(o, e, tl, d, actores) {
+  const T = tl + e.inicio;
+  const ref = actores.find(a => a.id && a.id === (o.de || o.sobre)) || actores.find(a => a.tipo === "famoso") || actores[0] || { pos: "centro" };
+  const ax = posActor(ref, tl, d), k = ref.escala || 1;
+  switch (o.tipo) {
+    case "balon": {
+      let x, y, g;
+      if (o.anim === "regate") { const f = T * 2 * Math.PI * 2.1; x = ax + 92 * dirActor(ref) * k; y = SUELO - 24 - 34 * Math.abs(Math.sin(f)); g = x * 1.6; }
+      else if (o.anim === "botar") { x = ax + 135 * k; y = SUELO - 26 - 190 * k * Math.abs(Math.sin(T * 3.2)); g = T * 120; }
+      else { const w = T * 1.7; x = ax + 165 * Math.sin(w) * k; y = SUELO - 26 - 110 * k * Math.abs(Math.cos(w)); g = T * 170; }
+      return sombraBalon(x, y) + balon(x, y, 26, g);
+    }
+    case "chispas": return chispas(ax, T);
+    case "conos": { const n = o.n || 4; let s = ""; for (let i = 0; i < n; i++) s += cono(250 + i * (580 / Math.max(1, n - 1))); return s; }
+    case "camino": { const x0 = posX(ref.desde ?? "izq2"), x1 = ax; return `<path d="M ${f1(x0)} ${SUELO - 26} Q ${f1((x0 + x1) / 2)} ${SUELO - 150} ${f1(x1)} ${SUELO - 26}" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="4" stroke-dasharray="3 16" stroke-linecap="round"/>`; }
+    case "confeti": return confeti(T);
+    case "numero": return numeroGrande(posX(o.pos, 760), o.y || 1030, o.texto, tl, o.sub);
+    case "calendario": return calendario(posX(o.pos, 800), o.y || 1090, o.texto, tl, o.sub);
+    case "checklist": return checklist(posX(o.pos, 790), o.y || 1120, o.items || 4, o.marcados ?? 2, tl);
+    case "bocadillo": return bocadillo(ax + 115 * k, o.y || (SUELO - 680 * k - 150), o.texto || "?", tl);
+    case "trofeo": return trofeo(posX(o.pos, 780), o.y || SUELO - 30, 1.3);
+    case "porteria": return porteria(posX(o.pos, 860));
+    default: return "";
+  }
+}
+
+// ---------- escena y fotograma ----------
+function dibujaEscena(e, tl, idx) {
+  const d = e.fin - e.inicio, actores = e.actores || [];
+  const prin = actores.find(a => a.foco) || actores.find(a => a.tipo === "famoso") || actores[0];
+  const focoX = e.focoX ?? (prin ? posActor(prin, tl, d) : 540);
+  let s = fondo(e, tl + e.inicio, focoX);
+  const kf = e.fondo === "barrio" ? 0.35 : (e.fondo === "estadio" || e.fondo === "gradas") ? 0.55 : 1;
+  if (e.foco !== false) s += foco(focoX, kf);
+  s += suelo(e);
+  if (e.foco !== false) s += charco(focoX);
+  const z = 1 + 0.035 * suave(lim(tl / Math.max(d, 0.1))) + 0.05 * (1 - salida(tramo(tl, 0, 0.4)));
+  let m = "";
+  for (const o of e.objetos || []) if (o.detras || ["conos", "camino", "porteria", "calendario", "checklist"].includes(o.tipo)) m += objeto(o, e, tl, d, actores);
+  for (const a of actores) m += actor(a, e, tl, d, idx);
+  for (const o of e.objetos || []) if (!(o.detras || ["conos", "camino", "porteria", "calendario", "checklist"].includes(o.tipo))) m += objeto(o, e, tl, d, actores);
+  s += `<g transform="translate(540 1220) scale(${(z).toFixed(4)}) translate(-540 -1220)">${m}</g>`;
+  s += `<rect width="1080" height="1920" fill="url(#vineta)"/>`;
+  return s + textoArriba(e, tl);
+}
+
+window.pintar = function (t) {
+  const g = window.GUION, E = g.escenas;
+  DEFS = { patrones: patrones() };
+  let i = E.findIndex(e => t < e.fin);
+  if (i < 0) i = E.length - 1;
+  const e = E[i], tl = t - e.inicio;
+  let s = dibujaEscena(e, tl, i);
+  if (i > 0 && tl < 0.16) { const pe = E[i - 1]; s += `<g opacity="${f2(1 - tl / 0.16)}">${dibujaEscena(pe, pe.fin - pe.inicio, i - 1)}</g>`; }
+  if (t > g.duracion - 0.45) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.45)) / 0.45))}"/>`;
+  document.getElementById("escena").innerHTML = `<defs>${Object.values(DEFS).join("")}</defs>` + s;
+};
+window.listo = Promise.all([700, 800, 900].map(w => document.fonts.load(`${w} 60px Montserrat`))).then(() => document.fonts.ready);
+</script>
+</body></html>

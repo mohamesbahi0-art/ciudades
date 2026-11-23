@@ -1,4 +1,4 @@
-// Dibuja el vídeo fotograma a fotograma con el navegador (escena.html) y lo pasa a ffmpeg.
+// Dibuja el vídeo fotograma a fotograma con el navegador (plato.html) y lo pasa a ffmpeg.
 // Uso: node render.js guion.json salida.mp4 [fps]
 const fs = require("fs");
 const path = require("path");
@@ -11,9 +11,9 @@ const { chromium } = require("playwright");
   const fps = Number(fpsTexto) || 30;
   const navegador = await chromium.launch(process.env.CHROMIUM_RUTA ? { executablePath: process.env.CHROMIUM_RUTA } : {});
   const pagina = await navegador.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
-  await pagina.goto("file://" + path.resolve(__dirname, "escena.html"));
+  await pagina.goto("file://" + path.resolve(__dirname, guion.html || "plato.html"));
   await pagina.evaluate(g => { window.GUION = g; }, guion);
-  await pagina.evaluate(() => document.fonts.ready);
+  await pagina.evaluate(() => window.listo || document.fonts.ready);
   const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "mjpeg",
                               "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "19", "-preset", "veryfast",
                               salida], { stdio: ["pipe", "inherit", "inherit"] });

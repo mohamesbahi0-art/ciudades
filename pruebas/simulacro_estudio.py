@@ -14,13 +14,22 @@ os.environ.setdefault("MEMORIA_DIR", os.path.join(os.environ["PRIVADO"], "memori
 from bots.comun import almacen, gemini, privado  # noqa: E402
 from bots.central import turno  # noqa: E402
 
-GUION = {"formato": "carrera", "titulo": "Prueba A vs B", "titulo_arriba": "A vs B",
-         "columnas": [{"etiqueta": "A", "color": "#FF5A5F", "desde": 1, "hasta": 2, "unidad": "COSAS", "curva": "cae"},
-                      {"etiqueta": "B", "color": "#4ADE80", "desde": 1, "hasta": 9, "unidad": "COSAS"}],
-         "objeto": "ladrillos", "dias": ["L", "M", "X"],
-         "escenas": [{"texto": "Mismo punto de partida.", "resaltar": ["Mismo"], "dia": "L", "progreso": [0.1, 0.1]},
-                     {"texto": "Uno espera. El otro empieza.", "resaltar": ["empieza"], "dia": "X", "progreso": [0.2, 1.0]}],
-         "final": {"lineas": [{"texto": "Empieza hoy.", "resaltar": ["hoy"]}], "pregunta": "¿Cuál eres tú?"},
+GUION = {"formato": "famoso", "titulo": "Prueba del plató",
+         "famoso": {"nombre": "PRUEBA", "piel": "#C68B5E", "pelo": "rizado", "color_pelo": "#1A1310", "camiseta": "#F7D417",
+                    "detalle": "#1E7F3A", "dorsal": "11", "color_dorsal": "#111111", "pantalon": "#1B2A6B",
+                    "medias": "#FFFFFF", "botas": "#111111"},
+         "escenas": [{"voz": "Con quince años ya era el mejor.", "texto": "Con 15 años ya era el mejor.", "resaltar": ["15 años"],
+                      "fondo": "estadio", "actores": [{"id": "p", "tipo": "famoso", "pos": "centro", "accion": "magia"}],
+                      "objetos": [{"tipo": "chispas"}, {"tipo": "balon", "anim": "orbita"}]},
+                     {"voz": "Muchos dicen que es suerte.", "texto": "Muchos dicen que es suerte.", "resaltar": ["suerte"],
+                      "color": "rojo", "fondo": "escenario",
+                      "actores": [{"id": "m1", "tipo": "maniqui", "pos": "izq2", "etiqueta": "SUERTE", "accion": "senala_der"},
+                                  {"id": "p", "tipo": "famoso", "pos": "centro", "accion": "brazos_cruzados"}]},
+                     {"voz": "¿Y tú, qué entrenas hoy?", "texto": "¿Y tú, qué entrenas hoy?", "resaltar": ["hoy"],
+                      "fondo": "barrio", "actores": [{"id": "tu", "tipo": "maniqui", "pos": "izq", "etiqueta": "TÚ",
+                                                      "color_etiqueta": "oro"}],
+                      "objetos": [{"tipo": "numero", "texto": "304", "sub": "PRUEBA", "pos": "der"},
+                                  {"tipo": "bocadillo", "texto": "?"}, {"tipo": "inventado"}]}],
          "descripcion": "prueba", "hashtags": ["#prueba"], "texto_instagram": "Prueba", "texto_tiktok": "Prueba"}
 
 
