@@ -1,9 +1,8 @@
 {
- "estado": "esperando",
+ "estado": "conectado",
  "canal": "nivshorts",
- "codigo": "WLJX-HSRN",
- "url": "https://www.google.com/device",
- "caduca": "2026-11-23T02:24:54Z",
- "quedan": 1,
- "actualizado": "2026-11-23T01:54:54Z"
+ "pedido": "nivshorts",
+ "coincide": true,
+ "quedan": 0,
+ "actualizado": "2026-11-23T01:56:15Z"
 }
