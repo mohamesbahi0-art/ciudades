@@ -67,48 +67,61 @@ def main(argv=None):
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
             paso("reportero", f"{len(lista)} fuentes")
 
-        paso("escritor", "escribiendo el guion")
-        g = escritor.escribir(canal, cuadernos["escritor"].para_el_prompt(), privado.titulos_recientes(clave), fuentes)
-        if lista:
-            reportero.apuntar_usadas(clave, lista, g.get("fuentes_usadas"))
-        json.dump(g, open(os.path.join(trabajo, "guion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-        id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g["titulo"], "idea": g.get("idea"),
-                                                           "prueba": a.prueba})
-        paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas)", f"guion listo ({len(g['escenas'])} escenas)")
+        aviso_juez = ""
+        for intento in (1, 2):           # si el Juez lo suspende, una segunda oportunidad con su consejo
+            if intento == 2:
+                paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
+            paso("escritor", "escribiendo el guion")
+            g = escritor.escribir(canal, cuadernos["escritor"].para_el_prompt() + aviso_juez,
+                                 privado.titulos_recientes(clave), fuentes)
+            if lista:
+                reportero.apuntar_usadas(clave, lista, g.get("fuentes_usadas"))
+            json.dump(g, open(os.path.join(trabajo, "guion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g["titulo"], "idea": g.get("idea"),
+                                                               "prueba": a.prueba})
+            paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas)", f"guion listo ({len(g['escenas'])} escenas)")
 
-        paso("locutor", f"grabando la voz ({canal.get('voz')})")
-        asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
-                                    "+0Hz", trabajo))
-        cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion})
+            paso("locutor", f"grabando la voz ({canal.get('voz')})")
+            asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
+                                        "+0Hz", trabajo))
+            quitado = locutor.apretar(trabajo)
+            cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
+            paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
 
-        paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
-        t0 = dt.datetime.now(dt.timezone.utc)
-        imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),
-                                     os.path.join(trabajo, "dibujos"))
-        faltan = imagenes.count(None)
-        minutos = round((dt.datetime.now(dt.timezone.utc) - t0).total_seconds() / 60, 1)
-        cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan,
-                                                   "minutos": minutos})
-        if faltan > max(1, len(imagenes) // 3):
-            raise RuntimeError(f"faltan {faltan} dibujos de {len(imagenes)}")
-        paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos en {minutos} min")
+            paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
+            t0 = dt.datetime.now(dt.timezone.utc)
+            imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),
+                                         os.path.join(trabajo, "dibujos"))
+            faltan = imagenes.count(None)
+            minutos = round((dt.datetime.now(dt.timezone.utc) - t0).total_seconds() / 60, 1)
+            cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan,
+                                                       "minutos": minutos})
+            if faltan > max(1, len(imagenes) // 3):
+                raise RuntimeError(f"faltan {faltan} dibujos de {len(imagenes)}")
+            paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos en {minutos} min")
 
-        paso("montador", "montando el vídeo")
-        video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
-                                os.path.join(trabajo, f"{hoy}-{clave}.mp4"))  # nombre único: el registro lo usa
-        segundos = montador.duracion(video)
-        cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1)})
-        paso("montador", f"vídeo de {segundos:.1f} s")
+            paso("montador", "montando el vídeo")
+            video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
+                                    os.path.join(trabajo, f"{hoy}-{clave}.mp4"))  # nombre único: el registro lo usa
+            segundos = montador.duracion(video)
+            cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1)})
+            paso("montador", f"vídeo de {segundos:.1f} s")
 
-        paso("juez_guardia", "juzgando el vídeo")
-        v = juez_guardia.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(), os.path.join(trabajo, "juicio"))
-        id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
-                                                                 "veredicto": v["veredicto"], "total": v.get("total")})
-        cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juez de guardia", v.get("consejo", ""))
-        paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
-             f"{v['veredicto']} ({v.get('total', '-')}/100)")
-        resumen.update(titulo=g["titulo"], veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
-                       juicio=id_juicio, segundos=round(segundos, 1))
+            paso("juez_guardia", "juzgando el vídeo")
+            v = juez_guardia.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(), os.path.join(trabajo, "juicio"))
+            id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
+                                                                     "veredicto": v["veredicto"], "total": v.get("total")})
+            cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juez de guardia", v.get("consejo", ""))
+            paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
+                 f"{v['veredicto']} ({v.get('total', '-')}/100)")
+            resumen.update(titulo=g["titulo"], veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
+                           juicio=id_juicio, segundos=round(segundos, 1), intento=intento,
+                           fallos=v.get("fallos_graves"))
+            if v["veredicto"] != "suspendido" or a.prueba or not ajustes.get("segunda_oportunidad", True):
+                break
+            aviso_juez = (f"\n- (Juez de guardia, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
+                          f"{v.get('consejo', '')} Fallos: {', '.join(v.get('fallos_graves') or []) or 'ninguno grave'}. "
+                          "Escribe un guion distinto que lo corrija.")
 
         if a.prueba:
             paso("subidor", "es una prueba: no se sube nada")

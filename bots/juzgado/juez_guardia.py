@@ -27,7 +27,9 @@ Puntúa de 0 a 25 cada apartado:
 - retencion: ¿hay partes muertas, silencios o relleno?
 - claridad: ¿se entiende solo y sin sonido? ¿se ve bien?
 - final: ¿acaba en algo que dé ganas de verlo otra vez o comentar?
-Fallos graves: pantalla negra, sin voz, imágenes rotas o con letras raras, título que no pega, contenido no apto.
+Fallos graves (SOLO estos): pantalla negra, vídeo sin voz, imágenes rotas o con letras deformadas, título que no tiene nada
+que ver con el vídeo, contenido no apto. Los dibujos están hechos con IA a propósito: ese estilo no es un fallo. El ritmo,
+las pausas o un gancho flojo bajan la nota, pero no son fallos graves.
 Devuelve SOLO un JSON: {{"gancho": 0, "retencion": 0, "claridad": 0, "final": 0, "fallos_graves": [], "consejo": "una frase concreta para mejorarlo"}}"""
 
 

@@ -32,6 +32,43 @@ async def generar(texto, voz, velocidad, tono, carpeta):
     return palabras
 
 
+def apretar(carpeta, hueco_max=0.22, inicio_max=0.08):
+    """Quita los silencios largos entre frases (edge-tts deja casi 1 segundo tras cada punto, y eso hace que la gente
+    se vaya) y mueve los tiempos de cada palabra para que los subtítulos sigan cuadrando. Devuelve los segundos quitados."""
+    import subprocess
+    ruta_json, ruta_mp3 = os.path.join(carpeta, "palabras.json"), os.path.join(carpeta, "voz.mp3")
+    palabras = json.load(open(ruta_json, encoding="utf-8"))
+    if len(palabras) < 2:
+        return 0.0
+    tramos, quitado, desplaz = [], 0.0, []
+    desde = max(0.0, palabras[0]["inicio"] - inicio_max)
+    quitado = desde
+    for i, p in enumerate(palabras):
+        desplaz.append(quitado)
+        if i + 1 < len(palabras):
+            hueco = palabras[i + 1]["inicio"] - p["fin"]
+            if hueco > hueco_max:
+                corte_ini = p["fin"] + hueco_max / 2
+                corte_fin = palabras[i + 1]["inicio"] - hueco_max / 2
+                tramos.append((desde, corte_ini))
+                quitado += corte_fin - corte_ini
+                desde = corte_fin
+    tramos.append((desde, palabras[-1]["fin"] + 0.35))
+    if quitado < 0.05:
+        return 0.0
+    partes = "".join(f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS[a{n}];" for n, (a, b) in enumerate(tramos))
+    filtro = partes + "".join(f"[a{n}]" for n in range(len(tramos))) + f"concat=n={len(tramos)}:v=0:a=1[s]"
+    tmp = ruta_mp3 + ".apretado.mp3"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta_mp3, "-filter_complex", filtro, "-map", "[s]",
+                    "-c:a", "libmp3lame", "-b:a", "160k", tmp], check=True)
+    os.replace(tmp, ruta_mp3)
+    for p, d in zip(palabras, desplaz):
+        p["inicio"], p["fin"] = round(p["inicio"] - d, 3), round(p["fin"] - d, 3)
+    with open(ruta_json, "w", encoding="utf-8") as f:
+        json.dump(palabras, f, ensure_ascii=False, indent=1)
+    return round(quitado, 2)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = p.add_mutually_exclusive_group(required=True)
