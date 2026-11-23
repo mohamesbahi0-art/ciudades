@@ -230,7 +230,12 @@ def construir(p, prueba=False, paso=print):
     with tempfile.TemporaryDirectory() as t:
         rutas = imagenes(entrada["nombre"], f.get("lema", ""), f.get("colores") or [], t)
         guardadas = {}
-        if not prueba:
+        if not prueba:                       # copia pequeña en el repositorio privado: el Comisario la sube a la app
+            from PIL import Image
+            carpeta_app = os.path.join(privado.carpeta(), "estado", "constructor", p["alias"])
+            os.makedirs(carpeta_app, exist_ok=True)
+            Image.open(rutas["foto"]).convert("RGB").save(os.path.join(carpeta_app, "foto.jpg"), quality=90)
+            Image.open(rutas["banner"]).convert("RGB").save(os.path.join(carpeta_app, "banner.jpg"), quality=88)
             for que, ruta in rutas.items():
                 nombre = f"{p['alias']}-{que}.png"
                 try:

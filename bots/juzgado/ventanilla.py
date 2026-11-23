@@ -251,6 +251,8 @@ def juzgar(original, peticion, codigo, trabajo, paso=print):
                      votos=v.get("votos", []), consejo=v.get("consejo", ""), fallos_graves=v.get("fallos_graves") or [],
                      medidas=v.get("medidas") or {},
                      jurado={"inocente": jur.get("inocente"), "culpable": jur.get("culpable"),
+                             "votos": [{"jurado": x.get("jurado"), "voto": x.get("voto"), "porque": x.get("porque"),
+                                        "piel": x.get("piel"), "nota": x.get("nota")} for x in jur.get("votos", [])],
                              "en_contra": [{"quien": x.get("jurado"), "porque": x.get("porque")}
                                            for x in jur.get("votos", []) if x.get("voto") == "culpable"][:6],
                              "a_favor": [{"quien": x.get("jurado"), "porque": x.get("porque")}

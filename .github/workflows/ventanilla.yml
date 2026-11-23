@@ -1,11 +1,11 @@
 # La Ventanilla del Juzgado («Juzga mi vídeo»): juzga los vídeos que sube el dueño desde la app.
-# La ronda de Claude deja cada vídeo en una rama temporal del repositorio privado (juicio/<codigo>) y escribe
-# peticiones/juicio.json (solo el código) para que esto arranque al momento. Por si acaso, también mira cada 3 horas.
+# La ronda de Claude deja cada vídeo en una rama temporal del repositorio privado (juicio/<codigo>). Esto mira cada
+# 15 minutos si hay alguna (y si no la hay, termina en unos segundos); también arranca con peticiones/juicio.json.
 # Cada vídeo pasa por el Jurado popular, el Juzgado completo y, si aprueba, por el Coliseo; si no, vuelve con los fallos.
 name: Juzga mi vídeo
 on:
   schedule:
-    - cron: "29 */3 * * *"
+    - cron: "*/15 * * * *"
   push:
     paths:
       - "peticiones/juicio.json"
@@ -21,18 +21,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      - name: ¿Hay algún vídeo del dueño esperando?
+        id: hay
+        env:
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: |
+          n=$(git ls-remote "https://x-access-token:${GH_SECRETOS}@github.com/${{ github.repository_owner }}/ciudades-memoria" 'refs/heads/juicio/*' | wc -l)
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "vídeos del dueño esperando: $n"
       - uses: actions/checkout@v4
+        if: steps.hay.outputs.n != '0'
       - name: Sacar el repositorio privado
+        if: steps.hay.outputs.n != '0'
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/ciudades-memoria
           token: ${{ secrets.GH_SECRETOS }}
           path: privado
       - uses: actions/setup-python@v5
+        if: steps.hay.outputs.n != '0'
         with:
           python-version: "3.12"
           cache: pip
       - name: Herramientas
+        if: steps.hay.outputs.n != '0'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install -q -r requirements.txt
@@ -40,6 +52,7 @@ jobs:
           git config user.name "ciudades-bot"
           git config user.email "ciudades-bot@users.noreply.github.com"
       - name: Juzgar los vídeos del dueño
+        if: steps.hay.outputs.n != '0'
         env:
           PRIVADO: privado
           MEMORIA_DIR: privado/memoria
@@ -47,7 +60,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python bots/juzgado/ventanilla.py
       - name: Guardar en el repositorio privado
-        if: always()
+        if: always() && steps.hay.outputs.n != '0'
         env:
           PRIVADO: privado
         run: |
