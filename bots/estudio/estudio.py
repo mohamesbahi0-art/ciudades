@@ -375,12 +375,15 @@ def efectos(g, carpeta, eventos=None):
 
 
 def formato_de(canal, pedido=None):
-    """(nombre, módulo) del formato: «famoso» (este fichero), «pictos» (pictogramas) o «ciencia» (Wist je dat)."""
+    """(nombre, módulo) del formato: «famoso» (este fichero), «pictos» (pictogramas), «ciencia» (Wist je dat) o
+    «hipnotico» (bolas de neón con la historia narrada)."""
     nombre = pedido or canal.get("formato_estudio") or "famoso"
     if nombre == "pictos":
         from bots.estudio import pictos as modulo
     elif nombre == "ciencia":
         from bots.estudio import ciencia as modulo
+    elif nombre == "hipnotico":
+        from bots.estudio import hipnotico as modulo
     else:
         nombre, modulo = "famoso", sys.modules[__name__]
     return nombre, modulo

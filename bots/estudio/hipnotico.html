@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Hipnótico</title>
+<!-- «Hipnótico»: bolas de neón que rebotan con gravedad dentro de un aro que gira, con estela; cada bote las hace crecer,
+     deja una onda en el aro y de vez en cuando nace otra bola. Encima, la historia narrada con subtítulos grandes al
+     ritmo de la voz y el gancho los primeros segundos. Lo usa render.js: window.GUION = guion; await window.listo;
+     window.pintar(t) para cada fotograma, en orden (la física avanza paso a paso y siempre sale igual). -->
+<style>
+@font-face{font-family:"Poppins";font-weight:600;src:url("fuentes/poppins-600.woff2") format("woff2")}
+@font-face{font-family:"Poppins";font-weight:800;src:url("fuentes/poppins-800.woff2") format("woff2")}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#04050A}
+canvas{display:block}
+</style></head><body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+"use strict";
+const W = 1080, H = 1920, CX = 540, CY = 900, R = 430, G = 1500, DT = 1 / 240;
+const NEON = ["#22E6FF", "#FF3DCB", "#FFE23D", "#62FF6B", "#FF8A2A", "#9D7BFF"];
+const ctx = document.getElementById("c").getContext("2d");
+const lim = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+let E = null;      // el estado de la física
+
+function azar(i) { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+function iniciar() {
+  E = { t: 0, botes: 0, giro: 0, ondas: [], bolas: [
+    { x: CX - 120, y: CY - 220, vx: 320, vy: 0, r: 24, c: 0, estela: [] },
+    { x: CX + 140, y: CY - 120, vx: -260, vy: -120, r: 20, c: 1, estela: [] }] };
+}
+
+function paso(dt) {
+  E.giro += dt * 0.6;
+  for (const b of E.bolas) {
+    b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+    const dx = b.x - CX, dy = b.y - CY, d = Math.hypot(dx, dy);
+    if (d + b.r > R - 8) {                       // choca con el aro: rebota (con un poco más de fuerza, para no parar)
+      const nx = dx / d, ny = dy / d, vn = b.vx * nx + b.vy * ny;
+      if (vn > 0) {
+        b.vx -= 2 * vn * nx; b.vy -= 2 * vn * ny;
+        const v = Math.hypot(b.vx, b.vy), objetivo = Math.max(v, 980);
+        b.vx *= objetivo / v * 1.004; b.vy *= objetivo / v * 1.004;
+        E.botes++;
+        b.r = Math.min(70, b.r + 1.4);           // cada bote, un poco más grande
+        b.c = (b.c + 1) % NEON.length;           // y cambia de color
+        E.ondas.push({ a: Math.atan2(ny, nx), t: E.t, c: NEON[b.c] });
+        if (E.botes % 7 === 0 && E.bolas.length < 9) {   // de vez en cuando, nace otra bola
+          const k = E.bolas.length;
+          E.bolas.push({ x: CX + (azar(k) - 0.5) * 200, y: CY - 250, vx: (azar(k + 9) - 0.5) * 700, vy: -200, r: 16,
+                         c: k % NEON.length, estela: [] });
+        }
+      }
+      const dentro = R - 8 - b.r - 0.5;
+      b.x = CX + (dx / d) * dentro; b.y = CY + (dy / d) * dentro;
+    }
+  }
+  E.ondas = E.ondas.filter(o => E.t - o.t < 0.9);
+}
+
+function brillo(color, blur) { ctx.shadowColor = color; ctx.shadowBlur = blur; }
+
+function aro() {
+  const pulso = E.ondas.length ? Math.max(...E.ondas.map(o => 1 - (E.t - o.t) / 0.9)) : 0;
+  ctx.save();
+  ctx.lineWidth = 10 + 6 * pulso;
+  const g = ctx.createConicGradient(E.giro, CX, CY);
+  NEON.concat([NEON[0]]).forEach((c, i, a) => g.addColorStop(i / (a.length - 1), c));
+  ctx.strokeStyle = g; brillo("#FFFFFF", 24 + 30 * pulso);
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2); ctx.stroke();
+  for (const o of E.ondas) {                    // la onda del bote, que se abre por el aro
+    const p = (E.t - o.t) / 0.9;
+    ctx.strokeStyle = o.c; ctx.globalAlpha = 1 - p; ctx.lineWidth = 14 * (1 - p) + 2; brillo(o.c, 40);
+    ctx.beginPath(); ctx.arc(CX, CY, R, o.a - 0.15 - p * 0.9, o.a + 0.15 + p * 0.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX + Math.cos(o.a) * R, CY + Math.sin(o.a) * R, 10 + 120 * p, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function bolas() {
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (const b of E.bolas) {
+    b.estela.forEach((p, i) => {                // la estela: círculos que se apagan
+      const q = (i + 1) / b.estela.length;
+      ctx.globalAlpha = 0.28 * q; ctx.fillStyle = NEON[b.c];
+      ctx.beginPath(); ctx.arc(p[0], p[1], b.r * (0.4 + 0.6 * q), 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1; brillo(NEON[b.c], 45); ctx.fillStyle = NEON[b.c];
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.28, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function palabrasDe(e) {
+  if (e.palabras && e.palabras.length) return e.palabras;
+  const ws = String(e.voz || e.texto || "").split(/\s+/).filter(Boolean), d = Math.max(0.5, e.fin - e.inicio - 0.3);
+  return ws.map((p, i) => ({ p, a: e.inicio + (d * i) / ws.length, b: e.inicio + (d * (i + 1)) / ws.length }));
+}
+
+function texto(t) {          // los subtítulos: 3 palabras como mucho, la que suena en amarillo y un poco más grande
+  const g = window.GUION, e = g.escenas.find(x => t < x.fin) || g.escenas[g.escenas.length - 1];
+  const ws = palabrasDe(e), grupos = [];
+  for (let i = 0; i < ws.length; i += 3) grupos.push(ws.slice(i, i + 3));
+  const grupo = grupos.find(gr => t < (gr[gr.length - 1].b + 0.08)) || grupos[grupos.length - 1];
+  if (!grupo || t < grupo[0].a - 0.1) return;
+  ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const piezas = grupo.map(w => ({ w, on: t >= w.a && t < w.b + 0.05 }));
+  const anchos = piezas.map(p => { ctx.font = `800 ${p.on ? 100 : 92}px Poppins`; return ctx.measureText(String(p.w.p).toUpperCase()).width; });
+  const total = anchos.reduce((a, b) => a + b, 0) + 30 * (piezas.length - 1);
+  let x = CX - Math.min(total, 1000) / 2, escala = total > 1000 ? 1000 / total : 1;
+  const entra = lim((t - grupo[0].a + 0.1) / 0.12), y = 1540 + (1 - entra) * 40;
+  piezas.forEach((p, i) => {
+    const w = anchos[i] * escala, palabra = String(p.w.p).toUpperCase();
+    ctx.font = `800 ${Math.round((p.on ? 100 : 92) * escala)}px Poppins`;
+    ctx.lineWidth = 16; ctx.strokeStyle = "#000"; ctx.lineJoin = "round"; ctx.globalAlpha = entra;
+    ctx.strokeText(palabra, x + w / 2, y);
+    ctx.fillStyle = p.on ? "#FFE23D" : "#FFFFFF"; brillo(p.on ? "#FFE23D" : "transparent", p.on ? 18 : 0);
+    ctx.fillText(palabra, x + w / 2, y); ctx.shadowBlur = 0;
+    x += w + 30 * escala;
+  });
+  ctx.restore();
+}
+
+function gancho(t) {         // el gancho, arriba, los 2,6 primeros segundos
+  const g = window.GUION, txt = String(g.texto_pantalla || "").toUpperCase();
+  if (!txt || t > 2.6) return;
+  const q = lim(t / 0.18) * lim((2.6 - t) / 0.25);
+  ctx.save(); ctx.textAlign = "center"; ctx.globalAlpha = q; ctx.font = "800 84px Poppins";
+  const palabras = txt.split(/\s+/), lineas = [];
+  let l = "";
+  for (const p of palabras) { if ((l + " " + p).trim().length > 16 && l) { lineas.push(l); l = p; } else l = (l + " " + p).trim(); }
+  if (l) lineas.push(l);
+  lineas.forEach((ln, i) => {
+    const y = 250 + i * 100;
+    ctx.lineWidth = 14; ctx.strokeStyle = "#000"; ctx.strokeText(ln, CX, y);
+    ctx.fillStyle = "#FFFFFF"; brillo("#22E6FF", 22); ctx.fillText(ln, CX, y); ctx.shadowBlur = 0;
+  });
+  ctx.restore();
+}
+
+window.pintar = function (t) {
+  if (!E || t < E.t - 1e-6) iniciar();
+  while (E.t + DT <= t + 1e-9) {
+    paso(DT); E.t += DT;
+    if (Math.round(E.t / DT) % 4 === 0) for (const b of E.bolas) { b.estela.push([b.x, b.y]); if (b.estela.length > 14) b.estela.shift(); }
+  }
+  const fondo = ctx.createRadialGradient(CX, CY, 80, CX, CY, 1300);
+  fondo.addColorStop(0, "#0E1022"); fondo.addColorStop(1, "#02030A");
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.fillStyle = fondo; ctx.fillRect(0, 0, W, H);
+  aro(); bolas(); gancho(t); texto(t);
+  const dur = window.GUION.duracion || 1;
+  if (t > dur - 0.35) { ctx.fillStyle = `rgba(0,0,0,${lim((t - (dur - 0.35)) / 0.35)})`; ctx.fillRect(0, 0, W, H); }
+};
+window.listo = Promise.all([600, 800].map(w => document.fonts.load(`${w} 60px Poppins`))).then(() => document.fonts.ready);
+</script>
+</body></html>

@@ -153,7 +153,25 @@ def _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, 
             resumen.update(destino_resultado="en_cola", motivo=motivo)
 
 
-def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None):
+def _toca_hipnotico(clave, canal):
+    """El Animador hipnótico hace uno de cada `hipnotico_cada` vídeos del canal (prueba: el Cerebro dirá si funciona)."""
+    cada = int(canal.get("hipnotico_cada") or 0)
+    if cada < 2:
+        return cada == 1
+    anteriores = ((privado.leer(os.path.join("estado", "central", f"{clave}.json"), {}) or {}).get("turnos") or [])
+    hechos = [t for t in anteriores if t.get("resultado") == "hecho"][-(cada - 1):]
+    return len(hechos) >= cada - 1 and not any(t.get("formato") == "hipnotico" for t in hechos)
+
+
+def _canal_hipnotico(canal):
+    """El canal, con lo que necesita el estudio para el formato hipnótico (su voz y su música de siempre)."""
+    return dict(canal, formato_estudio="hipnotico", voz_estudio=canal.get("voz_estudio") or canal.get("voz", "es-MX-JorgeNeural"),
+                velocidad_estudio=canal.get("velocidad_estudio") or canal.get("velocidad", "+10%"),
+                tono_estudio=canal.get("tono_estudio", "+0Hz"),
+                musica_estudio=canal.get("musica_estudio") or montador.musica.ambiente_de(canal))
+
+
+def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None, ajustes=None):
     """Turno de una cuenta animada: el estudio hace el vídeo, el Juzgado lo juzga (con segunda oportunidad) y va a
     «Para subir». Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
     lecciones = lecciones or cuadernos["escritor"].para_el_prompt()
@@ -216,6 +234,9 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
     elif v["veredicto"] != "aprobado":
         paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): se tira, no se sube")
         resumen["destino_resultado"] = "suspendido"
+    elif canal.get("destino") != "parasubir":        # un canal de YouTube con un formato del estudio (p. ej. hipnótico)
+        _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes or privado.ajustes(), paso, a, resumen)
+        estudio_animacion.apuntar(clave, g)
     else:
         ids = parasubir.dejar(clave, canal, video, g, segundos, v)
         cuadernos["publicador"].apuntar("para_subir", {"barrio": clave, "documentos": ids, "guion": id_guion})
@@ -469,6 +490,12 @@ def main(argv=None):
         lecciones_escritor = _lecciones_escritor(clave, cuadernos)   # con la receta de los Influencers
         if canal.get("estudio") == "animacion":     # cuentas de vídeos animados (las del dueño): el estudio de animación
             _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones_escritor)
+            raise _Hecho()
+        if canal.get("destino") == "youtube" and _toca_hipnotico(clave, canal):   # el Animador hipnótico (uno de cada N)
+            paso("escritor", "esta vez, formato hipnótico: bolas de neón con la historia narrada")
+            _turno_estudio(clave, _canal_hipnotico(canal), cuadernos, nombres, trabajo, paso, resumen, a,
+                           lecciones_escritor, ajustes)
+            resumen["formato"] = "hipnotico"
             raise _Hecho()
         if videoteca.suficientes(canal):           # canales de GTA con tomas de juego de verdad: nada de dibujos
             _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, lecciones_escritor, fuentes, lista)
