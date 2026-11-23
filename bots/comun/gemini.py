@@ -39,6 +39,7 @@ def apuntar_portero():
                                            if anterior.get("ultimo_reparto") else [],
                                            "ve_videos": VE_VIDEOS or anterior.get("ve_videos")})
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
+VIDEO_MAXIMO = 14_000_000      # bytes: en base64 crece un tercio y la petición entera no puede pasar de unos 20 MB
 
 
 class SinIA(RuntimeError):
@@ -53,7 +54,7 @@ def _limpiar_json(texto):
 
 
 def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False,
-              audio=None):
+              audio=None, video=None):
     clave = os.environ.get("GEMINI_API_KEY")
     if not clave:
         raise SinIA("falta el secreto GEMINI_API_KEY")
@@ -64,6 +65,9 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
     if audio and os.path.exists(audio) and os.path.getsize(audio) < 8_000_000:   # que los jueces también lo oigan
         with open(audio, "rb") as f:
             partes.append({"inline_data": {"mime_type": "audio/mp3", "data": base64.b64encode(f.read()).decode()}})
+    if video and os.path.exists(video) and os.path.getsize(video) < VIDEO_MAXIMO:   # un vídeo corto entero (Ojeador)
+        with open(video, "rb") as f:
+            partes.append({"inline_data": {"mime_type": "video/mp4", "data": base64.b64encode(f.read()).decode()}})
     cuerpo = {"contents": [{"role": "user", "parts": partes}], "generationConfig": {"temperature": temperatura}}
     if json_salida:
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"

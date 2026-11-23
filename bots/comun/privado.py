@@ -167,13 +167,14 @@ def fusionar(ruta, suyo, nuestro):
         junto["agotada_hasta"] = max([x for x in (suyo.get("agotada_hasta"), nuestro.get("agotada_hasta")) if x] or [None])
         return junto
     if ruta == "estado/influencers/recetas.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
-        canales = {}                                       # la receta del Recetario y la del Radar van cada una a lo suyo
+        canales = {}              # la receta del Recetario, la del Radar y la del Ojeador van cada una a lo suyo
         for clave in set(suyo.get("canales") or {}) | set(nuestro.get("canales") or {}):
             a, b = (suyo.get("canales") or {}).get(clave) or {}, (nuestro.get("canales") or {}).get(clave) or {}
             base = dict(b if (b.get("fecha") or "") >= (a.get("fecha") or "") else a)
-            radares = [x["radar"] for x in (a, b) if x.get("radar")]
-            if radares:
-                base["radar"] = max(radares, key=lambda r: r.get("fecha") or "")
+            for parte in ("radar", "ojeador"):
+                partes = [x[parte] for x in (a, b) if x.get(parte)]
+                if partes:
+                    base[parte] = max(partes, key=lambda r: r.get("fecha") or "")
             canales[clave] = base
         junto = dict(suyo, **nuestro)
         junto["canales"] = canales

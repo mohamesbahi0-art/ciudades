@@ -1,9 +1,9 @@
 """El Radar de nichos (Influencers): cada día mira qué está funcionando en el nicho de cada perfil y se lo pasa a los
 guionistas y a la app.
 
-TikTok e Instagram no dejan que un robot mire vídeos de otras cuentas (no hay vía gratis ni permitida), así que el
-Radar mira YouTube Shorts, donde se sube casi todo lo que peta en TikTok, con la API oficial; y Gemini «ve» por su
-enlace los que más crecen (no se descarga nada).
+El Radar mira YouTube Shorts, donde se sube casi todo lo que peta en TikTok, con la API oficial; y Gemini «ve» por su
+enlace los que más crecen (no se descarga nada). TikTok e Instagram los mira el Ojeador de redes (ojeador.py), sin
+cuenta; los dos dejan lo que funciona en la receta de cada perfil.
 
 Para cada perfil (canal de YouTube o barrio de TikTok/Instagram, también en pausa) con "nicho" en la config privada:
     "nicho": {"busquedas": ["texto", {"q": "texto", "idioma": "en", "region": "US"}], "idioma": "es", "region": "ES",

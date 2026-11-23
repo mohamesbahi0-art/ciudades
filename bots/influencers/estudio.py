@@ -161,8 +161,9 @@ def recetas(clave, tema, lista, palabras):
     todas = privado.leer(os.path.join(CARPETA, "recetas.json"), {}) or {}
     anterior = todas.setdefault("canales", {}).get(clave) or {}
     todas["canales"][clave] = dict(receta, fecha=privado.ahora(), basada_en=len(top))
-    if anterior.get("radar"):                    # lo que ha visto el Radar de nichos se queda
-        todas["canales"][clave]["radar"] = anterior["radar"]
+    for parte in ("radar", "ojeador"):           # lo que han visto el Radar de nichos y el Ojeador de redes se queda
+        if anterior.get(parte):
+            todas["canales"][clave][parte] = anterior[parte]
     privado.guardar_estado("influencers/recetas.json", {"canales": todas["canales"]})
     _apuntar("recetario", "receta", {"canal": clave})
     return receta
@@ -198,10 +199,20 @@ SEMANAL = """Eres la Estratega de crecimiento y la Exploradora de temas de una f
 - Recetas de cada canal: {recetas}
 - Competencia: {competencia}
 - Tendencias de hoy en España: {tendencias}
+- Lo que ve el Ojeador en TikTok e Instagram (canciones, hashtags y lo que más crece): {ojeador}
 Devuelve SOLO un JSON: {{"estrategia": {{"por_canal": {{"clave": "qué hacer esta semana (frecuencia, series, qué probar)"}},
 "prueba_de_la_semana": "un experimento concreto"}}, "temas_nuevos": [{{"tema": "...", "por_que": "...", "riesgo": "..."}}]}}
 Ten en cuenta que monetizar pide 1.000 suscriptores y 4.000 horas o 10 millones de visitas de Shorts en 90 días, y que
 YouTube rechaza lo que parece producido en masa: mejor calidad y variedad que cantidad."""
+
+
+def ojeador():
+    """Lo que ha visto el Ojeador de redes en TikTok e Instagram, en corto, para la estrategia de la semana."""
+    t = privado.leer(os.path.join(CARPETA, "ojeador", "tendencias.json"), {}) or {}
+    corto = {"canciones": (t.get("canciones") or [])[:8], "hashtags": (t.get("hashtags") or [])[:12],
+             "lo_que_mas_crece": [{k: v.get(k) for k in ("red", "titulo", "visitas_dia", "segundos", "cancion")}
+                                  for v in (t.get("top") or [])[:8]], "categorias": t.get("categorias")}
+    return json.dumps(corto, ensure_ascii=False)[:2500] if t else "(todavía nada)"
 
 
 def semanal():
@@ -210,7 +221,8 @@ def semanal():
                          ensure_ascii=False)[:3000]
     try:
         r = gemini.preguntar(SEMANAL.format(informe=informe, recetas=leer("recetas.json"), competencia=leer("competencia.json"),
-                                            tendencias=leer("tendencias.json")[:2500]), temperatura=0.6)
+                                            tendencias=leer("tendencias.json")[:2500], ojeador=ojeador()),
+                             temperatura=0.6)
     except gemini.SinIA as e:
         print(f"estudio: sin IA para la estrategia ({e})", flush=True)
         return

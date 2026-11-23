@@ -21,6 +21,7 @@ Las claves y los permisos van en los secretos de GitHub. Los datos privados (la 
 - `.github/workflows/`: los turnos que corren solos en GitHub, aunque Claude y el ordenador estén apagados:
   - `fabrica.yml`: cada 2 horas (minuto 17); también con `peticiones/fabrica.json` (`{"solo": "gta", "maximo": 1}`).
   - `revisar-canales.yml`: cada 3 horas (minuto 37): Jefes de canal y Analista.
+  - `ojeador.yml`: cada 3 horas (minuto 7): el Ojeador de redes mira TikTok e Instagram sin cuenta (si una red dice que no, la deja en paz unas horas; nunca se salta un bloqueo).
   - `conectar-canales.yml`, `prueba-central.yml` y `probar-descarga.yml`: solo con su fichero de `peticiones/`.
 - `docs/plantillas-nube/`: plantillas de turnos que todavía no están activos.
 - El estado que dejan los bots va al repositorio **privado** (`estado/`, `parasubir/`, `cola/`, `registro/`), y una ronda de Claude programada lo copia a la app.
