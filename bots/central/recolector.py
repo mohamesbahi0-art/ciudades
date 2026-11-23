@@ -36,8 +36,8 @@ from bots.comun import almacen, gemini, privado  # noqa: E402
 
 ESTADO = os.path.join("estado", "clips", "recolector.json")
 AGENTE = {"User-Agent": "ciudades-recolector/1.0 (clips con licencia libre)"}
-BUSQUEDA = ('(title:(GTA) OR title:("grand theft auto")) AND mediatype:movies AND '
-            '(licenseurl:*creativecommons.org/licenses/by/* OR licenseurl:*publicdomain/zero*)')
+# (las barras de las licencias confunden al buscador del archivo: se busca «creativecommons» y la licencia se mira aquí)
+CONSULTAS = ['"GTA 6"', '"GTA VI"', '"GTA 5"', '"GTA V"', '"Grand Theft Auto"']
 FUERA = re.compile(r"leak|filtra|s[ıi]zd[ıi]r|trailer|tr[áa]iler|podcast|fridman|reacci|reaction|minecraft|roblox|"
                    r"san andreas|stories|gta\s*(2|3|iv|4)\b|london 1969|advert|anuncio", re.I)
 MUESTRA, MUESTRAS = 60, 4          # cuánto mira la IA de cada vídeo largo (en trozos)
@@ -110,16 +110,22 @@ def _estado():
 
 def buscar(paginas=2):
     """Los vídeos de GTA con licencia que vale, sin los que no convienen (filtraciones, tráileres, charlas...)."""
-    docs = []
-    for pagina in range(1, paginas + 1):
-        url = "https://archive.org/advancedsearch.php?" + urllib.parse.urlencode(
-            {"q": BUSQUEDA, "fl[]": ["identifier", "title", "licenseurl", "creator", "downloads"], "rows": 100,
-             "page": pagina, "sort[]": "downloads desc", "output": "json"}, doseq=True)
-        lote = _pedir(url).get("response", {}).get("docs", [])
-        docs += lote
-        if len(lote) < 100:
-            break
-    return [d for d in docs if licencia(d.get("licenseurl")) and not FUERA.search(str(d.get("title") or ""))]
+    docs, vistos = [], set()
+    for consulta in CONSULTAS:
+        for pagina in range(1, paginas + 1):
+            url = "https://archive.org/advancedsearch.php?" + urllib.parse.urlencode(
+                {"q": f"({consulta}) AND mediatype:movies AND licenseurl:*creativecommons*",
+                 "fl[]": ["identifier", "title", "licenseurl", "creator", "downloads"], "rows": 100, "page": pagina,
+                 "sort[]": "downloads desc", "output": "json"}, doseq=True)
+            lote = _pedir(url).get("response", {}).get("docs", [])
+            for d in lote:
+                if d.get("identifier") and d["identifier"] not in vistos:
+                    vistos.add(d["identifier"])
+                    docs.append(d)
+            if len(lote) < 100:
+                break
+    return [d for d in docs if licencia(d.get("licenseurl")) and not FUERA.search(str(d.get("title") or ""))
+            and re.search(r"\bGTA|grand theft auto", str(d.get("title") or ""), re.I)]
 
 
 def elegir_archivo(meta):
