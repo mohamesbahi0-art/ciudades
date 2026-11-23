@@ -31,7 +31,8 @@ ETIQUETAS = ["ciudad", "coches", "conducir", "policía", "persecución", "agua",
              "personajes", "animales", "clima", "noche", "gráficos", "físicas", "interiores", "aviones", "motos",
              "barcos", "detalle", "humor", "mapa", "tiendas", "naturaleza"]
 JUEGOS = {"gta5": "GTA 5", "gta6": "GTA 6"}
-MIN_TOMAS = 4            # tomas para hacer con clips un vídeo de un canal de un solo juego
+MIN_TOMAS = 6            # tomas para hacer con clips un vídeo de un canal de un solo juego...
+MIN_FUENTES = 2          # ...sacadas de al menos 2 vídeos distintos (si no, todos los vídeos enseñarían lo mismo)
 MIN_PAREJAS = 2          # cosas con toma de GTA 5 y de GTA 6 para hacer un versus
 PRIMER_CORTE, PLANO_MAX = 2.0, 2.8
 COLORES = {"gta5": "0xE8412F", "gta6": "0x2F7BE8"}
@@ -130,7 +131,8 @@ def suficientes(canal):
     lista = disponibles(canal)
     if canal.get("tipo") == "versus":
         return len(parejas(lista)) >= MIN_PAREJAS
-    return len(lista) >= MIN_TOMAS
+    fuentes = {t.get("fuente") or t.get("enlace") or t.get("creador") for t in lista}
+    return len(lista) >= MIN_TOMAS and len(fuentes) >= MIN_FUENTES
 
 
 def catalogo(lista, maximo=30):

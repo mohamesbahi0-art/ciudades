@@ -15,7 +15,7 @@ Cada día:
    Después la guarda en la Videoteca con su crédito (autor, enlace y licencia). Los momentos virales quedan listos para
    su propio Short.
 
-Uso:  python bots/central/recolector.py [--maximo 3]
+Uso:  python bots/central/recolector.py [--maximo 5]
 """
 import argparse
 import json
@@ -237,7 +237,7 @@ def recoger_video(doc, estado, tmp, paso=print):
     return {"resultado": "hecho", **hecho}
 
 
-def recoger(maximo=3, paso=print):
+def recoger(maximo=5, paso=print):
     """Mira hasta `maximo` vídeos nuevos. Devuelve cuántas tomas y momentos ha traído."""
     if len(videoteca.tomas()) >= TOPE_VIDEOTECA:
         paso(f"recolector: la videoteca ya tiene {TOPE_VIDEOTECA} tomas o más; hoy no recoge")
@@ -279,7 +279,7 @@ def recoger(maximo=3, paso=print):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--maximo", type=int, default=3, help="vídeos nuevos que mira en esta pasada")
+    p.add_argument("--maximo", type=int, default=5, help="vídeos nuevos que mira en esta pasada")
     a = p.parse_args()
     t = recoger(a.maximo)
     print(f"recolector: {t['vistos']} vídeos mirados, {t['tomas']} tomas y {t['momentos']} momentos nuevos en la videoteca")
