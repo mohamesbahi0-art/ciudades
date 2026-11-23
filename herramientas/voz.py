@@ -1,4 +1,9 @@
-"""Voz gratis con edge-tts y el momento exacto de cada palabra (para los subtítulos).
+"""Voz con el momento exacto de cada palabra (para los subtítulos y para encajar las escenas).
+
+Dos motores:
+- edge-tts (gratis, por defecto): voces como es-ES-AlvaroNeural.
+- ElevenLabs (voces más naturales): voz "eleven:<id de la voz>" y el secreto ELEVENLABS_API_KEY. Si falta la llave o
+  se acaba el saldo del mes, sale sola la voz gratis de siempre (y lo dice), para que la fábrica nunca se pare.
 
 Uso:
   python voz.py --texto "Nadie se dio cuenta..." --salida carpeta/        (o --archivo guion.txt)
@@ -6,13 +11,72 @@ Uso:
 Deja en la carpeta: voz.mp3 y palabras.json ([{"palabra","inicio","fin"}] en segundos).
 Si la máquina pasa por un proxy con certificado propio, pon su CA en la variable EDGE_TTS_CA.
 """
-import argparse, asyncio, json, os, ssl, sys
+import argparse, asyncio, base64, json, os, ssl, sys, urllib.error, urllib.request
 
 import edge_tts
 import edge_tts.communicate as ec
 
 
+VOZ_GRATIS = "es-ES-AlvaroNeural"
+MOTOR = {}          # qué motor sonó la última vez (para apuntarlo): {"motor": "elevenlabs"|"edge", "aviso": ...}
+
+
+def _eleven(texto, voz_id, velocidad, carpeta):
+    """ElevenLabs con tiempos por letra; los junta en palabras. Lanza RuntimeError si no se puede."""
+    clave = os.environ.get("ELEVENLABS_API_KEY")
+    if not clave:
+        raise RuntimeError("falta el secreto ELEVENLABS_API_KEY")
+    try:
+        rapidez = max(0.7, min(1.2, 1 + float(str(velocidad).strip().rstrip("%") or 0) / 100))
+    except ValueError:
+        rapidez = 1.0
+    cuerpo = {"text": texto, "model_id": os.environ.get("ELEVENLABS_MODELO", "eleven_multilingual_v2"),
+              "voice_settings": {"stability": 0.45, "similarity_boost": 0.8, "style": 0.35, "use_speaker_boost": True,
+                                 "speed": rapidez}}
+    req = urllib.request.Request(f"https://api.elevenlabs.io/v1/text-to-speech/{voz_id}/with-timestamps"
+                                 "?output_format=mp3_44100_128", data=json.dumps(cuerpo).encode(), method="POST",
+                                 headers={"xi-api-key": clave, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        detalle = e.read()[:200].decode("utf-8", "replace")
+        raise RuntimeError(f"ElevenLabs dice {e.code}: {detalle}")
+    os.makedirs(carpeta, exist_ok=True)
+    with open(os.path.join(carpeta, "voz.mp3"), "wb") as f:
+        f.write(base64.b64decode(d["audio_base64"]))
+    al = d.get("alignment") or d.get("normalized_alignment") or {}
+    letras, inis, fins = al.get("characters", []), al.get("character_start_times_seconds", []), al.get("character_end_times_seconds", [])
+    palabras, actual = [], None
+    for c, a, b in zip(letras, inis, fins):
+        if c.isspace():
+            if actual:
+                palabras.append(actual)
+            actual = None
+        elif actual is None:
+            actual = {"palabra": c, "inicio": round(a, 3), "fin": round(b, 3)}
+        else:
+            actual["palabra"] += c
+            actual["fin"] = round(b, 3)
+    if actual:
+        palabras.append(actual)
+    with open(os.path.join(carpeta, "palabras.json"), "w", encoding="utf-8") as f:
+        json.dump(palabras, f, ensure_ascii=False, indent=1)
+    return palabras
+
+
 async def generar(texto, voz, velocidad, tono, carpeta):
+    if str(voz).startswith("eleven:"):
+        try:
+            palabras = _eleven(texto, voz.split(":", 1)[1], velocidad, carpeta)
+            MOTOR.update(motor="elevenlabs", aviso=None)
+            return palabras
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
+            MOTOR.update(motor="edge", aviso=f"ElevenLabs no ha podido ({str(e)[:120]}); voz gratis")
+            print(f"voz: {MOTOR['aviso']}", flush=True)
+            voz = os.environ.get("VOZ_GRATIS", VOZ_GRATIS)
+    else:
+        MOTOR.update(motor="edge", aviso=None)
     if os.environ.get("EDGE_TTS_CA"):
         ec._SSL_CTX = ssl.create_default_context(cafile=os.environ["EDGE_TTS_CA"])
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
