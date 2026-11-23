@@ -1,0 +1,25 @@
+# Prueba de voces de ElevenLabs para TikTok: 4 voces de hombre en español dicen la misma frase y los audios quedan en la
+# release «pruebas» del repositorio privado para que el dueño elija. Se pone en marcha con peticiones/eleven.json.
+name: Probar voces de ElevenLabs
+on:
+  push:
+    paths:
+      - "peticiones/eleven.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r requirements.txt
+      - name: Probar voces
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: python pruebas/probar_eleven.py
