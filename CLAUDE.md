@@ -21,6 +21,10 @@ Todo eso va en los secretos de GitHub. La configuración de canales y barrios es
 - `bots/` (pendiente): el código de cada ciudad.
 - `estado/` (pendiente): lo que dejan los bots y una ronda de Claude copia a la app.
 
+## Memoria de los robots
+
+Cada robot tiene su cuaderno (`memoria/<robot>.json`) en el repositorio **privado** `ciudades-memoria`, nunca en este. Se maneja con `herramientas/memoria.py` (variable `MEMORIA_DIR`) y lo explica la skill `memoria`. Antes de trabajar, el robot lee sus lecciones; después apunta lo que hizo y, cuando llega el resultado real, le pone la nota. Lo que dice el dueño entra como lección suya y manda.
+
 ## Conectar o reconectar canales de YouTube
 
 1. Escribe `peticiones/conectar.json` con `{"canales": {"<clave>": "<huella>"}}`. La huella son los 16 primeros caracteres del sha256 del id del canal, con los ids de la lista privada (skill `ciudades`). Añade `"rehacer": true` para renovar permisos que ya existen.

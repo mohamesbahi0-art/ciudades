@@ -27,11 +27,14 @@ Fábrica de vídeos cortos (YouTube Shorts, TikTok y Reels) que funciona sola en
 | `herramientas/analizar.py` | Desmonta un vídeo viral para aprender de él |
 | `herramientas/palabras_clave.py` | Palabras clave gratis del buscador de YouTube |
 | `herramientas/competencia.py` | Qué publican los canales que más crecen en un tema y qué les funciona |
+| `herramientas/memoria.py` | La memoria de cada robot: su diario, lo que aprende y lo que está probando |
 
 Cada programa explica cómo se usa con `python herramientas/<programa>.py --help`.
 
 ## Privacidad
 
 Este repositorio es público para que GitHub Actions sea gratis. Por eso aquí no hay claves, permisos, ids de canales ni cuentas: todo eso va en los secretos de GitHub (`Settings > Secrets and variables > Actions`). `config/ejemplo-canales.json` enseña la forma de la configuración privada.
+
+Lo que aprenden los robots (su memoria) se guarda en un repositorio aparte y privado, nunca aquí.
 
 Las plantillas para que todo funcione solo están en `docs/plantillas-nube/`. Todavía no están activas: se activarán cuando los bots estén listos.
