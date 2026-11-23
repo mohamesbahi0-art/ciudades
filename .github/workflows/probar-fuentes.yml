@@ -1,0 +1,41 @@
+# Prueba de fuentes de clips con licencia libre que un robot puede bajar solo (Internet Archive, PeerTube y Wikimedia
+# Commons), sin saltarse nada. Solo con peticiones/fuentes.json o a mano. En el registro solo salen cifras.
+name: Probar fuentes de clips
+on:
+  push:
+    paths:
+      - "peticiones/fuentes.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+        run: python pruebas/probar_fuentes_clips.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('prueba de fuentes de clips') else 1)"
