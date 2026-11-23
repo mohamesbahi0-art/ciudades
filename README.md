@@ -33,7 +33,7 @@ Cada programa explica cómo se usa con `python herramientas/<programa>.py --help
 
 ## Privacidad
 
-Este repositorio es público para que GitHub Actions sea gratis. Por eso aquí no hay claves, permisos, ids de canales ni cuentas: todo eso va en los secretos de GitHub (`Settings > Secrets and variables > Actions`). `config/ejemplo-canales.json` enseña la forma de la configuración privada.
+Este repositorio es público para que GitHub Actions sea gratis. Por eso aquí no hay claves, permisos, ids de canales ni cuentas. Las claves van en los secretos de GitHub (`Settings > Secrets and variables > Actions`) y los datos privados en un repositorio privado aparte. `config/ejemplo-canales.json` enseña la forma de la configuración privada.
 
 Lo que aprenden los robots (su memoria) se guarda en un repositorio aparte y privado, nunca aquí.
 

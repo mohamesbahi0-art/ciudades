@@ -10,7 +10,7 @@ Lo es para que GitHub Actions sea gratis. Nunca subas:
 - ids de canales, nombres de cuentas de Instagram o TikTok, correos o rutas del ordenador del dueño;
 - la lista de creadores que han dado permiso, ni nada copiado de la carpeta rescatada del portátil sin limpiarlo.
 
-Todo eso va en los secretos de GitHub. La configuración de canales y barrios es el secreto `CONFIG_CANALES` (un JSON con la forma de `config/ejemplo-canales.json`). Antes de cada commit, busca que no se cuele nada de esto.
+Las claves y los permisos van en los secretos de GitHub. Los datos privados (la lista oficial completa, la configuración de canales y barrios en `config/canales.json`, los cuadernos de memoria, el estado y el registro de subidas) van en el repositorio **privado** `ciudades-memoria`. Los turnos lo leen con la llave `GH_SECRETOS`. Antes de cada commit, busca que no se cuele nada de esto.
 
 ## Cómo está ordenado
 
