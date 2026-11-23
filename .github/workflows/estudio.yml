@@ -1,0 +1,57 @@
+# El estudio de los Influencers: cada día, cuando ya se ha renovado la cuota de YouTube, miran qué se hace viral y
+# escriben las recetas que leen los Escritores. Los lunes, también la estrategia de la semana y los temas nuevos.
+# También con peticiones/estudio.json ({"semanal": true}) o a mano desde Actions.
+name: Estudio de los Influencers
+on:
+  schedule:
+    - cron: "53 8 * * *"
+  push:
+    paths:
+      - "peticiones/estudio.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: estudio
+  cancel-in-progress: false
+jobs:
+  estudio:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Estudiar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+        run: |
+          extra=""
+          if [ "${{ github.event_name }}" = "push" ] && python -c "import json,sys;sys.exit(0 if json.load(open('peticiones/estudio.json')).get('semanal') else 1)"; then extra="--semanal"; fi
+          python bots/influencers/estudio.py $extra
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('estudio de los Influencers') else 1)"

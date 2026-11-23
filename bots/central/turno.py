@@ -87,12 +87,16 @@ def main(argv=None):
             cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
             paso("reportero_gta6", f"{len(lista)} fuentes")
 
+        receta = (privado.leer(os.path.join("estado", "influencers", "recetas.json"), {}) or {}).get("canales", {}).get(clave)
+        lecciones_escritor = cuadernos["escritor"].para_el_prompt()
+        if receta:                               # la receta de los Influencers para este canal
+            lecciones_escritor += "\n- (Receta de los Influencers, de lo que funciona ahora) " + json.dumps(
+                {k: v for k, v in receta.items() if k not in ("fecha", "basada_en")}, ensure_ascii=False)
         idea, id_idea = None, None
         if ajustes.get("sala_ideas", True):     # la Sala de Ideas elige la mejor de 3 antes de gastar dibujos
             paso("escritor", "proponiendo ideas a la Sala de Ideas")
             try:
-                propuestas = escritor.ideas(canal, cuadernos["escritor"].para_el_prompt(), privado.titulos_recientes(clave),
-                                            fuentes)
+                propuestas = escritor.ideas(canal, lecciones_escritor, privado.titulos_recientes(clave), fuentes)
                 idea, id_idea = sala_ideas.elegir(clave, canal, propuestas, tribunal._pruebas(clave, canal))
                 paso("escritor", f"la Sala de Ideas eligió «{(idea or {}).get('titulo')}» de {len(propuestas)}",
                      f"la Sala de Ideas eligió 1 de {len(propuestas)}")
@@ -103,7 +107,7 @@ def main(argv=None):
             if intento == 2:
                 paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
             paso("escritor", "escribiendo el guion")
-            g = escritor.escribir(canal, cuadernos["escritor"].para_el_prompt() + aviso_juez,
+            g = escritor.escribir(canal, lecciones_escritor + aviso_juez,
                                  privado.titulos_recientes(clave), fuentes, idea=idea)
             if lista:
                 reportero.apuntar_usadas(clave, lista, g.get("fuentes_usadas"))
