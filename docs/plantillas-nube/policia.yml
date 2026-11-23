@@ -1,0 +1,31 @@
+# Policía: la ronda de vigilancia, cada hora. Revisa, arregla lo seguro y apunta los casos.
+name: Policía
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write                    # para relanzar un turno que falló
+jobs:
+  ronda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: policia
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Ronda
+        env:
+          GH_TOKEN: ${{ github.token }}     # para ver y relanzar los turnos de las otras ciudades
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          NTFY_TEMA: ${{ secrets.NTFY_TEMA }}
+        run: python bots/policia/ronda.py
+      - if: always()
+        run: bash bots/comun/guardar_estado.sh "policia ronda"

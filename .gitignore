@@ -1,0 +1,16 @@
+# Lo que fabrican los bots no se guarda en el repositorio
+trabajo/
+salida/
+*.mp4
+*.mp3
+*.wav
+*.ass
+# Nunca subir permisos, claves ni la configuración privada
+.env
+token*.json
+client_secret*.json
+config/canales.json
+config/*privad*
+# Python
+__pycache__/
+.venv/

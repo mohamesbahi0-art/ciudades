@@ -1,0 +1,49 @@
+# Ciudad Central: cada hora, cada canal hace su turno en su propio carril (uno no frena a los demás).
+# Va en .github/workflows/central.yml del repositorio «ciudades».
+name: Ciudad Central
+on:
+  schedule:
+    - cron: "17 * * * *"          # minuto 17 de cada hora (en UTC); evita las horas en punto, que van con retraso
+  workflow_dispatch:                # botón para lanzarlo a mano desde la web o el móvil
+permissions:
+  contents: write                   # para guardar el estado en el repositorio
+jobs:
+  turno:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50             # si se cuelga, GitHub lo corta solo (lo que antes hacían los jefes)
+    strategy:
+      fail-fast: false              # si falla un canal, los demás siguen
+      matrix:
+        canal: [terror, sobshorts, nivshorts, gta, clips, curios, versus, mapas]
+    concurrency:
+      group: carril-${{ matrix.canal }}
+      cancel-in-progress: false     # nunca corta a medias una subida del mismo canal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          pip install -q -r requirements.txt
+      - name: Turno del canal
+        env:
+          CANAL: ${{ matrix.canal }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TERROR: ${{ secrets.YT_REFRESH_TERROR }}
+          YT_REFRESH_SOBSHORTS: ${{ secrets.YT_REFRESH_SOBSHORTS }}
+          YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_REFRESH_CURIOS: ${{ secrets.YT_REFRESH_CURIOS }}
+          YT_REFRESH_VERSUS: ${{ secrets.YT_REFRESH_VERSUS }}
+          YT_REFRESH_MAPAS: ${{ secrets.YT_REFRESH_MAPAS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NTFY_TEMA: ${{ secrets.NTFY_TEMA }}
+        run: python bots/central/turno.py --canal "$CANAL"
+      - name: Guardar el estado (aunque el turno falle)
+        if: always()
+        run: bash bots/comun/guardar_estado.sh "central ${{ matrix.canal }}"

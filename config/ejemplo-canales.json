@@ -1,0 +1,17 @@
+{
+ "_ayuda": "Ejemplo de la configuración privada. La de verdad NO se sube aquí: se guarda entera como secreto CONFIG_CANALES en GitHub (Settings > Secrets and variables > Actions) y los bots la leen de ahí.",
+ "canales": {
+  "ejemplo": {
+   "nombre": "Nombre exacto del canal en YouTube",
+   "id": "UCxxxxxxxxxxxxxxxxxxxxxx",
+   "tipo": "historias",
+   "horas": ["13:00", "18:00"],
+   "voz": "es-MX-JorgeNeural",
+   "color": "#FFD400",
+   "pausado": false
+  }
+ },
+ "barrios": {
+  "ejemplo": {"red": "instagram", "cuenta": "nombre_de_la_cuenta"}
+ }
+}

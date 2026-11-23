@@ -1,0 +1,5 @@
+edge-tts>=7.0
+Pillow>=10.0
+yt-dlp
+google-api-python-client
+google-auth

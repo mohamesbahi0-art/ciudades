@@ -1,0 +1,2 @@
+# Solo para transcribir audio (recortador de clips). Es pesado: instálalo solo en los turnos que lo usen.
+faster-whisper

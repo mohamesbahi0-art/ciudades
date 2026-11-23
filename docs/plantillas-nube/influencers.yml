@@ -1,0 +1,31 @@
+# Influencers: estudian lo viral dos veces al día y escriben el recetario los lunes.
+name: Influencers
+on:
+  schedule:
+    - cron: "23 6,18 * * *"         # 07:23 y 19:23 en invierno en España (UTC+1)
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  estudio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    concurrency:
+      group: influencers
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -r requirements.txt
+      - name: Estudio de virales
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python bots/influencers/estudio.py
+      - if: always()
+        run: bash bots/comun/guardar_estado.sh "influencers estudio"
