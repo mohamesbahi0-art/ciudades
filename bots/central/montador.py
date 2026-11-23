@@ -11,6 +11,7 @@ import tempfile
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
+import musica  # noqa: E402  (herramientas/musica.py)
 import subtitulos  # noqa: E402  (herramientas/subtitulos.py)
 
 FPS = 30
@@ -59,7 +60,7 @@ def _gancho(texto, ancho_max=15):
     return "\n".join(lineas + [actual])
 
 
-def montar(guion, imagenes, voz, palabras_json, salida):
+def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
     tmp = tempfile.mkdtemp()
     try:
         palabras_voz = subtitulos.cargar(palabras_json)
@@ -92,8 +93,15 @@ def montar(guion, imagenes, voz, palabras_json, salida):
                        ":fontsize=88:fontcolor=white:borderw=8:bordercolor=black"
                        f":x=(w-text_w)/2:y=h*0.13+{n * 104}:enable='lt(t,2.5)'")
         filtro += "[v]"
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", "imagen.mp4", "-i", os.path.abspath(voz),
-                        "-filter_complex", filtro, "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
+        entradas = ["-i", "imagen.mp4", "-i", os.path.abspath(voz)]
+        audio = "1:a"
+        pista = musica.crear(ambiente, total, os.path.join(tmp, "musica.m4a")) if ambiente else None
+        if pista:                                    # música propia, muy por debajo de la voz
+            entradas += ["-i", pista]
+            filtro += ";[2:a]volume=0.35[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
+            audio = "[a]"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *entradas,
+                        "-filter_complex", filtro, "-map", "[v]", "-map", audio, "-c:v", "libx264", "-preset", "veryfast",
                         "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-t", f"{total:.2f}",
                         "-movflags", "+faststart", os.path.abspath(salida)], cwd=tmp, check=True)
         return salida

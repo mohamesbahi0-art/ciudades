@@ -137,7 +137,8 @@ def main(argv=None):
 
             paso("montador", "montando el vídeo")
             video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
-                                    os.path.join(trabajo, f"{hoy}-{clave}.mp4"))  # nombre único: el registro lo usa
+                                    os.path.join(trabajo, f"{hoy}-{clave}.mp4"),  # nombre único: el registro lo usa
+                                    ambiente=montador.musica.ambiente_de(canal))
             segundos = montador.duracion(video)
             cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1)})
             paso("montador", f"vídeo de {segundos:.1f} s")
