@@ -1,9 +1,8 @@
 {
- "estado": "esperando",
+ "estado": "conectado",
  "canal": "sobshorts",
- "codigo": "ZLK-YKV-JVTX",
- "url": "https://www.google.com/device",
- "caduca": "2026-11-23T02:23:16Z",
- "quedan": 2,
- "actualizado": "2026-11-23T01:53:16Z"
+ "pedido": "sobshorts",
+ "coincide": true,
+ "quedan": 1,
+ "actualizado": "2026-11-23T01:54:52Z"
 }
