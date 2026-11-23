@@ -789,6 +789,18 @@
    "lote": 2,
    "codigo": "nuevo",
    "tipo": "bot"
+  },
+  {
+   "id": "recolector_clips",
+   "nombre": "Recolector de clips",
+   "ciudad": "central",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Cada día trae solo clips de GTA 5 y GTA 6 con licencia libre de Internet Archive (la biblioteca de internet), los limpia y los guarda en la Videoteca con su crédito. Nadie tiene que grabar nada.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
   }
  ]
 }

@@ -103,8 +103,20 @@ def marcar(codigo, **cambios):
     privado.guardar_estado("clips/para_grabar.json", dict(datos, momentos=datos.get("momentos") or []))
 
 
+def texto_licencia(licencia):
+    return "dominio público (CC0)" if str(licencia or "").upper().startswith("CC0") else "licencia Creative Commons (CC BY)"
+
+
 def credito(m):
-    return f"🎬 Clip: {m.get('creador', '?')} · {m.get('enlace') or ''} · licencia Creative Commons (CC BY)".strip()
+    return f"🎬 Clip: {m.get('creador', '?')} · {m.get('enlace') or ''} · {texto_licencia(m.get('licencia'))}".strip()
+
+
+def añadir(momento):
+    """Un momento nuevo en la lista (los que trae solo el Recolector entran ya «grabado» y en la videoteca)."""
+    datos = privado.leer(LISTA, {}) or {}
+    lista = [m for m in datos.get("momentos") or [] if m.get("codigo") != momento.get("codigo")] + [momento]
+    datos.pop("actualizado", None)
+    privado.guardar_estado("clips/para_grabar.json", dict(datos, momentos=lista))
 
 
 def _segundos(ruta):

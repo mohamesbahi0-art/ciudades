@@ -50,3 +50,5 @@ jobs:
           python pruebas/simulacro_claude.py
       - name: Videoteca de juego (Archivero, versus en pantalla partida y noticias con clips)
         run: python pruebas/simulacro_videoteca.py
+      - name: Recolector de clips (Internet Archive de mentira, licencias, tomas y momento hasta su Short)
+        run: python pruebas/simulacro_recolector.py

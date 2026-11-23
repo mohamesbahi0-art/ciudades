@@ -141,7 +141,7 @@ def catalogo(lista, maximo=30):
 
 
 def creditos(ids):
-    """Una línea por vídeo de origen: «🎬 Clip: creador · enlace · licencia Creative Commons (CC BY)»."""
+    """Una línea por vídeo de origen: «🎬 Clip: creador · enlace · licencia» (CC BY o dominio público)."""
     por_id = {t["id"]: t for t in tomas()}
     lineas, vistos = [], set()
     for i in ids:
@@ -152,7 +152,7 @@ def creditos(ids):
         if (t.get("creador"), enlace) in vistos:
             continue
         vistos.add((t.get("creador"), enlace))
-        lineas.append(f"🎬 Clip: {t.get('creador', '?')} · {enlace} · licencia Creative Commons (CC BY)")
+        lineas.append(f"🎬 Clip: {t.get('creador', '?')} · {enlace} · {clips.texto_licencia(t.get('licencia'))}")
     return lineas
 
 
