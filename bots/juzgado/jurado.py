@@ -106,7 +106,7 @@ def deliberar(guion, canal, alegatos, comun):
         "sentencia": "no_sube" if resultado["rechaza"] else "sube", "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "resumen": (f"Jurado popular: {inocente} inocente y {culpable} culpable. "
                     + ("Lo rechaza: el guion se reescribe." if resultado["rechaza"] else "El guion sigue: se graba.")),
-        "prueba": bool(comun.get("prueba"))})
+        "prueba": bool(comun.get("prueba")), "turno": comun.get("turno"), "intento": comun.get("intento")})
     resultado["juicio_app"] = id_juicio
     c = privado.cuaderno("jurado_popular")
     c.apuntar("veredicto", {"canal": canal.get("clave"), "inocente": inocente, "culpable": culpable,

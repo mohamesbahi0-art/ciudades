@@ -60,12 +60,13 @@ def _jurado_guion(clave, canal, g, paso, a, reescribir, alegatos=None, veces=2):
     vale=False si sigue sin convencerles (ese guion no se graba). Sin jurado hoy (tope o sin IA), el guion sigue."""
     donde = "YouTube Shorts" if canal.get("destino", "youtube") == "youtube" else "TikTok e Instagram"
     idioma = {"es": "español", "nl": "neerlandés", "en": "inglés"}.get((canal.get("idioma") or "es")[:2], "español")
+    turno_id = f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')}-{privado.alias(clave)}"   # junta los intentos
     for vez in range(veces + 1):
         primera = (g.get("escenas") or [{}])[0]
         gancho = g.get("texto_pantalla") or (primera.get("texto") if isinstance(primera, dict) else str(primera)) or ""
         try:
             v = jurado.deliberar(g, canal, alegatos or {}, {"donde": donde, "idioma": idioma, "gancho": gancho,
-                                                            "prueba": a.prueba})
+                                                            "prueba": a.prueba, "turno": turno_id, "intento": vez + 1})
         except Exception as e:
             paso("jurado_popular", f"hoy no se ha podido reunir ({type(e).__name__}): el guion sigue")
             return g, True
