@@ -187,9 +187,25 @@ def arreglos(v, minimo, canal):
     return sueltos[:3] or ["Los jueces no han dado detalles esta vez: prueba a subirlo otra vez más tarde."], ""
 
 
+def cuenta_de(valor):
+    """La clave de la cuenta, venga como venga de la app: la clave («terror»), el alias («barrio-2»), la cuenta con o
+    sin @ («@grow.up.only») o su nombre («Overleef Dit»)."""
+    v = str(valor or "").strip().lstrip("@")
+    clave = privado.resolver(v)
+    cfg = privado.config()
+    if clave in cfg.get("canales", {}) or clave in cfg.get("barrios", {}):
+        return clave
+    bajo = clave.lower()
+    for grupo in ("canales", "barrios"):
+        for k, c in cfg.get(grupo, {}).items():
+            if bajo in (k.lower(), str(c.get("cuenta") or "").lower().lstrip("@"), str(c.get("nombre") or "").lower()):
+                return k
+    return clave
+
+
 def juzgar(original, peticion, codigo, trabajo, paso=print):
     """Pasa un vídeo del dueño por todo el Juzgado y el Coliseo. Devuelve el resultado (para la app)."""
-    clave = privado.resolver(str(peticion.get("cuenta") or ""))
+    clave = cuenta_de(peticion.get("cuenta"))
     base = {"codigo": codigo, "cuenta": clave, "alias": privado.alias(clave) if clave else "",
             "recibido": peticion.get("subido") or peticion.get("creado"), "titulo_dueño": peticion.get("titulo", "")}
     try:
@@ -310,9 +326,9 @@ def main():
                 try:
                     r = juzgar(original, peticion, codigo, t, paso)
                 except Exception as e:      # un vídeo roto no para a los demás
+                    print(f"ventanilla: {codigo}: fallo {type(e).__name__}", flush=True)
                     r = {"codigo": codigo, "estado": "error", "problema": "No he podido juzgarlo por un fallo mío: "
-                         f"lo vuelvo a intentar en la siguiente vuelta ({type(e).__name__}).", "cuenta":
-                         privado.resolver(str(peticion.get("cuenta") or ""))}
+                         "lo vuelvo a intentar solo en la siguiente vuelta.", "cuenta": cuenta_de(peticion.get("cuenta"))}
         antes = privado.leer(os.path.join("estado", "propios", f"{codigo}.json"), {}) or {}
         r["intentos"] = int(antes.get("intentos") or 0) + 1
         if r.get("estado") == "error" and r["intentos"] >= 3:
