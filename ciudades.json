@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "nota": "Lista pública de ciudades y bots. Los canales, las cuentas y sus ids no van aquí: van en el secreto CONFIG_CANALES.",
  "ciudades": [
   {
@@ -559,6 +559,42 @@
    "donde": "ciudad",
    "grupo": "Quién trabaja aquí",
    "hace": "Cada semana escribe las recetas que siguen los escritores y que usan los jueces.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "estratega_crecimiento",
+   "nombre": "Estratega de crecimiento",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Marketing",
+   "hace": "Decide cuándo y cuánto publicar, qué series hacer, cómo se ayudan los canales entre sí y qué probar cada semana.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "experto_seo",
+   "nombre": "Experto en SEO",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Marketing",
+   "hace": "Busca las palabras que escribe la gente y las pone en títulos, descripciones y hashtags para que te encuentren.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "espia_competencia",
+   "nombre": "Espía de la competencia",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Marketing",
+   "hace": "Vigila los canales que más crecen en cada tema y descubre los huecos que dejan.",
    "origen": "nuevo",
    "lote": 2,
    "codigo": "nuevo",

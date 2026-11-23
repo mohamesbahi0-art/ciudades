@@ -25,6 +25,8 @@ Fábrica de vídeos cortos (YouTube Shorts, TikTok y Reels) que funciona sola en
 | `herramientas/conectar_canal.py` | Conecta los canales de YouTube sin ordenador (código en google.com/device) y guarda los permisos en los secretos de GitHub |
 | `herramientas/avisar.py` | Avisos al móvil gratis (ntfy o Telegram) |
 | `herramientas/analizar.py` | Desmonta un vídeo viral para aprender de él |
+| `herramientas/palabras_clave.py` | Palabras clave gratis del buscador de YouTube |
+| `herramientas/competencia.py` | Qué publican los canales que más crecen en un tema y qué les funciona |
 
 Cada programa explica cómo se usa con `python herramientas/<programa>.py --help`.
 
