@@ -1,0 +1,4 @@
+{"muestras": [
+  {"canal": "barrio-2", "video": "pruebas/juzgar/barrio-2-pictos.mp4", "guion": "pruebas/juzgar/barrio-2-pictos.json"},
+  {"canal": "barrio-3", "video": "pruebas/juzgar/barrio-3-ciencia.mp4", "guion": "pruebas/juzgar/barrio-3-ciencia.json"}
+]}

@@ -1,0 +1,47 @@
+# El Juzgado juzga muestras ya hechas (antes de encender un perfil), igual que en un turno de verdad.
+# Se pone en marcha con peticiones/juzgar.json ({"muestras": [{"canal": "barrio-2", "video": "pruebas/juzgar/x.mp4",
+# "guion": "pruebas/juzgar/x.json"}]}; rutas del repositorio privado y alias, nunca nombres de cuentas).
+name: Juzgar muestras
+on:
+  push:
+    paths:
+      - "peticiones/juzgar.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  juzgar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -r requirements.txt
+      - name: Juzgar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python pruebas/juzgar_muestras.py peticiones/juzgar.json
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('juzgar muestras') else 1)"
