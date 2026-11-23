@@ -58,6 +58,10 @@ def dejar(clave, canal, video, guion, duracion, juicio=None):
                "cuando": huecos.iso(hora), "creado": privado.ahora(), "estado": "pendiente"}
         if juicio:
             doc["nota"] = juicio.get("total")
+            if juicio.get("cerebro"):
+                doc["juzgo"] = juicio["cerebro"]             # quién juzgó: «claude» o «gemini» (lo enseña la app)
+        if guion.get("cerebro"):
+            doc["cerebro"] = guion["cerebro"]                # quién escribió el guion: «claude», «gemini» o «a mano»
         id_doc = f"{base}-{'ig' if red == 'instagram' else 'tt' if red == 'tiktok' else slug(red, 8)}"
         privado.escribir(os.path.join(CARPETA, f"{id_doc}.json"), doc)
         ids.append(id_doc)
