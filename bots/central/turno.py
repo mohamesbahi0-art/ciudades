@@ -81,7 +81,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         resumen.update(titulo=g.get("titulo"), veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
                        juicio=id_juicio, juicio_app=id_tribunal, segundos=round(segundos, 1), intento=intento,
                        formato=g.get("formato"))
-        if v["veredicto"] != "suspendido" or a.prueba:
+        if v["veredicto"] == "aprobado" or a.prueba:
             break
         consejo = (f"\n- (El Juzgado ha suspendido el intento anterior, «{g.get('titulo', '')}»: {v.get('consejo', '')}. "
                    "Haz otro vídeo distinto que no tenga ese fallo.)")
@@ -92,8 +92,8 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         resumen["destino_resultado"] = "prueba"
         if os.environ.get("ALMACEN_PRUEBAS"):
             resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video, f"{os.path.basename(trabajo)}.mp4")
-    elif v["veredicto"] == "suspendido":
-        paso("subidor", "el Juzgado lo ha suspendido: no se sube")
+    elif v["veredicto"] != "aprobado":
+        paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): se tira, no se sube")
         resumen["destino_resultado"] = "suspendido"
     else:
         ids = parasubir.dejar(clave, canal, video, g, segundos, v)

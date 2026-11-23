@@ -63,6 +63,7 @@ Alegato de la fiscalía (Héctor Duro): {fiscalia}
 
 Los jueces, cada uno mirando SOLO su especialidad:
 {jueces}
+{exigencia}
 Los dibujos hechos con IA son el estilo del canal: no es un fallo. Un tema duro, oscuro o incómodo tampoco: el dueño
 quiere vídeos sin miedo; solo cuenta que enganche.
 Devuelve SOLO un JSON: {{"votos": [{{"juez": "gancho|reloj|calle", "voto": "sube" o "no", "nota": 0-100, "razon": "una frase"}}],
@@ -97,6 +98,22 @@ def _jefe():
     return max(candidatos)[1] if candidatos else JEFE_INICIAL
 
 
+def minima(canal):
+    """La nota mínima para publicar: la del perfil si la tiene (el dueño pide 90 en TikTok/Instagram), si no la general."""
+    try:
+        return int(canal.get("nota_minima", NOTA_MINIMA))
+    except (TypeError, ValueError):
+        return NOTA_MINIMA
+
+
+def exigencia(canal):
+    m = minima(canal)
+    if m < 80:
+        return ""
+    return (f"OJO: esta cuenta solo publica vídeos de {m} o más sobre 100. Sé muy exigente: {m} es un vídeo excelente, que "
+            "la gente vería entero y compartiría. Si es «correcto» o «está bien», no llega: ponle menos de 80 y di qué falta.")
+
+
 def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     clave = canal["clave"]
     subprocess.run([sys.executable, os.path.join(RAIZ, "herramientas", "fotogramas.py"), video, "--salida", carpeta],
@@ -116,7 +133,8 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
              else "una cuenta de Instagram y TikTok", "nombre": canal["nombre"],
              "idioma": {"es": "español", "nl": "neerlandés"}.get(canal.get("idioma", "es")[:2], "español"),
              "titulo": guion["titulo"], "gancho": guion.get("texto_pantalla", ""),
-             "medidas": json.dumps(medidas, ensure_ascii=False)}
+             "medidas": json.dumps(medidas, ensure_ascii=False),
+             "exigencia": exigencia(canal)}
     try:
         alegatos = gemini.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal),
                                                     lecciones=lecciones, **comun), imagenes=imagenes, solo_bueno=True,
@@ -151,7 +169,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
     voto_jefe = next((v["voto"] for v in votos if v["clave"] == jefe), "sube")
     total = round(statistics.mean(v["nota"] for v in votos))
     sube = (a_favor * 2 > len(votos)) or (a_favor * 2 == len(votos) and voto_jefe == "sube")
-    if fallos or total < NOTA_MINIMA:
+    if fallos or total < minima(canal):
         sube = False
     veredicto = "aprobado" if sube else "suspendido"
     resultado = {"veredicto": veredicto, "total": total, "fallos_graves": fallos, "consejo": sala.get("consejo", ""),
