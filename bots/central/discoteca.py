@@ -1,10 +1,11 @@
-"""La Discoteca: música de fondo de verdad, compuesta por músicos y regalada al dominio público (CC0), para que los vídeos
-no suenen a ordenador. Se puede usar en cualquier vídeo, gratis y sin nombrar a nadie.
+"""La Discoteca: música de fondo de verdad, compuesta y tocada por músicos y regalada al dominio público (CC0 o «sin
+derechos conocidos»), para que los vídeos no suenen a ordenador. Se puede usar gratis y sin nombrar a nadie.
 
-Baja piezas de FreePD.com (música de dominio público) por estilos, el oído de la Policía (Gemini) escucha un trozo de
-cada una y solo se quedan las que sirven de fondo y no tienen voz cantada. Se guardan como archivos de la release
-«musica» del repositorio privado y la lista en estado/musica/biblioteca.json. La fábrica las baja al empezar cada ronda
-(preparar) y herramientas/musica.py las usa; si no hay ninguna, compone la suya.
+Busca en el Internet Archive (archive.org, con su buscador oficial) piezas de audio cuya licencia es de dominio público,
+por estilos; el oído de la Policía (Gemini) escucha 30 segundos de cada una y solo se quedan las que sirven de fondo y
+no tienen voz cantada. Se guardan como archivos de la release «musica» del repositorio privado y la lista en
+estado/musica/biblioteca.json. La fábrica las baja al empezar cada ronda (preparar) y herramientas/musica.py las usa;
+si no hay ninguna, compone la suya.
 
 Uso:  python bots/central/discoteca.py [--por-ambiente 6]      (en GitHub Actions)
 """
@@ -23,30 +24,35 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, RAIZ)
 from bots.comun import almacen, gemini, privado  # noqa: E402
 
-WEB = "https://freepd.com/"
+ARCHIVO = "https://archive.org"
 ESTANTERIA = "musica"
 LISTA = os.path.join("estado", "musica", "biblioteca.json")
-LICENCIA = "CC0 · dominio público (FreePD.com): se puede usar sin pedir permiso ni nombrar al autor"
+LICENCIA = "Dominio público (CC0 o «sin derechos conocidos») según su ficha en archive.org: uso libre y sin nombrar a nadie"
 CABECERAS = {"User-Agent": "Mozilla/5.0 (compatible; music-library-fetch/1.0)"}
-# palabras de la sección de la web → ambientes de herramientas/musica.py
-ESTILOS = [("epic", "inspira"), ("scoring", "inspira"), ("inspir", "inspira"), ("motiv", "inspira"),
-           ("upbeat", "energia"), ("electronic", "energia"), ("action", "energia"),
-           ("horror", "tension"), ("mystery", "tension"), ("suspense", "tension"), ("dark", "tension"),
-           ("romantic", "calma"), ("world", "calma"), ("calm", "calma"), ("piano", "calma")]
+BUSQUEDAS = {
+    "inspira": "(subject:(cinematic OR epic OR inspirational OR motivational OR orchestral OR soundtrack) OR "
+               "title:(epic OR inspirational OR cinematic OR hope))",
+    "energia": "(subject:(electronic OR upbeat OR \"video game\" OR chiptune OR synthwave OR action OR hiphop) OR "
+               "title:(upbeat OR electronic OR action))",
+    "tension": "(subject:(horror OR suspense OR \"dark ambient\" OR thriller OR mystery OR creepy) OR "
+               "title:(horror OR suspense OR dark OR mystery))",
+    "calma": "(subject:(piano OR ambient OR calm OR relaxing OR lofi OR chill) OR title:(piano OR ambient OR calm))",
+}
 USOS = {"inspira": "historias motivadoras de famosos en TikTok, con una voz contando la historia encima",
         "energia": "vídeos de videojuegos (GTA) y datos curiosos en YouTube Shorts, con voz encima",
         "tension": "historias de terror en YouTube Shorts, con voz encima",
         "calma": "vídeos informativos tranquilos, con voz encima"}
 OIDO = """Escucha este trozo de 30 segundos de una música de dominio público. Queremos usarla DE FONDO, bajita, debajo de
-una voz que narra, en {uso}. Sé exigente: puntúa de 1 a 10 si queda bien así (10 = perfecta y profesional).
-Di también si tiene voz cantada o letra (entonces no sirve) y para cuáles de estos usos valdría: inspira (motivación,
-emoción, épica), energia (videojuegos, ritmo, curiosidades), tension (terror, misterio), calma (información tranquila).
+una voz que narra, en {uso}. Sé exigente: puntúa de 1 a 10 si queda bien así (10 = perfecta y profesional; baja la nota
+si suena mal grabada, a ruido, a aficionado o si no pega).
+Di también si tiene voz cantada, letra o gente hablando (entonces no sirve) y para cuáles de estos usos valdría:
+inspira (motivación, emoción, épica), energia (videojuegos, ritmo, curiosidades), tension (terror, misterio), calma.
 Devuelve SOLO un JSON: {{"nota": 0, "voz_cantada": false, "sirve_para": ["inspira"], "suena_a": "una frase"}}"""
 
 
-def _bajar(url, destino=None, limite=15_000_000):
+def _pedir(url, destino=None, limite=15_000_000):
     req = urllib.request.Request(url, headers=CABECERAS)
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=90) as r:
         datos = r.read(limite + 1)
     if len(datos) > limite:
         raise ValueError("demasiado grande")
@@ -54,21 +60,38 @@ def _bajar(url, destino=None, limite=15_000_000):
         with open(destino, "wb") as f:
             f.write(datos)
         return destino
-    return datos.decode("utf-8", "replace")
+    return json.loads(datos.decode("utf-8", "replace"))
 
 
-def _enlaces(html, base, final):
-    vistos = []
-    for h in re.findall(r'href\s*=\s*["\']([^"\']+)["\']', html, flags=re.I):
-        url = urllib.parse.urljoin(base, h)
-        if url.lower().split("?")[0].endswith(final) and url.startswith(WEB) and url not in vistos:
-            vistos.append(url)
-    return vistos
+def _es_libre(licencia):
+    licencia = (licencia or "").lower()
+    return "publicdomain/zero" in licencia or "publicdomain/mark" in licencia
 
 
-def _ambiente(pagina):
-    nombre = pagina.lower().rsplit("/", 1)[-1]
-    return next((a for clave, a in ESTILOS if clave in nombre), None)
+def _candidatos(ambiente, filas=40):
+    """Fichas de audio con licencia de dominio público para ese ambiente, las más descargadas primero."""
+    q = f"mediatype:audio AND licenseurl:*publicdomain* AND {BUSQUEDAS[ambiente]}"
+    url = (f"{ARCHIVO}/advancedsearch.php?q={urllib.parse.quote(q)}&fl[]=identifier&fl[]=title&fl[]=licenseurl"
+           f"&sort[]=downloads+desc&rows={filas}&output=json")
+    docs = _pedir(url).get("response", {}).get("docs", [])
+    return [d for d in docs if _es_libre(d.get("licenseurl"))]
+
+
+def _pistas_de(ident, maximo=2):
+    """Los mp3 de una ficha que tienen pinta de pieza musical (de 45 s a 7 min), comprobando otra vez la licencia."""
+    meta = _pedir(f"{ARCHIVO}/metadata/{urllib.parse.quote(ident)}")
+    if not _es_libre((meta.get("metadata") or {}).get("licenseurl")):
+        return []
+    buenas = []
+    for f in meta.get("files", []):
+        nombre = f.get("name", "")
+        try:
+            largo = float(f.get("length") or 0)
+        except ValueError:
+            largo = 0
+        if nombre.lower().endswith(".mp3") and 45 <= largo <= 420 and int(f.get("size") or 0) < 15_000_000:
+            buenas.append((nombre, largo, f.get("title") or nombre[:-4]))
+    return buenas[:maximo]
 
 
 def _segundos(ruta):
@@ -81,75 +104,66 @@ def _slug(texto):
     return re.sub(r"[^a-z0-9]+", "-", texto.lower()).strip("-")[:40] or "pieza"
 
 
-def llenar(por_ambiente=6, avisar=print):
-    portada = _bajar(WEB)
-    if not re.search(r"public domain|cc0|creative commons zero", portada, flags=re.I):
-        raise RuntimeError("La web ya no dice que su música sea de dominio público: no se baja nada.")
-    avisar("discoteca: la web confirma que su música es de dominio público")
-    todos = []
-    for h in re.findall(r'href\s*=\s*["\']([^"\']+)["\']', portada, flags=re.I):
-        url = urllib.parse.urljoin(WEB, h)
-        if url.startswith(WEB) and url not in todos:
-            todos.append(url)
-    paginas = [p for p in todos if _ambiente(p) and not p.lower().endswith(".mp3")]
-    avisar(f"discoteca: secciones útiles: {', '.join(p.rsplit('/', 1)[-1] for p in paginas) or 'ninguna'}")
-    if not paginas:                        # la web ha cambiado: se enseña su índice para arreglarlo
-        crudos = re.findall(r'(?:href|src)\s*=\s*["\']([^"\']+)["\']', portada, flags=re.I)
-        avisar(f"discoteca: portada de {len(portada)} letras, {portada.lower().count('.mp3')} menciones de .mp3; enlaces: "
-               + " | ".join(crudos[:60]))
-        for m in re.finditer(r"[^\s\"'<>]{0,80}\.mp3", portada[:200000], flags=re.I):
-            avisar(f"discoteca: mp3 visto: {m.group(0)}")
-            break
+def llenar(por_ambiente=6, probar=10, avisar=print):
     lista = privado.leer(LISTA, {}) or {}
     pistas = {p["fuente"]: p for p in lista.get("pistas", [])}
     cuenta = {a: sum(1 for p in pistas.values() if p.get("vale") and p.get("ambiente") == a) for a in USOS}
+    sin_oido = False
     with tempfile.TemporaryDirectory() as tmp:
-        for pagina in paginas:
-            amb = _ambiente(pagina)
-            try:
-                mp3s = _enlaces(_bajar(pagina), pagina, ".mp3")
-            except Exception as e:      # una sección caída no para las demás
-                avisar(f"discoteca: {pagina.rsplit('/', 1)[-1]} no carga ({type(e).__name__})")
+        for amb in USOS:
+            if sin_oido or cuenta[amb] >= por_ambiente:
                 continue
-            for url in mp3s:
-                if cuenta.get(amb, 0) >= por_ambiente:
+            try:
+                fichas = _candidatos(amb)
+            except Exception as e:
+                avisar(f"discoteca: el buscador no contesta para {amb} ({type(e).__name__})")
+                continue
+            avisar(f"discoteca: {amb}: {len(fichas)} fichas de dominio público")
+            probadas = 0
+            for ficha in fichas:
+                if cuenta[amb] >= por_ambiente or probadas >= probar or sin_oido:
                     break
-                if url in pistas:
-                    continue
-                titulo = urllib.parse.unquote(url.rsplit("/", 1)[-1])[:-4]
-                crudo, m4a, trozo = (os.path.join(tmp, "crudo.mp3"), os.path.join(tmp, f"{_slug(titulo)}.m4a"),
-                                     os.path.join(tmp, "trozo.mp3"))
                 try:
-                    _bajar(url, crudo)
-                    seg = _segundos(crudo)
-                    if seg < 40:
-                        continue
-                    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", crudo, "-ac", "2", "-c:a", "aac",
-                                    "-b:a", "128k", m4a], check=True)
-                    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(seg * 0.25), "-t", "30", "-i", crudo,
-                                    "-ac", "1", "-b:a", "64k", trozo], check=True)
-                    oido = gemini.preguntar(OIDO.format(uso=USOS[amb]), audio=trozo, temperatura=0.2)
-                except gemini.SinIA as e:
-                    avisar(f"discoteca: el oído no contesta ({e}); se para aquí")
-                    break
-                except Exception as e:
-                    avisar(f"discoteca: «{titulo}» no se ha podido bajar ({type(e).__name__})")
+                    archivos = _pistas_de(ficha["identifier"])
+                except Exception:
                     continue
-                oido = oido if isinstance(oido, dict) else {}
-                nota = oido.get("nota") if isinstance(oido.get("nota"), (int, float)) else 0
-                vale = nota >= 6 and not oido.get("voz_cantada")
-                nombre = f"{amb}-{_slug(titulo)}.m4a"
-                entrada = {"nombre": nombre, "titulo": titulo, "fuente": url, "ambiente": amb,
-                           "ambientes": sorted({amb, *[a for a in oido.get("sirve_para", []) if a in USOS]}),
-                           "segundos": round(seg, 1), "nota": nota, "vale": vale, "suena_a": oido.get("suena_a", ""),
-                           "fecha": privado.ahora()}
-                if vale:
-                    os.replace(m4a, os.path.join(tmp, nombre))
-                    almacen.guardar(ESTANTERIA, os.path.join(tmp, nombre), nombre)
-                    cuenta[amb] = cuenta.get(amb, 0) + 1
-                pistas[url] = entrada
-                avisar(f"discoteca: {amb} · «{titulo}» · {nota}/10 · {'se queda' if vale else 'no vale'}")
-                time.sleep(2)
+                for nombre, largo, titulo in archivos:
+                    url = f"{ARCHIVO}/download/{urllib.parse.quote(ficha['identifier'])}/{urllib.parse.quote(nombre)}"
+                    if url in pistas or cuenta[amb] >= por_ambiente or probadas >= probar:
+                        continue
+                    probadas += 1
+                    crudo, trozo = os.path.join(tmp, "crudo.mp3"), os.path.join(tmp, "trozo.mp3")
+                    try:
+                        _pedir(url, crudo)
+                        seg = _segundos(crudo) or largo
+                        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(seg * 0.25), "-t", "30",
+                                        "-i", crudo, "-ac", "1", "-b:a", "64k", trozo], check=True)
+                        oido = gemini.preguntar(OIDO.format(uso=USOS[amb]), audio=trozo, temperatura=0.2)
+                    except gemini.SinIA as e:
+                        avisar(f"discoteca: el oído no contesta ({str(e)[:80]}); se para aquí")
+                        sin_oido = True
+                        break
+                    except Exception as e:
+                        avisar(f"discoteca: «{titulo[:50]}» no se ha podido bajar ({type(e).__name__})")
+                        continue
+                    oido = oido if isinstance(oido, dict) else {}
+                    nota = oido.get("nota") if isinstance(oido.get("nota"), (int, float)) else 0
+                    vale = nota >= 6 and not oido.get("voz_cantada")
+                    archivo = f"{amb}-{_slug(ficha['identifier'])}-{_slug(titulo)}.m4a"[:90]
+                    pistas[url] = {"nombre": archivo, "titulo": str(titulo)[:120], "ficha": f"{ARCHIVO}/details/{ficha['identifier']}",
+                                   "fuente": url, "licencia": ficha.get("licenseurl"), "ambiente": amb,
+                                   "ambientes": sorted({amb, *[a for a in oido.get("sirve_para", []) if a in USOS]}),
+                                   "segundos": round(seg, 1), "nota": nota, "vale": vale,
+                                   "suena_a": str(oido.get("suena_a", ""))[:160], "fecha": privado.ahora()}
+                    if vale:
+                        m4a = os.path.join(tmp, archivo)
+                        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", crudo, "-ac", "2", "-c:a", "aac",
+                                        "-b:a", "128k", m4a], check=True)
+                        almacen.guardar(ESTANTERIA, m4a, archivo)
+                        cuenta[amb] += 1
+                    avisar(f"discoteca: {amb} · «{str(titulo)[:50]}» · {nota}/10 · {'se queda' if vale else 'no vale'}"
+                           f" · {str(oido.get('suena_a', ''))[:70]}")
+                    time.sleep(2)
     privado.guardar_estado("musica/biblioteca.json", {"licencia": LICENCIA, "actualizado": privado.ahora(),
                                                       "pistas": sorted(pistas.values(), key=lambda p: p["nombre"])})
     c = privado.cuaderno("discoteca")
@@ -177,8 +191,9 @@ def preparar(carpeta):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--por-ambiente", type=int, default=6)
+    p.add_argument("--probar", type=int, default=10, help="cuántas piezas escucha como mucho por ambiente")
     a = p.parse_args()
-    cuenta = llenar(a.por_ambiente)
+    cuenta = llenar(a.por_ambiente, a.probar)
     print(f"discoteca: piezas buenas por ambiente: {cuenta}")
     return 0
 
