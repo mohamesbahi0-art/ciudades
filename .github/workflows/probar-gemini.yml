@@ -32,13 +32,15 @@ jobs:
                       return r.status, r.read()
               except urllib.error.HTTPError as e:
                   return e.code, e.read()
+              except Exception as e:
+                  return 0, f"{type(e).__name__}".encode()
           c, b = pedir("https://generativelanguage.googleapis.com/v1beta/models?pageSize=300")
           modelos = [m["name"].split("/")[1] for m in json.loads(b).get("models", [])
                      if "generateContent" in m.get("supportedGenerationMethods", [])
                      and "image" not in m["name"] and "tts" not in m["name"] and "embedding" not in m["name"]]
           print("MODELOS:", ", ".join(modelos))
           for m in modelos:
-              if not any(x in m for x in ("flash", "pro", "gemma")):
+              if not any(x in m for x in ("flash", "pro", "gemma")) or any(x in m for x in ("robotics", "computer", "transcribe", "customtools")):
                   continue
               c, b = pedir(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
                            {"contents": [{"parts": [{"text": "Di solo: hola"}]}]})

@@ -62,4 +62,7 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
             except urllib.error.URLError as e:
                 ultimo = f"{modelo}: sin conexión ({e.reason})"
                 time.sleep(5)
+            except (TimeoutError, OSError) as e:          # tarda demasiado en contestar: otro intento u otro modelo
+                ultimo = f"{modelo}: no contesta a tiempo ({type(e).__name__})"
+                time.sleep(5)
     raise SinIA(f"Gemini no contesta: {ultimo}")
