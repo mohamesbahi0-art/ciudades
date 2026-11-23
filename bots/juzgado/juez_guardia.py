@@ -11,8 +11,8 @@ from bots.comun import gemini
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MINIMO = 50
 
-PLANTILLA = """Eres el Juez de guardia del Juzgado de un canal de YouTube Shorts en español llamado «{nombre}».
-Juzgas si este vídeo hará que la gente que va pasando Shorts se pare y lo vea entero.
+PLANTILLA = """Eres el Juez de guardia del Juzgado de {donde} llamado «{nombre}». El vídeo está en {idioma}.
+Juzgas si este vídeo hará que la gente que va pasando vídeos cortos se pare y lo vea entero.
 Te paso 7 fotogramas en orden (segundos 0,3 · 1,2 · 2,5, y al 30 %, 55 %, 80 % y el final) y estos datos:
 - Título: {titulo}
 - Texto en pantalla al empezar: {gancho}
@@ -43,7 +43,9 @@ def juzgar(video, guion, canal, lecciones, carpeta):
         fallos.append("pantalla negra")
     if datos.get("sin_audio"):
         fallos.append("sin voz")
-    texto = PLANTILLA.format(nombre=canal["nombre"], titulo=guion["titulo"], gancho=guion.get("texto_pantalla", ""),
+    donde = "un canal de YouTube Shorts" if canal.get("destino", "youtube") == "youtube" else "una cuenta de Instagram y TikTok"
+    idioma = {"es": "español", "nl": "neerlandés", "en": "inglés"}.get(canal.get("idioma", "es")[:2], "español")
+    texto = PLANTILLA.format(nombre=canal["nombre"], donde=donde, idioma=idioma, titulo=guion["titulo"], gancho=guion.get("texto_pantalla", ""),
                              narracion=guion["narracion"], medidas=json.dumps(medidas, ensure_ascii=False),
                              lecciones=lecciones)
     imagenes = [os.path.join(carpeta, f["archivo"]) for f in datos["fotogramas"]]

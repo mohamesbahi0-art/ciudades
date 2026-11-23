@@ -1,4 +1,4 @@
-# Prueba de la Policía: ¿puede GitHub bajar vídeos de YouTube con yt-dlp? (Momentazos, curiosidades y comparaciones lo
+# Prueba de la Policía: ¿puede GitHub bajar vídeos de YouTube con yt-dlp? (los canales de clips, curiosidades y comparaciones lo
 # necesitan). Se pone en marcha cuando Claude deja peticiones/descarga.json ({"url": "..."}) o a mano desde Actions.
 name: Probar descarga
 on:

@@ -1,5 +1,6 @@
 # Jefes de canal: miran en YouTube qué tiene cada canal (programados, último vídeo, suscriptores). Solo leen, no tocan
-# nada. Cada 3 horas, cuando Claude deja peticiones/revisar.json, o a mano desde Actions.
+# nada. Después la Analista de cuentas repasa cómo va todo. Cada 3 horas, cuando Claude deja peticiones/revisar.json,
+# o a mano desde Actions.
 name: Revisar canales
 on:
   schedule:
@@ -54,6 +55,13 @@ jobs:
           YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
           YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
         run: python bots/policia/programados.py
+      - name: La Analista repasa cómo van las cuentas
+        if: always()
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python bots/influencers/analista.py
       - name: Guardar en el repositorio privado
         if: always()
         run: |

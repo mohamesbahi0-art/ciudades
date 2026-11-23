@@ -15,11 +15,16 @@ Las claves y los permisos van en los secretos de GitHub. Los datos privados (la 
 ## Cómo está ordenado
 
 - `herramientas/`: programas genéricos y probados (voz, subtítulos, portadas, medidas, recortes, subida, avisos y análisis).
+- `bots/`: el código de cada ciudad. `bots/central/fabrica.py` es la ronda de la fábrica: vacía la cola, decide qué canales y barrios necesitan vídeo (huecos.py) y hace un turno por cada uno (turno.py: reportero → escritor → locutor → dibujante → montador → juez de guardia → subidor o bandeja «Para subir»). `bots/influencers/analista.py` es la Analista de cuentas.
 - `ciudades.json`: la lista pública de ciudades y bots, sin datos de canales.
-- `.github/workflows/conectar-canales.yml`: el único turno activo. Solo arranca cuando aparece `peticiones/conectar.json`.
-- `docs/plantillas-nube/`: los turnos de GitHub Actions. Todavía no están activos; pásalos a `.github/workflows/` solo cuando los bots existan y el dueño esté de acuerdo.
-- `bots/` (pendiente): el código de cada ciudad.
-- `estado/` (pendiente): lo que dejan los bots y una ronda de Claude copia a la app.
+- `.github/workflows/`: los turnos que corren solos en GitHub, aunque Claude y el ordenador estén apagados:
+  - `fabrica.yml`: cada 2 horas (minuto 17); también con `peticiones/fabrica.json` (`{"solo": "gta", "maximo": 1}`).
+  - `revisar-canales.yml`: cada 3 horas (minuto 37): Jefes de canal y Analista.
+  - `conectar-canales.yml`, `prueba-central.yml` y `probar-descarga.yml`: solo con su fichero de `peticiones/`.
+- `docs/plantillas-nube/`: plantillas de turnos que todavía no están activos.
+- El estado que dejan los bots va al repositorio **privado** (`estado/`, `parasubir/`, `cola/`, `registro/`), y una ronda de Claude programada lo copia a la app.
+
+**Los registros de GitHub Actions de este repositorio son públicos.** Los bots solo escriben en ellos la clave del canal y el paso; los barrios (cuentas de TikTok e Instagram) salen como `barrio-1`, `barrio-2`… (`privado.alias`, `privado.limpiar`). En `peticiones/` usa también esos alias, nunca el nombre de la cuenta. Los vídeos se guardan como archivos de «releases» del repositorio privado (`bots/comun/almacen.py`), nunca en el historial.
 
 ## Memoria de los robots
 

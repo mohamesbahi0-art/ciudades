@@ -1,0 +1,64 @@
+"""La bandeja «Para subir»: los vídeos de TikTok e Instagram que sube el dueño a mano (skill `para-subir`).
+
+Cada vídeo terminado se guarda en la estantería «para-subir» del Almacén y deja un documento por red en parasubir/ del
+repositorio privado, con el texto listo para copiar, las etiquetas y la hora recomendada. Una ronda de Claude lo copia a
+la app (colección `parasubir`) y trae de vuelta lo que el dueño marca como subido o descartado."""
+import datetime as dt
+import os
+import re
+import unicodedata
+
+from bots.central import huecos
+from bots.comun import almacen, privado
+
+CARPETA = "parasubir"
+
+
+def slug(texto, largo=40):
+    t = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:largo].strip("-") or "video"
+
+
+def documentos():
+    carpeta = os.path.join(privado.carpeta(), CARPETA)
+    if not os.path.isdir(carpeta):
+        return []
+    salida = []
+    for n in sorted(os.listdir(carpeta)):
+        if n.endswith(".json"):
+            d = privado.leer(os.path.join(CARPETA, n), None)
+            if d:
+                salida.append(dict(d, _id=n[:-5]))
+    return salida
+
+
+def pendientes(barrio):
+    return sum(1 for d in documentos() if d.get("barrio") == barrio and d.get("estado") == "pendiente")
+
+
+def cuando(barrio, canal, ahora=None):
+    """La siguiente hora recomendada que no tenga ya otro vídeo pendiente del mismo barrio y red."""
+    ahora = ahora or dt.datetime.now(dt.timezone.utc)
+    ocupadas = [huecos.fecha(d["cuando"]) for d in documentos()
+                if d.get("barrio") == barrio and d.get("estado") == "pendiente" and d.get("cuando")]
+    return huecos.siguiente([canal.get("hora", "19:00")], ocupadas, ahora=ahora, dias_maximos=60)
+
+
+def dejar(clave, canal, video, guion, duracion, juicio=None):
+    """Guarda el vídeo y crea sus documentos. Devuelve los ids creados."""
+    hoy = dt.datetime.now(dt.timezone.utc)
+    base = f"{hoy.strftime('%Y-%m-%d')}-{slug(clave, 20)}-{slug(guion.get('titulo', 'video'), 30)}"
+    enlace = almacen.guardar("para-subir", video, f"{base}.mp4")
+    hora = cuando(clave, canal) or hoy + dt.timedelta(hours=2)
+    ids = []
+    for red in canal.get("redes", ["instagram"]):
+        texto = guion.get(f"texto_{red}") or guion.get("texto_instagram") or guion.get("descripcion", "")
+        doc = {"barrio": clave, "red": red, "titulo": guion.get("titulo", ""), "texto": texto.strip(),
+               "etiquetas": guion.get("hashtags", [])[:5], "video": enlace, "duracion": round(duracion, 1),
+               "cuando": huecos.iso(hora), "creado": privado.ahora(), "estado": "pendiente"}
+        if juicio:
+            doc["nota"] = juicio.get("total")
+        id_doc = f"{base}-{'ig' if red == 'instagram' else 'tt' if red == 'tiktok' else slug(red, 8)}"
+        privado.escribir(os.path.join(CARPETA, f"{id_doc}.json"), doc)
+        ids.append(id_doc)
+    return ids

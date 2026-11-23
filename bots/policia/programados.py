@@ -56,9 +56,10 @@ def revisar(clave, cfg):
         if st.get("privacyStatus") == "private" and sale and sale > ahora:
             programados.append({"titulo": sn["title"], "sale": sale.strftime("%Y-%m-%dT%H:%M:%SZ"), "id": v["id"]})
         elif st.get("privacyStatus") == "public":
+            est = v.get("statistics", {})
             publicados.append({"titulo": sn["title"], "publicado": sn["publishedAt"], "id": v["id"],
-                               "url": f"https://youtu.be/{v['id']}",
-                               "visitas": int(v.get("statistics", {}).get("viewCount", 0))})
+                               "url": f"https://youtu.be/{v['id']}", "visitas": int(est.get("viewCount", 0)),
+                               "megusta": int(est.get("likeCount", 0)), "comentarios": int(est.get("commentCount", 0))})
     programados.sort(key=lambda x: x["sale"])
     publicados.sort(key=lambda x: x["publicado"], reverse=True)
     en_24h = [p for p in programados if fecha(p["sale"]) <= ahora + dt.timedelta(hours=24)]
@@ -68,7 +69,17 @@ def revisar(clave, cfg):
             "programados": programados, "programados24h": len(en_24h),
             "hasta": programados[-1]["sale"] if programados else None,
             "ultimo_publicado": publicados[0] if publicados else None,
-            "publicados_7_dias": sum(1 for p in publicados if fecha(p["publicado"]) > ahora - dt.timedelta(days=7))}
+            "publicados_7_dias": sum(1 for p in publicados if fecha(p["publicado"]) > ahora - dt.timedelta(days=7)),
+            "recientes": publicados[:40]}
+
+
+def apuntar_historial(clave, r):
+    """Una foto de las cifras del canal cada vez que se revisa: con ellas la Analista ve cómo crece."""
+    ruta = os.path.join("estado", "historial", f"{clave}.json")
+    fotos = privado.leer(ruta, []) or []
+    fotos.append({"fecha": privado.ahora(), "suscriptores": r.get("suscriptores"), "visitas": r.get("visitas_totales"),
+                  "videos": r.get("videos_totales")})
+    privado.escribir(ruta, fotos[-400:])
 
 
 def main():
@@ -92,6 +103,8 @@ def main():
             fallos += 1
         resumen[clave] = r
         privado.guardar_estado(f"canales/{clave}.json", r)
+        if not r.get("error"):
+            apuntar_historial(clave, r)
         jefes.apuntar("revision", {"canal": clave, "programados": len(r.get("programados", [])), "hasta": r.get("hasta"),
                                    "error": r.get("error")})
         if r.get("error"):

@@ -1,0 +1,95 @@
+# La fábrica: cada 2 horas, en los servidores de GitHub, sin Claude y sin ningún ordenador encendido.
+# Sube lo que esperaba en la cola, decide qué canales y barrios necesitan vídeo, los hace, los juzga y los programa en
+# YouTube (o los deja en «Para subir» si son de TikTok/Instagram). Todo lo que pasa queda en el repositorio privado.
+# También arranca cuando Claude deja peticiones/fabrica.json ({"solo": "gta", "maximo": 1}) o a mano desde Actions.
+name: Fábrica
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  push:
+    paths:
+      - "peticiones/fabrica.json"
+  workflow_dispatch:
+    inputs:
+      solo:
+        description: "Solo estos canales (claves separadas por comas)"
+        required: false
+      maximo:
+        description: "Cuántos vídeos como mucho"
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: fabrica
+  cancel-in-progress: false
+jobs:
+  ronda:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Qué hacer
+        id: que
+        run: |
+          solo="${{ github.event.inputs.solo }}"; maximo="${{ github.event.inputs.maximo }}"
+          if [ "${{ github.event_name }}" = "push" ] && [ -f peticiones/fabrica.json ]; then
+            solo=$(python -c "import json;print(json.load(open('peticiones/fabrica.json')).get('solo',''))")
+            maximo=$(python -c "import json;print(json.load(open('peticiones/fabrica.json')).get('maximo',''))")
+          fi
+          solo=$(printf '%s' "$solo" | tr -cd 'a-z0-9.,_-'); maximo=$(printf '%s' "$maximo" | tr -cd '0-9')
+          args=""
+          [ -n "$solo" ] && args="$args --solo $solo"
+          [ -n "$maximo" ] && args="$args --maximo $maximo"
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+      - name: Ronda de la fábrica
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          YT_ID_GTA: ${{ secrets.YT_ID_GTA }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_ID_CLIPS: ${{ secrets.YT_ID_CLIPS }}
+          YT_REFRESH_CURIOS: ${{ secrets.YT_REFRESH_CURIOS }}
+          YT_ID_CURIOS: ${{ secrets.YT_ID_CURIOS }}
+          YT_REFRESH_VERSUS: ${{ secrets.YT_REFRESH_VERSUS }}
+          YT_ID_VERSUS: ${{ secrets.YT_ID_VERSUS }}
+          YT_REFRESH_MAPAS: ${{ secrets.YT_REFRESH_MAPAS }}
+          YT_ID_MAPAS: ${{ secrets.YT_ID_MAPAS }}
+          YT_REFRESH_TERROR: ${{ secrets.YT_REFRESH_TERROR }}
+          YT_ID_TERROR: ${{ secrets.YT_ID_TERROR }}
+          YT_REFRESH_SOBSHORTS: ${{ secrets.YT_REFRESH_SOBSHORTS }}
+          YT_ID_SOBSHORTS: ${{ secrets.YT_ID_SOBSHORTS }}
+          YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
+          YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
+        run: python bots/central/fabrica.py ${{ steps.que.outputs.args }}
+      - name: Guardar lo que quede en el repositorio privado
+        if: always()
+        run: |
+          cd privado
+          git add -A -- . ':(exclude)*.mp4' ':(exclude)*.mp3' ':(exclude)*.webp'
+          git diff --cached --quiet && exit 0
+          git commit -q -m "fábrica: lo que quedaba de la ronda"
+          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; git rebase --abort 2>/dev/null; sleep $((i*5)); done
+          exit 1

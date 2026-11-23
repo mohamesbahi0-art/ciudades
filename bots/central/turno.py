@@ -1,8 +1,15 @@
-"""Turno de un canal en la Ciudad Central: el Escritor escribe, el Locutor pone la voz, el Dibujante dibuja, el Montador
-monta, el Juez de guardia juzga y, si no es una prueba, el Subidor lo programa a su hora. Cada robot apunta en su cuaderno
-lo que ha hecho, y el estado queda en el repositorio privado para la app.
+"""Turno de un canal (o de un barrio de TikTok/Instagram) en la Ciudad Central.
 
-Uso:  python bots/central/turno.py --canal terror [--prueba] [--salida carpeta]
+El Reportero trae fuentes si el canal las necesita, el Escritor escribe, el Locutor pone la voz, el Dibujante dibuja, el
+Montador monta y el Juez de guardia juzga. Después:
+- canal de YouTube: el Subidor lo programa en su hueco (o lo deja en la cola si hoy no hay cupo);
+- barrio: se deja en la bandeja «Para subir» con su texto para que lo suba el dueño.
+Cada robot apunta en su cuaderno lo que ha hecho, y el estado queda en el repositorio privado para la app.
+
+En los registros de GitHub (que son públicos) solo sale la clave del canal y el paso; títulos y nombres van solo al
+repositorio privado.
+
+Uso:  python bots/central/turno.py --canal terror [--hora 2026-12-01T20:00:00Z] [--prueba] [--salida carpeta]
       python bots/central/turno.py --peticion peticiones/prueba.json --prueba --salida privado/pruebas
 """
 import argparse
@@ -17,82 +24,136 @@ import traceback
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
-from bots.central import dibujante, escritor, montador  # noqa: E402
+from bots.central import dibujante, escritor, huecos, montador, parasubir, reportero, subidor  # noqa: E402
 from bots.comun import privado  # noqa: E402
 from bots.juzgado import juez_guardia  # noqa: E402
 import voz as locutor  # noqa: E402  (herramientas/voz.py)
 
-ROBOTS = ("escritor", "locutor", "dibujante", "montador", "juez_guardia", "subidor")
+ROBOTS = ("reportero_gta6", "escritor", "locutor", "dibujante", "montador", "juez_guardia", "subidor", "publicador")
+CON_FUENTES = ("noticias", "datos", "versus")
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--canal")
     p.add_argument("--peticion")
-    p.add_argument("--prueba", action="store_true", help="hace el vídeo pero no lo sube")
+    p.add_argument("--hora", help="hueco donde programarlo (ISO); si no se da, lo calcula")
+    p.add_argument("--prueba", action="store_true", help="hace el vídeo pero no lo sube ni lo deja para subir")
     p.add_argument("--salida", default="trabajo")
-    a = p.parse_args()
-    clave = a.canal or json.load(open(a.peticion, encoding="utf-8"))["canal"]
+    a = p.parse_args(argv)
+    clave = privado.resolver(a.canal or json.load(open(a.peticion, encoding="utf-8"))["canal"])
     canal = privado.canal(clave)
+    ajustes = privado.ajustes()
     hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
-    trabajo = os.path.join(a.salida, f"{hoy}-{clave}")
+    trabajo = os.path.join(a.salida, f"{hoy}-{privado.alias(clave)}")
     os.makedirs(trabajo, exist_ok=True)
     cuadernos = {r: privado.cuaderno(r) for r in ROBOTS}
     registro = []
 
-    def paso(robot, texto):
-        linea = f"[{dt.datetime.now(dt.timezone.utc).strftime('%H:%M:%S')}] {robot}: {texto}"
-        print(linea, flush=True)
-        registro.append(linea)
+    def paso(robot, texto, publico=None):
+        hora = dt.datetime.now(dt.timezone.utc).strftime('%H:%M:%S')
+        registro.append(f"[{hora}] {robot}: {texto}")
+        print(privado.limpiar(f"[{hora}] {clave} · {robot}: {publico if publico is not None else texto}"), flush=True)
 
-    resumen = {"canal": clave, "nombre": canal["nombre"], "prueba": a.prueba, "empezado": privado.ahora()}
+    resumen = {"canal": clave, "nombre": canal["nombre"], "destino": canal["destino"], "prueba": a.prueba,
+               "empezado": privado.ahora()}
     try:
+        fuentes, lista = None, []
+        if canal.get("tipo") in CON_FUENTES and canal.get("fuentes"):
+            paso("reportero", "buscando fuentes")
+            fuentes, lista = reportero.fuentes(clave, canal, registro=lambda t: paso("reportero", t))
+            if not fuentes:
+                raise RuntimeError("el Reportero no ha encontrado ninguna fuente hoy")
+            cuadernos["reportero_gta6"].apuntar("fuentes", {"canal": clave, "cuantas": len(lista)})
+            paso("reportero", f"{len(lista)} fuentes")
+
         paso("escritor", "escribiendo el guion")
-        g = escritor.escribir(canal, cuadernos["escritor"].para_el_prompt(), privado.titulos_recientes(clave))
+        g = escritor.escribir(canal, cuadernos["escritor"].para_el_prompt(), privado.titulos_recientes(clave), fuentes)
+        if lista:
+            reportero.apuntar_usadas(clave, lista, g.get("fuentes_usadas"))
         json.dump(g, open(os.path.join(trabajo, "guion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g["titulo"], "idea": g.get("idea"),
                                                            "prueba": a.prueba})
-        paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas)")
+        paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas)", f"guion listo ({len(g['escenas'])} escenas)")
 
         paso("locutor", f"grabando la voz ({canal.get('voz')})")
-        asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), "+10%", "+0Hz", trabajo))
+        asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
+                                    "+0Hz", trabajo))
         cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion})
 
         paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
+        t0 = dt.datetime.now(dt.timezone.utc)
         imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),
                                      os.path.join(trabajo, "dibujos"))
         faltan = imagenes.count(None)
-        cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan})
-        if faltan > 2:
+        minutos = round((dt.datetime.now(dt.timezone.utc) - t0).total_seconds() / 60, 1)
+        cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan,
+                                                   "minutos": minutos})
+        if faltan > max(1, len(imagenes) // 3):
             raise RuntimeError(f"faltan {faltan} dibujos de {len(imagenes)}")
-        paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos")
+        paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos en {minutos} min")
 
         paso("montador", "montando el vídeo")
         video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
-                                os.path.join(trabajo, "video.mp4"))
-        cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion,
-                                                  "segundos": round(montador.duracion(video), 1)})
+                                os.path.join(trabajo, f"{hoy}-{clave}.mp4"))  # nombre único: el registro lo usa
+        segundos = montador.duracion(video)
+        cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1)})
+        paso("montador", f"vídeo de {segundos:.1f} s")
 
         paso("juez_guardia", "juzgando el vídeo")
         v = juez_guardia.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(), os.path.join(trabajo, "juicio"))
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
                                                                  "veredicto": v["veredicto"], "total": v.get("total")})
         cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juez de guardia", v.get("consejo", ""))
-        paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}")
+        paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
+             f"{v['veredicto']} ({v.get('total', '-')}/100)")
         resumen.update(titulo=g["titulo"], veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
-                       juicio=id_juicio)
+                       juicio=id_juicio, segundos=round(segundos, 1))
 
         if a.prueba:
             paso("subidor", "es una prueba: no se sube nada")
+            resumen["destino_resultado"] = "prueba"
         elif v["veredicto"] == "suspendido":
             paso("subidor", "el Juzgado lo ha suspendido: no se sube")
+            resumen["destino_resultado"] = "suspendido"
+        elif canal["destino"] == "parasubir":
+            ids = parasubir.dejar(clave, canal, video, g, segundos, v)
+            cuadernos["publicador"].apuntar("para_subir", {"barrio": clave, "documentos": ids, "guion": id_guion})
+            privado.apuntar_titulo(clave, g["titulo"])
+            paso("publicador", f"en la bandeja «Para subir»: {', '.join(ids)}", f"en la bandeja ({len(ids)} redes)")
+            resumen.update(destino_resultado="para_subir", documentos=ids)
         else:
-            paso("subidor", "pendiente: la subida automática se activa después de la prueba")
+            hora = huecos.fecha(a.hora) if a.hora else None
+            if not hora:
+                registro_subidas = privado.leer(subidor.REGISTRO, []) or []
+                revision = privado.leer(os.path.join("estado", "canales", f"{clave}.json"), {})
+                cola = subidor.en_cola()
+                hora = huecos.siguiente(canal["horas"], huecos.ocupados(revision, registro_subidas, cola, clave),
+                                        dias_maximos=ajustes["dias_maximos"])
+            if hora and subidor.hay_cupo(ajustes):
+                r = subidor.subir(clave, canal, video, g, hora)
+                paso("subidor", f"{r['resultado']}: {r['mensaje']}", f"{r['resultado']} (código {r['codigo']})")
+                resumen.update(destino_resultado=r["resultado"], hora=r.get("hora"), url=r.get("url"))
+                cuadernos["subidor"].apuntar("subida", {"canal": clave, "guion": id_guion, "codigo": r["codigo"],
+                                                        "hora": r.get("hora"), "video": r.get("id")})
+                if r["resultado"] != "subido":
+                    nombre = subidor.encolar(clave, video, g, r["mensaje"], v)
+                    paso("subidor", f"guardado en la cola: {nombre}", "guardado en la cola")
+                    resumen.update(destino_resultado="en_cola", motivo=r["mensaje"], codigo=r["codigo"])
+            else:
+                motivo = "no hay hueco en los próximos días" if not hora else "hoy no queda cupo de subidas"
+                nombre = subidor.encolar(clave, video, g, motivo, v)
+                paso("subidor", f"{motivo}: guardado en la cola ({nombre})", f"{motivo}: guardado en la cola")
+                resumen.update(destino_resultado="en_cola", motivo=motivo)
         resumen["resultado"] = "hecho"
     except Exception as e:  # el turno nunca se queda a medias sin contarlo
         resumen.update(resultado="error", error=f"{type(e).__name__}: {e}")
-        paso("turno", f"ERROR {type(e).__name__}: {e}")
-        traceback.print_exc()
+        paso("turno", f"ERROR {type(e).__name__}: {e}", f"ERROR {type(e).__name__}")
+        detalle = traceback.format_exc()
+        with open(os.path.join(trabajo, "fallo.txt"), "w", encoding="utf-8") as f:
+            f.write(detalle)
+        resumen["traza"] = detalle[-2000:]
+        print(privado.limpiar("\n".join(detalle.strip().splitlines()[-12:])), flush=True)
     finally:
         resumen["terminado"] = privado.ahora()
         with open(os.path.join(trabajo, "registro.txt"), "w", encoding="utf-8") as f:
@@ -100,7 +161,9 @@ def main():
         json.dump(resumen, open(os.path.join(trabajo, "resumen.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         for c in cuadernos.values():
             c.guardar()
-        privado.guardar_estado(f"central/{clave}.json", {"canal": clave, "ultimo_turno": resumen})
+        historial = (privado.leer(os.path.join("estado", "central", f"{clave}.json"), {}) or {}).get("turnos", [])
+        historial = (historial + [resumen])[-20:]
+        privado.guardar_estado(f"central/{clave}.json", {"canal": clave, "ultimo_turno": resumen, "turnos": historial})
         shutil.rmtree(os.path.join(trabajo, "dibujos", "tmp"), ignore_errors=True)
     return 0 if resumen.get("resultado") == "hecho" else 1
 
