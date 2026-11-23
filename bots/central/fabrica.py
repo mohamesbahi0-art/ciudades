@@ -105,6 +105,14 @@ def main():
             print(f"cola: {subidos} vídeo(s) subidos", flush=True)
             guardar(f"fábrica: {subidos} vídeo(s) de la cola subidos")
 
+    if not a.prueba:
+        try:
+            borrados = parasubir.limpiar()     # la estantería «para-subir» no crece sin fin
+            if borrados:
+                print(f"almacén: {borrados} vídeo(s) ya subidos borrados de la estantería", flush=True)
+        except Exception as e:
+            print(f"almacén: no he podido limpiar ({type(e).__name__})", flush=True)
+
     plan, esperan = planear(ajustes, cfg, revs, solo)
     ronda["plan"] = [k for k, _ in plan][:maximo]
     ronda["esperan"] = esperan

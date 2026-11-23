@@ -35,6 +35,8 @@ jobs:
       - name: Hacer el vídeo de prueba
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+          ALMACEN_PRUEBAS: "1"
           PRIVADO: privado
           MEMORIA_DIR: privado/memoria
         run: python bots/central/turno.py --peticion peticiones/prueba.json --prueba --salida privado/pruebas
@@ -46,6 +48,5 @@ jobs:
           cd privado
           git config user.name "ciudades-bot"
           git config user.email "ciudades-bot@users.noreply.github.com"
-          git add pruebas 2>/dev/null || true
           cd ..
           python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('prueba de la Ciudad Central') else 1)"

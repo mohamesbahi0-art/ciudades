@@ -62,3 +62,24 @@ def dejar(clave, canal, video, guion, duracion, juicio=None):
         privado.escribir(os.path.join(CARPETA, f"{id_doc}.json"), doc)
         ids.append(id_doc)
     return ids
+
+
+def limpiar(dias=14):
+    """Borra de la estantería los vídeos que el dueño ya subió o descartó hace más de `dias` días (el texto se queda)."""
+    import collections
+    por_video = collections.defaultdict(list)
+    for d in documentos():
+        if d.get("video") and not d.get("videoBorrado"):
+            por_video[d["video"].rsplit("/", 1)[-1]].append(d)
+    limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=dias)
+    borrados = 0
+    for nombre, docs in por_video.items():
+        fechas = [huecos.fecha(d.get("subidoEl") or d.get("descartadoEl")) for d in docs]
+        if all(d.get("estado") in ("subido", "descartado") for d in docs) and all(f and f < limite for f in fechas):
+            almacen.borrar("para-subir", nombre)
+            for d in docs:
+                d2 = {k: v for k, v in d.items() if k != "_id"}
+                d2["videoBorrado"] = privado.ahora()
+                privado.escribir(os.path.join(CARPETA, f"{d['_id']}.json"), d2)
+            borrados += 1
+    return borrados

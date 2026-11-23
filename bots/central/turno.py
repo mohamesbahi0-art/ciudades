@@ -164,6 +164,8 @@ def main(argv=None):
         if a.prueba:
             paso("subidor", "es una prueba: no se sube nada")
             resumen["destino_resultado"] = "prueba"
+            if os.environ.get("ALMACEN_PRUEBAS"):   # el vídeo de prueba va a la estantería «pruebas», no al historial
+                resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video)
         elif v["veredicto"] == "suspendido":
             paso("subidor", "el Juzgado lo ha suspendido: no se sube")
             resumen["destino_resultado"] = "suspendido"

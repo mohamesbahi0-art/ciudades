@@ -50,6 +50,9 @@ def main():
         fallidas = [u for u in hechas[:2] if u["resultado"] == "failure"]
         if len(fallidas) == 2:
             problemas.append(f"{nombre}: ha fallado las dos últimas veces")
+    simulacro = turnos.get("simulacro.yml", {}).get("ultimas", [])
+    if simulacro and simulacro[0]["estado"] == "completed" and simulacro[0]["resultado"] == "failure":
+        problemas.append("simulacro.yml: el último cambio del código rompe la ronda de mentira (mirar antes de la de verdad)")
     privado.guardar_estado("maquinas.json", {"turnos": turnos, "problemas": problemas})
     jefa = privado.cuaderno("jefa_maquinas")
     jefa.apuntar("revision", {"turnos": len(turnos), "problemas": problemas})
