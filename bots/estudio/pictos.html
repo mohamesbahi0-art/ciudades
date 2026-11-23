@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Pictos</title>
+<!-- Pictos: vídeos de pictogramas (motivación y dinero) para Grow Up, versión mejorada del estilo del dueño.
+     Fondo oscuro con brillo, monigotes lisos, iconos de línea, barras, contadores, gráficas y texto palabra a palabra
+     (arriba, la frase anterior en pequeño). render.js: window.GUION = guion; await window.listo; window.pintar(t). -->
+<style>
+@font-face{font-family:"Montserrat";font-weight:700;src:url("fuentes/montserrat-700.woff2") format("woff2")}
+@font-face{font-family:"Montserrat";font-weight:800;src:url("fuentes/montserrat-800.woff2") format("woff2")}
+@font-face{font-family:"Montserrat";font-weight:900;src:url("fuentes/montserrat-900.woff2") format("woff2")}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#05080F}
+svg{display:block;font-family:"Montserrat",sans-serif}
+</style></head><body>
+<svg id="v" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+<defs>
+  <filter id="b3" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+  <filter id="b8" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+  <filter id="b20" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="20"/></filter>
+  <filter id="brillo" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="sombraTexto" x="-10%" y="-40%" width="120%" height="180%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.7"/></filter>
+  <radialGradient id="vineta" cx="0.5" cy="0.55" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.6"/></radialGradient>
+  <linearGradient id="luzCuerpo" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/><stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+  <linearGradient id="oroG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE7A0"/><stop offset="0.5" stop-color="#FFC94A"/><stop offset="1" stop-color="#D99A1A"/></linearGradient>
+</defs>
+<g id="escena"></g>
+</svg>
+<script>
+"use strict";
+const W = 1080, H = 1920, SUELO = 1330, R = Math.PI / 180;
+const lim = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const tramo = (t, a, d) => lim((t - a) / d);
+const suave = x => x * x * (3 - 2 * x);
+const salida = x => 1 - Math.pow(1 - x, 3);
+const rebote = x => { if (x <= 0) return 0; if (x >= 1) return 1; const c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const azar = i => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const f1 = n => Math.round(n * 10) / 10, f2 = n => Math.round(n * 100) / 100;
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const POS = { centro: 540, izq: 320, der: 760, izq2: 175, der2: 905, izq3: 100, der3: 980 };
+const posX = (p, def = 540) => typeof p === "number" ? p : (POS[p] ?? def);
+const PALETAS = {
+  menta: { fondo: "#05080F", brillo: "#0E4A45", main: "#2EE6A8", oro: "#FFC94A", rojo: "#FF5A6E", azul: "#5AB8FF", blanco: "#EEF2F7", gris: "#4B5568", linea: "#EEF2F7" },
+  azul: { fondo: "#04070F", brillo: "#0F2E5C", main: "#4DA3FF", oro: "#FFC94A", rojo: "#FF5A6E", azul: "#7CD4FF", blanco: "#EEF2F7", gris: "#4B5568", linea: "#EEF2F7" },
+  naranja: { fondo: "#0A0605", brillo: "#4A2410", main: "#FF8A3D", oro: "#FFC94A", rojo: "#FF4D5E", azul: "#5AB8FF", blanco: "#F5EFEA", gris: "#5A4D48", linea: "#F5EFEA" },
+};
+let P = PALETAS.menta;
+const col = c => P[c] || c || P.blanco;
+
+const lienzo = document.createElement("canvas").getContext("2d");
+function ancho(texto, peso, tam, esp = 0) { lienzo.font = `${peso} ${tam}px Montserrat`; return lienzo.measureText(texto).width + esp * Math.max(0, String(texto).length - 1); }
+const normal = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9ñ%€$]/g, "");
+
+// ---------- tiempo de cada palabra (de la voz) ----------
+function palabrasDe(e) {
+  const vis = String(e.texto || e.voz || "").trim().split(/\s+/).filter(Boolean);
+  const voz = e.palabras || [];
+  const d = e.fin - e.inicio;
+  return vis.map((w, i) => {
+    let a, b;
+    if (voz.length) {
+      const j = voz.length === vis.length ? i : Math.min(voz.length - 1, Math.floor(i * voz.length / vis.length));
+      a = voz[j].a; b = voz[j].b;
+    } else { a = e.inicio + 0.15 + (d - 0.6) * i / vis.length; b = a + (d - 0.6) / vis.length; }
+    return { w, a, b };
+  });
+}
+function cuandoDice(e, palabra, def) {
+  if (!palabra) return def;
+  const n = normal(palabra), ws = palabrasDe(e);
+  const x = ws.find(p => normal(p.w).startsWith(n) || n.startsWith(normal(p.w)) && normal(p.w).length > 2);
+  return x ? x.a - e.inicio : def;
+}
+
+// ---------- texto: trozos de 2-4 palabras que salen palabra a palabra; arriba, el trozo anterior en pequeño ----------
+function trozos(ws) {
+  const out = []; let cur = [];
+  ws.forEach((p, i) => {
+    cur.push(p);
+    const txt = cur.map(x => x.w).join(" ");
+    const fin = /[.,;:!?…]$/.test(p.w) || cur.length >= 4 || txt.length >= 20;
+    if (fin || i === ws.length - 1) { out.push(cur); cur = []; }
+  });
+  return out;
+}
+function textoArriba(e, tl, T, idxEscena = 0) {
+  const ws = palabrasDe(e);
+  if (!ws.length) return "";
+  const grupos = trozos(ws);
+  let k = grupos.findIndex(g => T < g[g.length - 1].b + 0.25);
+  if (k < 0) k = grupos.length - 1;
+  const g = grupos[k];
+  const marcadas = new Set();
+  for (const r of e.resaltar || []) for (const parte of String(r).split(/\s+/)) marcadas.add(normal(parte));
+  const color = col(e.color === "rojo" ? "rojo" : e.color === "verde" ? "main" : "oro");
+  // trozo anterior (o el contexto de la escena) en pequeño arriba
+  const recorta = ws2 => { let t = ""; for (let j = ws2.length - 1; j >= 0; j--) { const n = (ws2[j].w + (t ? " " + t : "")); if (n.length > 34) break; t = n; } return t; };
+  const dichas = grupos.slice(0, k).flat();
+  let previo = dichas.length ? recorta(dichas) : (e.antes || "");
+  if (!previo && idxEscena > 0) previo = recorta(palabrasDe(GUION.escenas[idxEscena - 1]));
+  let s = "";
+  if (previo) {
+    const tk = 30, txt = previo.toUpperCase();
+    s += `<text x="540" y="268" text-anchor="middle" font-weight="800" font-size="${tk}" letter-spacing="5" fill="#8590A6" opacity="${f2(0.9 * salida(tramo(tl, 0, 0.2)))}">${esc(txt)}</text>`;
+  }
+  const tam = g.map(x => x.w).join(" ").length > 16 ? 70 : 80;
+  const esp = ancho(" ", 800, tam);
+  const anchos = g.map(x => ancho(x.w.toUpperCase(), 800, tam));
+  const total = anchos.reduce((a, b) => a + b, 0) + esp * (g.length - 1);
+  const una = total <= 980;
+  const filas = una ? [g.map((x, i) => i)] : [g.slice(0, Math.ceil(g.length / 2)).map((x, i) => i), g.slice(Math.ceil(g.length / 2)).map((x, i) => i + Math.ceil(g.length / 2))];
+  filas.forEach((fila, fi) => {
+    const anchoFila = fila.reduce((a, i) => a + anchos[i], 0) + esp * (fila.length - 1);
+    let x = 540 - anchoFila / 2;
+    const y = 372 + fi * (tam + 12) - (filas.length > 1 ? 30 : 0);
+    for (const i of fila) {
+      const p = g[i], dicha = T >= p.a - 0.04, m = marcadas.has(normal(p.w));
+      const q = salida(tramo(T, p.a - 0.04, 0.16));
+      const sc = dicha ? 1 + 0.12 * (1 - q) : 1;
+      const cx = x + anchos[i] / 2;
+      const fill = dicha ? (m ? color : "#FFFFFF") : "#FFFFFF";
+      const op = dicha ? 1 : 0.22;
+      s += `<g transform="translate(${f1(cx)} ${y}) scale(${f2(sc)})" opacity="${op}"><text x="0" y="0" text-anchor="middle" font-weight="800" font-size="${tam}" fill="${fill}">${esc(p.w.toUpperCase())}</text></g>`;
+      if (m && dicha) s += `<rect x="${f1(x)}" y="${y + 14}" width="${f1(anchos[i] * salida(tramo(T, p.a, 0.3)))}" height="8" rx="4" fill="${color}"/>`;
+      x += anchos[i] + esp;
+    }
+  });
+  return `<g filter="url(#sombraTexto)">${s}</g>`;
+}
+
+// ---------- fondo ----------
+function fondo(e, T, cx) {
+  let s = `<defs><radialGradient id="gl"><stop offset="0" stop-color="${P.brillo}" stop-opacity="0.95"/><stop offset="0.45" stop-color="${P.brillo}" stop-opacity="0.45"/><stop offset="1" stop-color="${P.brillo}" stop-opacity="0"/></radialGradient></defs>`;
+  s += `<rect width="1080" height="1920" fill="${P.fondo}"/>`;
+  s += `<ellipse cx="${f1(cx)}" cy="1120" rx="760" ry="700" fill="url(#gl)" opacity="0.85"/>`;
+  s += `<ellipse cx="540" cy="330" rx="620" ry="260" fill="url(#gl)" opacity="0.18"/>`;
+  for (let i = 0; i < 64; i++) {
+    const x = azar(i) * 1080, y0 = azar(i + 50) * 1900;
+    const y = ((y0 - T * (4 + azar(i + 9) * 8)) % 1900 + 1900) % 1900;
+    const o = (0.08 + 0.3 * azar(i + 70)) * (0.55 + 0.45 * Math.sin(T * (0.8 + azar(i) * 2) + i));
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1 + azar(i + 30) * 2)}" fill="#BFD3FF" opacity="${f2(o)}"/>`;
+  }
+  s += `<line x1="0" y1="${SUELO}" x2="1080" y2="${SUELO}" stroke="#3A4660" stroke-width="3" stroke-dasharray="12 12" opacity="0.75"/>`;
+  return s;
+}
+
+// ---------- monigotes ----------
+function persona(o, tl, T, pop) {
+  const c = col(o.color || "blanco"), k = o.escala || 1;
+  const fase = (o.id ? o.id.length : 3) * 0.7;
+  let bob = Math.sin(T * 2.2 + fase) * 2.5, dx = 0, rot = 0;
+  if (o.accion === "celebra") bob = -18 * Math.abs(Math.sin(T * 4.5 + fase));
+  if (o.accion === "nervioso") dx = Math.sin(T * 38) * 3;
+  if (o.accion === "triste") rot = 0;
+  let brazos = "";
+  const L = (a, b, w = 22) => `<line x1="${f1(a[0])}" y1="${f1(a[1])}" x2="${f1(b[0])}" y2="${f1(b[1])}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const ola = Math.sin(T * 3 + fase);
+  switch (o.accion) {
+    case "senala_der": brazos = L([40, -112], [118, -118 + 3 * ola]); break;
+    case "senala_izq": brazos = L([-40, -112], [-118, -118 + 3 * ola]); break;
+    case "celebra": brazos = L([-40, -116], [-84, -196 - 6 * ola]) + L([40, -116], [84, -196 + 6 * ola]); break;
+    case "piensa": brazos = L([36, -108], [40, -170]) + `<circle cx="40" cy="-176" r="12" fill="${c}"/>`; break;
+    case "saluda": brazos = L([40, -116], [92, -190 + 12 * ola]); break;
+    case "sujeta": brazos = L([-36, -100], [0, -78]) + L([36, -100], [0, -78]); break;
+    case "brazos_abiertos": brazos = L([-40, -116], [-104, -150]) + L([40, -116], [104, -150]); break;
+  }
+  const cabezaY = o.accion === "triste" ? -184 : -196;
+  let s = `<g transform="translate(${f1(dx)} ${f1(bob)}) rotate(${rot})">`;
+  if (o.brilla) s += `<circle cx="0" cy="-130" r="150" fill="${c}" opacity="0.16" filter="url(#b20)"/>`;
+  s += brazos;
+  const cuerpo = "M -64 0 L -64 -70 C -64 -128 -40 -150 0 -150 C 40 -150 64 -128 64 -70 L 64 0 Z";
+  s += `<path d="${cuerpo}" fill="${c}"/><path d="${cuerpo}" fill="url(#luzCuerpo)"/>`;
+  s += `<circle cx="0" cy="${cabezaY}" r="36" fill="${c}"/><circle cx="0" cy="${cabezaY}" r="36" fill="url(#luzCuerpo)"/>`;
+  if (o.pupitre) s += `<g stroke="${P.linea}" stroke-width="6" stroke-linecap="round" fill="none"><line x1="-86" y1="-46" x2="86" y2="-46"/><line x1="-70" y1="-46" x2="-70" y2="0"/><line x1="70" y1="-46" x2="70" y2="0"/><path d="M -30 -46 L -22 -64 L 26 -64 L 30 -46" fill="${P.fondo}"/></g>`;
+  s += `</g>`;
+  let fuera = "";
+  const cima = -240;
+  if (o.etiqueta) {
+    const pe = rebote(tramo(tl, (o.etiqueta_t ?? 0.35), 0.35));
+    fuera += etiqueta(0, cima - 34, o.etiqueta, o.color_etiqueta || "rojo", pe);
+    if (o.tachar !== undefined) {
+      const q = salida(tramo(tl, o.tachar, 0.3)), w = ancho(String(o.etiqueta).toUpperCase(), 800, 30) + 48;
+      fuera += `<g stroke="${P.rojo}" stroke-width="9" stroke-linecap="round" opacity="${f2(q)}"><line x1="${f1(-w / 2 * q)}" y1="${f1(cima - 58 + 0)}" x2="${f1(w / 2 * q)}" y2="${f1(cima - 10)}"/><line x1="${f1(-w / 2 * q)}" y1="${f1(cima - 10)}" x2="${f1(w / 2 * q)}" y2="${f1(cima - 58)}"/></g>`;
+    }
+  }
+  if (o.corona) fuera += `<g transform="translate(0 ${cima - 10 + bob})" opacity="${f2(rebote(tramo(tl, o.corona, 0.4)))}">${icono("corona", 0.8, T, "oro")}</g>`;
+  return `<g transform="translate(${f1(o._x)} ${SUELO}) scale(${f2(k * (0.4 + 0.6 * rebote(pop)))})" opacity="${f2(lim(pop * 2))}">` +
+         `<ellipse cx="0" cy="4" rx="80" ry="10" fill="#000" opacity="0.45" filter="url(#b3)"/>${s}${fuera}</g>`;
+}
+
+function etiqueta(x, y, texto, color, pop = 1, tam = 30) {
+  const t = String(texto).toUpperCase(), w = ancho(t, 800, tam, 1) + 44, h = 56, c = col(color);
+  const oscuraLetra = ["oro", "main", "blanco"].includes(color);
+  return `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f2(rebote(pop))})" opacity="${f2(lim(pop * 3))}">` +
+    `<rect x="${f1(-w / 2 - 6)}" y="${-h / 2 - 6}" width="${f1(w + 12)}" height="${h + 12}" rx="${h / 2 + 6}" fill="${c}" opacity="0.25" filter="url(#b8)"/>` +
+    `<rect x="${f1(-w / 2)}" y="${-h / 2}" width="${f1(w)}" height="${h}" rx="${h / 2}" fill="${c}"/>` +
+    `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${tam}" letter-spacing="1" fill="${oscuraLetra ? "#0B0F17" : "#FFFFFF"}">${esc(t)}</text></g>`;
+}
+
+// ---------- iconos de línea (caja de 200 x 200 centrada en 0,0) ----------
+function icono(nombre, k, T, acento, texto) {
+  const A = col(acento || "main"), Ln = P.linea;
+  const st = `stroke="${Ln}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"`;
+  const lleno = c => `fill="${c}" stroke="${Ln}" stroke-width="7" stroke-linejoin="round"`;
+  let s = "";
+  switch (nombre) {
+    case "moneda": s = `<circle r="62" fill="url(#oroG)"/><circle r="48" fill="none" stroke="#B9800F" stroke-width="5"/><text y="24" text-anchor="middle" font-weight="900" font-size="68" fill="#8A5A00">€</text>`; break;
+    case "monedas": for (let i = 0; i < 4; i++) s += `<g transform="translate(0 ${40 - i * 24})"><ellipse rx="62" ry="22" fill="#D99A1A"/><rect x="-62" y="-10" width="124" height="10" fill="#D99A1A"/><ellipse rx="62" ry="22" cy="-10" fill="url(#oroG)"/></g>`; break;
+    case "billete": s = `<rect x="-90" y="-52" width="180" height="104" rx="12" ${lleno("#0E2A22")}/><circle r="28" fill="none" stroke="${A}" stroke-width="6"/><text y="13" text-anchor="middle" font-weight="900" font-size="36" fill="${A}">€</text><line x1="-66" y1="-30" x2="-44" y2="-30" ${st}/><line x1="44" y1="30" x2="66" y2="30" ${st}/>`; break;
+    case "hucha": s = `<ellipse cx="0" cy="10" rx="80" ry="60" ${lleno(A)}/><circle cx="54" cy="-10" r="7" fill="#0B0F17"/><path d="M -30 -46 L -20 -76 L 0 -52" ${lleno(A)}/><rect x="-18" y="-46" width="36" height="8" rx="4" fill="#0B0F17"/><line x1="-46" y1="66" x2="-46" y2="84" ${st}/><line x1="34" y1="66" x2="34" y2="84" ${st}/><ellipse cx="86" cy="14" rx="12" ry="16" ${lleno(A)}/><g transform="translate(0 ${-110 + 14 * Math.abs(Math.sin(T * 2))}) scale(0.4)"><circle r="62" fill="url(#oroG)"/></g>`; break;
+    case "cartera": s = `<rect x="-88" y="-56" width="176" height="112" rx="16" ${lleno("#1A2233")}/><path d="M 30 -22 L 88 -22 L 88 22 L 30 22 Z" ${lleno(A)}/><circle cx="52" cy="0" r="8" fill="#0B0F17"/>`; break;
+    case "cartera_vacia": s = `<rect x="-88" y="-56" width="176" height="112" rx="16" ${lleno("#1A2233")}/><path d="M 30 -22 L 88 -22 L 88 22 L 30 22 Z" ${lleno("#3A4458")}/><g stroke="${P.rojo}" stroke-width="5" fill="none" opacity="${f2(0.6 + 0.4 * Math.sin(T * 6))}"><path d="M -40 -84 q 8 -12 0 -24"/><path d="M -10 -88 q 8 -12 0 -24"/></g>`; break;
+    case "tarjeta": s = `<rect x="-96" y="-60" width="192" height="120" rx="14" ${lleno("#1A2233")}/><rect x="-96" y="-30" width="192" height="22" fill="${Ln}" opacity="0.85"/><rect x="-70" y="6" width="38" height="28" rx="5" fill="url(#oroG)"/>`; break;
+    case "banco": s = `<path d="M -96 -40 L 0 -96 L 96 -40 Z" ${lleno("#1A2233")}/>` + [-64, -22, 22, 64].map(x => `<line x1="${x}" y1="-28" x2="${x}" y2="58" ${st}/>`).join("") + `<line x1="-100" y1="72" x2="100" y2="72" ${st}/><text y="-48" text-anchor="middle" font-weight="900" font-size="34" fill="${A}">€</text>`; break;
+    case "casa": s = `<path d="M -90 -10 L 0 -92 L 90 -10" ${st}/><rect x="-70" y="-16" width="140" height="100" ${lleno("#1A2233")}/><rect x="-18" y="30" width="36" height="54" fill="${A}"/><rect x="28" y="4" width="26" height="24" fill="${A}" opacity="0.7"/>`; break;
+    case "coche": s = `<path d="M -100 30 L -100 0 L -64 -6 L -36 -46 L 40 -46 L 70 -6 L 100 4 L 100 30 Z" ${lleno(A)}/><circle cx="-56" cy="34" r="22" ${lleno("#0B0F17")}/><circle cx="56" cy="34" r="22" ${lleno("#0B0F17")}/>`; break;
+    case "movil": s = `<rect x="-48" y="-90" width="96" height="180" rx="18" ${lleno("#0F1624")}/><rect x="-36" y="-70" width="72" height="128" rx="6" fill="${A}" opacity="${f2(0.55 + 0.25 * Math.sin(T * 3))}"/><line x1="-14" y1="74" x2="14" y2="74" ${st}/>`; break;
+    case "portatil": s = `<rect x="-78" y="-70" width="156" height="100" rx="10" ${lleno("#0F1624")}/><rect x="-64" y="-58" width="128" height="76" rx="4" fill="${A}" opacity="0.55"/><path d="M -100 40 L 100 40 L 86 60 L -86 60 Z" ${lleno("#1A2233")}/>`; break;
+    case "tele": s = `<rect x="-96" y="-70" width="192" height="120" rx="12" ${lleno("#0F1624")}/><rect x="-82" y="-58" width="164" height="96" rx="4" fill="${A}" opacity="${f2(0.4 + 0.3 * azar(Math.floor(T * 6)))}"/><line x1="-30" y1="74" x2="30" y2="74" ${st}/><line x1="0" y1="50" x2="0" y2="74" ${st}/>`; break;
+    case "mando": s = `<path d="M -84 -20 Q -96 50 -60 56 Q -40 58 -24 30 L 24 30 Q 40 58 60 56 Q 96 50 84 -20 Q 76 -46 50 -46 L -50 -46 Q -76 -46 -84 -20 Z" ${lleno("#1A2233")}/><line x1="-56" y1="-8" x2="-56" y2="20" ${st}/><line x1="-70" y1="6" x2="-42" y2="6" ${st}/><circle cx="50" cy="-2" r="8" fill="${A}"/><circle cx="66" cy="14" r="8" fill="${P.rojo}"/>`; break;
+    case "libro": s = `<path d="M 0 -60 Q -50 -84 -96 -64 L -96 66 Q -50 46 0 70 Q 50 46 96 66 L 96 -64 Q 50 -84 0 -60 Z" ${lleno("#1A2233")}/><line x1="0" y1="-60" x2="0" y2="70" ${st}/>` + [-30, -8, 14].map(y => `<line x1="-74" y1="${y}" x2="-24" y2="${y - 6}" stroke="${A}" stroke-width="5" stroke-linecap="round"/><line x1="24" y1="${y - 6}" x2="74" y2="${y}" stroke="${A}" stroke-width="5" stroke-linecap="round"/>`).join(""); break;
+    case "reloj": { const a1 = T * 360 / 4, a2 = T * 360 / 48; s = `<circle r="80" ${lleno("#0F1624")}/>` + [0, 90, 180, 270].map(a => `<line x1="${f1(Math.sin(a * R) * 62)}" y1="${f1(-Math.cos(a * R) * 62)}" x2="${f1(Math.sin(a * R) * 70)}" y2="${f1(-Math.cos(a * R) * 70)}" ${st}/>`).join("") + `<line x1="0" y1="0" x2="${f1(Math.sin(a2 * R) * 36)}" y2="${f1(-Math.cos(a2 * R) * 36)}" ${st}/><line x1="0" y1="0" x2="${f1(Math.sin(a1 * R) * 56)}" y2="${f1(-Math.cos(a1 * R) * 56)}" stroke="${A}" stroke-width="7" stroke-linecap="round"/><circle r="8" fill="${A}"/>`; break; }
+    case "reloj_arena": { const q = (T * 0.25) % 1; s = `<line x1="-60" y1="-84" x2="60" y2="-84" ${st}/><line x1="-60" y1="84" x2="60" y2="84" ${st}/><path d="M -48 -84 Q -48 -24 0 0 Q -48 24 -48 84 M 48 -84 Q 48 -24 0 0 Q 48 24 48 84" ${st}/><path d="M ${f1(-38 * (1 - q))} ${f1(-70 + 56 * q)} L ${f1(38 * (1 - q))} ${f1(-70 + 56 * q)} L 0 -6 Z" fill="${A}"/><path d="M -40 78 L 40 78 L ${f1(30 * q)} ${f1(78 - 50 * q)} L ${f1(-30 * q)} ${f1(78 - 50 * q)} Z" fill="${A}"/><line x1="0" y1="-4" x2="0" y2="76" stroke="${A}" stroke-width="3" stroke-dasharray="4 6" stroke-dashoffset="${f1(-T * 40)}"/>`; break; }
+    case "calendario": s = `<rect x="-84" y="-76" width="168" height="160" rx="14" ${lleno("#0F1624")}/><path d="M -84 -38 L 84 -38" ${st}/><rect x="-84" y="-76" width="168" height="38" rx="14" fill="${A}"/><line x1="-44" y1="-94" x2="-44" y2="-62" ${st}/><line x1="44" y1="-94" x2="44" y2="-62" ${st}/><text y="48" text-anchor="middle" font-weight="900" font-size="${texto && String(texto).length > 4 ? 40 : 56}" fill="${Ln}">${esc(texto || "")}</text>`; break;
+    case "grafica_sube": { const q = salida(lim(T % 4 / 1.5)); s = `<polyline points="-90,-80 -90,80 90,80" ${st}/><path d="M -76 60 C -20 54 20 30 76 -64" stroke="${A}" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="260" stroke-dashoffset="${f1(260 * (1 - q))}"/><path d="M 76 -64 L 52 -60 M 76 -64 L 74 -40" stroke="${A}" stroke-width="9" stroke-linecap="round" opacity="${f2(q)}"/>`; break; }
+    case "grafica_baja": s = `<polyline points="-90,-80 -90,80 90,80" ${st}/><path d="M -76 -60 C -20 -40 20 20 76 56" stroke="${P.rojo}" stroke-width="9" fill="none" stroke-linecap="round"/>`; break;
+    case "flecha_arriba": s = `<path d="M 0 -90 L 70 -10 L 28 -10 L 28 86 L -28 86 L -28 -10 L -70 -10 Z" fill="${A}"/>`; break;
+    case "flecha_abajo": s = `<path d="M 0 90 L 70 10 L 28 10 L 28 -86 L -28 -86 L -28 10 L -70 10 Z" fill="${P.rojo}"/>`; break;
+    case "trofeo": s = `<path d="M -56 -80 L 56 -80 Q 56 0 0 12 Q -56 0 -56 -80 Z" fill="url(#oroG)"/><path d="M -56 -64 Q -92 -64 -86 -32 Q -80 -6 -46 -6 M 56 -64 Q 92 -64 86 -32 Q 80 -6 46 -6" stroke="#FFC94A" stroke-width="10" fill="none"/><rect x="-10" y="10" width="20" height="34" fill="#D99A1A"/><rect x="-46" y="44" width="92" height="26" rx="6" fill="#3A2614"/>`; break;
+    case "corona": s = `<path d="M -80 30 L -90 -46 L -42 -6 L 0 -70 L 42 -6 L 90 -46 L 80 30 Z" fill="url(#oroG)" stroke="#FFE7A0" stroke-width="4" stroke-linejoin="round"/><rect x="-80" y="30" width="160" height="22" rx="6" fill="#D99A1A"/>` + [[-104, -70], [100, -84], [0, -104]].map(([x, y], i) => `<path d="M ${x} ${y - 14} Q ${x} ${y} ${x + 14} ${y} Q ${x} ${y} ${x} ${y + 14} Q ${x} ${y} ${x - 14} ${y} Q ${x} ${y} ${x} ${y - 14} Z" fill="#FFE7A0" opacity="${f2(0.5 + 0.5 * Math.sin(T * 4 + i * 2))}"/>`).join(""); break;
+    case "medalla": s = `<path d="M -40 -96 L -10 -20 M 40 -96 L 10 -20" stroke="${A}" stroke-width="16"/><circle cy="30" r="56" fill="url(#oroG)"/><text y="50" text-anchor="middle" font-weight="900" font-size="54" fill="#8A5A00">1</text>`; break;
+    case "estrella": s = `<path d="M 0 -90 L 24 -28 L 90 -24 L 38 18 L 56 84 L 0 46 L -56 84 L -38 18 L -90 -24 L -24 -28 Z" fill="url(#oroG)"/>`; break;
+    case "cohete": s = `<g transform="translate(0 ${f1(-6 * Math.abs(Math.sin(T * 8)))})"><path d="M 0 -96 Q 44 -50 36 40 L -36 40 Q -44 -50 0 -96 Z" ${lleno("#1A2233")}/><circle cy="-30" r="16" fill="${A}"/><path d="M -36 10 L -66 50 L -36 46 M 36 10 L 66 50 L 36 46" ${lleno(A)}/><path d="M -20 44 Q 0 ${f1(110 + 16 * Math.sin(T * 20))} 20 44 Z" fill="${P.oro}"/></g>`; break;
+    case "bombilla": s = `<circle cy="-22" r="70" fill="${P.oro}" opacity="${f2(0.18 + 0.1 * Math.sin(T * 4))}" filter="url(#b8)"/><path d="M -30 46 L -30 26 Q -66 4 -62 -34 Q -56 -84 0 -86 Q 56 -84 62 -34 Q 66 4 30 26 L 30 46 Z" fill="${P.oro}" stroke="${Ln}" stroke-width="6"/><line x1="-26" y1="62" x2="26" y2="62" ${st}/><line x1="-18" y1="80" x2="18" y2="80" ${st}/>`; break;
+    case "cerebro": s = `<path d="M 0 -70 Q -30 -96 -60 -74 Q -96 -70 -92 -30 Q -106 6 -78 30 Q -74 66 -36 66 Q -12 82 0 62 Q 12 82 36 66 Q 74 66 78 30 Q 106 6 92 -30 Q 96 -70 60 -74 Q 30 -96 0 -70 Z" ${lleno("#0F1624")}/><line x1="0" y1="-70" x2="0" y2="62" ${st}/><path d="M -60 -36 Q -36 -20 -56 6 M -40 30 Q -20 20 -24 44 M 60 -36 Q 36 -20 56 6 M 40 30 Q 20 20 24 44" stroke="${A}" stroke-width="6" fill="none" stroke-linecap="round"/>`; break;
+    case "diana": s = `<circle r="84" ${lleno("#0F1624")}/><circle r="56" fill="none" stroke="${P.rojo}" stroke-width="10"/><circle r="26" fill="${P.rojo}"/><line x1="0" y1="0" x2="92" y2="-92" stroke="${A}" stroke-width="8" stroke-linecap="round"/><path d="M 92 -92 L 70 -94 M 92 -92 L 94 -70" stroke="${A}" stroke-width="8" stroke-linecap="round"/>`; break;
+    case "montana": s = `<path d="M -100 80 L -30 -40 L 4 10 L 36 -72 L 100 80 Z" ${lleno("#1A2233")}/><line x1="36" y1="-72" x2="36" y2="-118" ${st}/><path d="M 36 -118 L 76 -104 L 36 -90 Z" fill="${A}"/>`; break;
+    case "escalera": s = `<path d="M -96 84 L -96 44 L -48 44 L -48 4 L 0 4 L 0 -36 L 48 -36 L 48 -76 L 96 -76" ${st}/><circle cx="72" cy="-104" r="16" fill="${A}"/>`; break;
+    case "puerta": s = `<rect x="-60" y="-96" width="120" height="186" rx="6" ${lleno("#0F1624")}/><path d="M -60 -96 L 24 -76 L 24 90 L -60 90 Z" fill="${A}" opacity="0.85"/><circle cx="8" cy="0" r="7" fill="#0B0F17"/>`; break;
+    case "llave": s = `<circle cx="-50" cy="0" r="36" fill="none" stroke="${P.oro}" stroke-width="14"/><path d="M -14 0 L 90 0 M 60 0 L 60 30 M 80 0 L 80 22" stroke="${P.oro}" stroke-width="14" stroke-linecap="round"/>`; break;
+    case "candado": s = `<path d="M -42 -10 L -42 -50 Q -42 -92 0 -92 Q 42 -92 42 -50 L 42 -10" ${st}/><rect x="-70" y="-14" width="140" height="104" rx="16" fill="${A}" stroke="${Ln}" stroke-width="7"/><circle cy="28" r="12" fill="#0B0F17"/>`; break;
+    case "lupa": s = `<circle cx="-16" cy="-16" r="56" ${lleno("#0F1624")}/><line x1="24" y1="24" x2="84" y2="84" stroke="${Ln}" stroke-width="16" stroke-linecap="round"/><path d="M -46 -30 Q -40 -52 -18 -56" stroke="${A}" stroke-width="6" fill="none" stroke-linecap="round"/>`; break;
+    case "botella": s = `<path d="M -16 -96 L 16 -96 L 16 -64 Q 46 -44 46 -4 L 46 84 Q 46 96 34 96 L -34 96 Q -46 96 -46 84 L -46 -4 Q -46 -44 -16 -64 Z" ${lleno("#0F1624")}/><rect x="-46" y="0" width="92" height="56" fill="${A}"/>` + [12, 26, 40].map(y => `<line x1="-30" y1="${y}" x2="26" y2="${y}" stroke="#0B0F17" stroke-width="5"/>`).join(""); break;
+    case "carrito": s = `<path d="M -100 -60 L -70 -60 L -46 40 L 70 40 L 90 -30 L -60 -30" ${st}/><circle cx="-34" cy="70" r="14" fill="${Ln}"/><circle cx="56" cy="70" r="14" fill="${Ln}"/>` + [[-30, -50], [0, -64], [30, -52]].map(([x, y]) => `<rect x="${x - 14}" y="${y}" width="28" height="${-y - 34}" rx="4" fill="${A}"/>`).join(""); break;
+    case "cafe": s = `<path d="M -60 -30 L 60 -30 L 50 70 Q 48 84 34 84 L -34 84 Q -48 84 -50 70 Z" ${lleno("#1A2233")}/><path d="M 60 -10 Q 96 -10 92 22 Q 88 46 54 46" ${st}/>` + [-24, 6, 36].map((x, i) => `<path d="M ${x} -50 q 10 -16 0 -32 q -10 -16 0 -30" stroke="${Ln}" stroke-width="5" fill="none" stroke-linecap="round" opacity="${f2(0.3 + 0.4 * Math.sin(T * 3 + i))}"/>`).join(""); break;
+    case "pesa": s = `<rect x="-70" y="-10" width="140" height="20" rx="8" fill="${Ln}"/><rect x="-100" y="-44" width="30" height="88" rx="8" fill="${A}"/><rect x="70" y="-44" width="30" height="88" rx="8" fill="${A}"/><rect x="-66" y="-30" width="18" height="60" rx="6" fill="${A}"/><rect x="48" y="-30" width="18" height="60" rx="6" fill="${A}"/>`; break;
+    case "fuego": { const w = Math.sin(T * 9) * 6; s = `<path d="M 0 90 Q -70 80 -62 10 Q -56 -30 -20 -60 Q -24 -20 0 -10 Q 4 -60 30 -96 Q 40 -40 62 -10 Q 80 30 60 64 Q 40 90 0 90 Z" fill="${P.rojo}"/><path d="M 0 86 Q -36 80 -30 36 Q -24 6 ${f1(-2 + w)} -16 Q 8 24 26 30 Q 40 60 22 78 Q 12 88 0 86 Z" fill="${P.oro}"/>`; break; }
+    case "rayo": s = `<path d="M 20 -96 L -56 12 L -6 12 L -26 96 L 56 -18 L 6 -18 Z" fill="${P.oro}"/>`; break;
+    case "corazon": s = `<path d="M 0 80 Q -96 10 -84 -40 Q -70 -90 0 -50 Q 70 -90 84 -40 Q 96 10 0 80 Z" fill="${P.rojo}" transform="scale(${f2(1 + 0.06 * Math.max(0, Math.sin(T * 7)))})"/>`; break;
+    case "check": s = `<circle r="80" fill="${A}"/><path d="M -38 0 L -10 30 L 42 -30" stroke="#0B0F17" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`; break;
+    case "cruz": s = `<circle r="80" fill="${P.rojo}"/><path d="M -34 -34 L 34 34 M 34 -34 L -34 34" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/>`; break;
+    case "pregunta": s = `<circle r="80" fill="none" stroke="${A}" stroke-width="8"/><text y="34" text-anchor="middle" font-weight="900" font-size="100" fill="${A}">?</text>`; break;
+    case "exclamacion": s = `<circle r="80" fill="${P.oro}"/><text y="36" text-anchor="middle" font-weight="900" font-size="104" fill="#0B0F17">!</text>`; break;
+    case "pizarra": s = `<rect x="-110" y="-60" width="220" height="120" rx="12" ${lleno("#0B0F17")}/><text y="16" text-anchor="middle" font-weight="900" font-size="${texto && String(texto).length > 8 ? 30 : 42}" fill="${Ln}">${esc(String(texto || "").toUpperCase())}</text><line x1="-70" y1="42" x2="70" y2="42" stroke="${Ln}" stroke-width="4" opacity="0.4"/>`; break;
+    case "colegio": s = `<path d="M -100 -10 L 0 -70 L 100 -10" ${st}/><rect x="-86" y="-14" width="172" height="96" ${lleno("#0F1624")}/><rect x="-16" y="30" width="32" height="52" fill="${A}"/><line x1="0" y1="-70" x2="0" y2="-114" ${st}/><path d="M 0 -114 L 34 -104 L 0 -94 Z" fill="${A}"/>`; break;
+    case "oficina": s = `<rect x="-70" y="-100" width="140" height="190" rx="6" ${lleno("#0F1624")}/>` + [-72, -36, 0, 36].map(y => [-40, 0, 40].map(x => `<rect x="${x - 12}" y="${y}" width="24" height="22" rx="3" fill="${A}" opacity="${f2(0.4 + 0.5 * azar(x * 3 + y))}"/>`).join("")).join(""); break;
+    case "maletin": s = `<rect x="-90" y="-50" width="180" height="120" rx="14" ${lleno("#1A2233")}/><path d="M -30 -50 L -30 -76 L 30 -76 L 30 -50" ${st}/><line x1="-90" y1="0" x2="90" y2="0" ${st}/><rect x="-14" y="-10" width="28" height="22" rx="4" fill="${A}"/>`; break;
+    case "porcentaje": s = `<circle r="84" fill="${A}"/><text y="32" text-anchor="middle" font-weight="900" font-size="96" fill="#0B0F17">%</text>`; break;
+    case "balanza": { const a = Math.sin(T * 1.5) * 6; s = `<line x1="0" y1="-80" x2="0" y2="80" ${st}/><line x1="-60" y1="80" x2="60" y2="80" ${st}/><g transform="rotate(${f1(a)} 0 -70)"><line x1="-90" y1="-70" x2="90" y2="-70" ${st}/><path d="M -90 -70 L -120 0 L -60 0 Z" stroke="${Ln}" stroke-width="5" fill="${A}" opacity="0.8"/><path d="M 90 -70 L 60 0 L 120 0 Z" stroke="${Ln}" stroke-width="5" fill="${P.rojo}" opacity="0.8"/></g>`; break; }
+    case "regalo": s = `<rect x="-76" y="-20" width="152" height="100" rx="8" fill="${A}"/><rect x="-86" y="-50" width="172" height="34" rx="8" fill="${A}"/><rect x="-12" y="-50" width="24" height="130" fill="${P.oro}"/><path d="M 0 -50 Q -50 -100 -40 -60 M 0 -50 Q 50 -100 40 -60" stroke="${P.oro}" stroke-width="10" fill="none"/>`; break;
+    case "ajedrez": s = `<path d="M -50 84 L 50 84 L 40 56 L -40 56 Z" fill="${Ln}"/><path d="M -30 56 L -22 -10 L 22 -10 L 30 56 Z" fill="${Ln}"/><rect x="-36" y="-28" width="72" height="20" rx="6" fill="${Ln}"/><circle cy="-50" r="22" fill="${Ln}"/><path d="M -8 -90 L 8 -90 M 0 -98 L 0 -76" stroke="${P.oro}" stroke-width="7" stroke-linecap="round"/>`; break;
+    case "cama": s = `<path d="M -100 -40 L -100 70 M 100 10 L 100 70 M -100 40 L 100 40" ${st}/><rect x="-100" y="0" width="200" height="40" rx="10" fill="${A}"/><rect x="-92" y="-22" width="56" height="26" rx="10" fill="${Ln}"/><text x="40" y="-30" font-weight="900" font-size="40" fill="${Ln}" opacity="${f2(0.4 + 0.4 * Math.sin(T * 2))}">z</text>`; break;
+    case "camino": s = `<path d="M -40 90 Q -10 30 -50 -10 Q -80 -50 20 -90" stroke="${A}" stroke-width="12" fill="none" stroke-dasharray="20 18" stroke-linecap="round" stroke-dashoffset="${f1(-T * 30)}"/>`; break;
+    case "monedas_crecen": { s = `<line x1="-120" y1="80" x2="120" y2="80" stroke="${Ln}" stroke-width="5" opacity="0.5"/>`;
+      [1, 2, 3, 5, 8].forEach((n, j) => { const vis = lim((T * 1.2 - j * 0.35) * 2); for (let c2 = 0; c2 < n; c2++) { if (c2 / n > vis) break; const y = 68 - c2 * 15; s += `<g transform="translate(${-100 + j * 50} ${y})"><ellipse rx="22" ry="8" fill="#D99A1A"/><rect x="-22" y="-5" width="44" height="5" fill="#D99A1A"/><ellipse rx="22" ry="8" cy="-5" fill="url(#oroG)"/></g>`; } });
+      break; }
+    case "bola_nieve": { const r = 40 + 30 * salida(lim((T % 5) / 3)); s = `<path d="M -100 90 Q 0 40 100 0" stroke="${Ln}" stroke-width="6" fill="none" opacity="0.6"/><circle cx="${f1(-60 + 100 * salida(lim((T % 5) / 3)))}" cy="${f1(70 - r - 20 * salida(lim((T % 5) / 3)))}" r="${f1(r)}" fill="${Ln}" stroke="#AFC2DA" stroke-width="5"/>`; break; }
+    default: s = `<circle r="60" fill="${A}" opacity="0.5"/>`;
+  }
+  return `<g transform="scale(${f2(k)})">${s}</g>`;
+}
+
+// ---------- piezas de datos ----------
+function barras(lista, tl, y0) {
+  let s = "";
+  lista.forEach((b, i) => {
+    const y = y0 + i * 118, c = col(b.color || "main"), q = salida(tramo(tl, 0.35 + i * 0.25, 0.9)) * lim(+b.valor || 0);
+    s += `<text x="170" y="${y}" font-weight="800" font-size="30" letter-spacing="4" fill="${c}">${esc(String(b.texto || "").toUpperCase())}</text>`;
+    s += `<rect x="170" y="${y + 18}" width="740" height="40" rx="20" fill="#1A2233" stroke="#2A3446" stroke-width="3"/>`;
+    s += `<rect x="174" y="${y + 22}" width="${f1(Math.max(32, 732 * q))}" height="32" rx="16" fill="${c}" opacity="${q > 0.01 ? 1 : 0}"/>`;
+    s += `<rect x="174" y="${y + 22}" width="${f1(Math.max(32, 732 * q))}" height="32" rx="16" fill="${c}" opacity="${q > 0.01 ? 0.45 : 0}" filter="url(#b8)"/>`;
+    if (b.etiqueta) s += `<text x="910" y="${y}" text-anchor="end" font-weight="900" font-size="34" fill="${c}" opacity="${f2(tramo(tl, 0.5 + i * 0.25, 0.4))}">${esc(b.etiqueta)}</text>`;
+  });
+  return s;
+}
+
+function numeroBonito(v, dec) {
+  const n = Math.round(v * Math.pow(10, dec)) / Math.pow(10, dec);
+  return n.toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function contador(c, tl, y, d = 4) {
+  const dura = c.dura ?? lim(d * 0.55, 1.2, 3.0);
+  const q = salida(tramo(tl, c.empieza ?? 0.3, dura));
+  const v = (+c.desde || 0) + ((+c.hasta || 0) - (+c.desde || 0)) * q;
+  const txt = `${c.prefijo || ""}${numeroBonito(v, c.decimales || 0)}${c.sufijo || ""}`;
+  const color = col(c.color || "oro"), tam = txt.length > 10 ? 120 : 150;
+  const golpe = q >= 1 ? 1 + 0.06 * Math.exp(-(tl - (c.empieza ?? 0.3) - dura) * 6) : 1;
+  let s = `<g transform="translate(540 ${y}) scale(${f2(golpe)})">`;
+  s += `<text x="0" y="0" text-anchor="middle" font-weight="900" font-size="${tam}" fill="${color}" opacity="0.45" filter="url(#b20)">${esc(txt)}</text>`;
+  s += `<text x="0" y="0" text-anchor="middle" font-weight="900" font-size="${tam}" fill="${color}">${esc(txt)}</text></g>`;
+  if (c.texto) s += `<text x="540" y="${y + 62}" text-anchor="middle" font-weight="800" font-size="32" letter-spacing="5" fill="#8590A6">${esc(String(c.texto).toUpperCase())}</text>`;
+  return s;
+}
+
+function grafica(gr, tl) {
+  const x0 = 170, x1 = 910, y0 = 660, y1 = 1180, q = salida(tramo(tl, 0.3, 2.2));
+  let s = `<polyline points="${x0},${y0} ${x0},${y1} ${x1},${y1}" stroke="#3A4660" stroke-width="5" fill="none"/>`;
+  if (gr.eje) s += `<text x="${x1}" y="${y1 + 46}" text-anchor="end" font-weight="800" font-size="28" letter-spacing="4" fill="#8590A6">${esc(String(gr.eje).toUpperCase())}</text>`;
+  const forma = { exponencial: u => Math.pow(u, 2.6), recta: u => u * 0.55, plana: u => 0.04 + 0.02 * Math.sin(u * 9), baja: u => 0.45 * (1 - u), sube: u => u * 0.85 };
+  (gr.lineas || []).slice(0, 3).forEach((l, i) => {
+    const f = forma[l.forma] || forma.recta, c = col(l.color || (i ? "rojo" : "main"));
+    const pts = [];
+    for (let k = 0; k <= 60 * q; k++) { const u = k / 60; pts.push(`${f1(x0 + (x1 - x0) * u)},${f1(y1 - 20 - (y1 - y0 - 40) * f(u))}`); }
+    if (pts.length > 1) {
+      s += `<polyline points="${pts.join(" ")}" stroke="${c}" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" filter="url(#b8)"/>`;
+      s += `<polyline points="${pts.join(" ")}" stroke="${c}" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+      const [lx, ly] = pts[pts.length - 1].split(",").map(Number);
+      s += `<circle cx="${lx}" cy="${ly}" r="12" fill="${c}"/>`;
+      if (l.nombre && q > 0.6) s += etiqueta(Math.min(lx, 820), ly - 52, l.nombre, l.color || (i ? "rojo" : "main"), tramo(tl, 1.6, 0.4), 26);
+    }
+  });
+  return s;
+}
+
+function lista(items, tl, e) {
+  let s = "";
+  items.slice(0, 4).forEach((it, i) => {
+    const t0 = it.cuando ? cuandoDice(e, it.cuando, 0.3 + i * 0.6) : 0.3 + i * 0.6;
+    const p = rebote(tramo(tl, t0, 0.35)), y = 700 + i * 130;
+    s += `<g transform="translate(${f1(140 + (1 - lim(p)) * -40)} ${y})" opacity="${f2(lim(p * 2))}">`;
+    s += `<circle cx="0" cy="0" r="40" fill="${col("main")}"/><text x="0" y="16" text-anchor="middle" font-weight="900" font-size="44" fill="#0B0F17">${i + 1}</text>`;
+    if (it.icono) s += `<g transform="translate(110 0)">${icono(it.icono, 0.42, tl, it.color)}</g>`;
+    s += `<text x="${it.icono ? 170 : 74}" y="14" font-weight="800" font-size="40" fill="#EEF2F7">${esc(String(it.texto || "").toUpperCase())}</text></g>`;
+  });
+  return s;
+}
+
+function cta(c, tl, T) {
+  const p = rebote(tramo(tl, 0.4, 0.4)), tap = (tl % 1.6) < 0.18;
+  const t = String(c.texto || "SÍGUEME").toUpperCase(), w = ancho(t, 900, 44) + 120;
+  let s = `<g transform="translate(540 880) scale(${f2(p * (tap ? 0.94 : 1))})"><rect x="${f1(-w / 2)}" y="-48" width="${f1(w)}" height="96" rx="48" fill="${col("main")}"/>`;
+  s += `<rect x="${f1(-w / 2 - 8)}" y="-56" width="${f1(w + 16)}" height="112" rx="56" fill="${col("main")}" opacity="0.3" filter="url(#b8)"/>`;
+  s += `<text x="0" y="16" text-anchor="middle" font-weight="900" font-size="44" fill="#0B0F17">${esc(t)}</text></g>`;
+  const mx = 540 + w / 2 - 30 + 30 * (1 - salida(tramo(tl % 1.6, 0, 0.5))), my = 930 + 20 * (1 - salida(tramo(tl % 1.6, 0, 0.5)));
+  s += `<path d="M ${f1(mx)} ${f1(my)} l 0 54 l 14 -14 l 12 26 l 12 -6 l -12 -24 l 20 0 Z" fill="#FFFFFF" stroke="#0B0F17" stroke-width="3" opacity="${f2(p)}"/>`;
+  if (c.opciones) {
+    c.opciones.slice(0, 2).forEach((o, i) => { s += etiqueta(i ? 760 : 320, 1050, o, i ? "main" : "blanco", tramo(tl, 0.9 + i * 0.15, 0.3), 32); });
+  }
+  return s;
+}
+
+// ---------- escena ----------
+function colocar(e) {
+  const ps = (e.personas || []).map((o, i) => ({ ...o }));
+  const libres = ["centro", "izq", "der", "izq2", "der2"];
+  const usadas = new Set(ps.filter(o => o.pos !== undefined).map(o => String(o.pos)));
+  ps.forEach(o => { if (o.pos === undefined) { o.pos = libres.find(p => !usadas.has(p)) || "centro"; usadas.add(o.pos); } o._x = posX(o.pos); });
+  if (e.fila) {           // una fila de gente (la clase, los demás)
+    const n = Math.min(9, +e.fila.n || 5), sep = 980 / n;
+    for (let i = 0; i < n; i++) ps.push({ id: `f${i}`, color: i === (e.fila.destaca ?? -1) ? "main" : (e.fila.color || "blanco"), escala: e.fila.escala || 0.72, pupitre: e.fila.pupitre, _x: 50 + sep * (i + 0.5), accion: "quieto" });
+  }
+  return ps;
+}
+
+function dibujaEscena(e, tl, idx, T) {
+  P = PALETAS[(window.GUION || {}).paleta] || PALETAS.menta;
+  const d = e.fin - e.inicio, ps = colocar(e);
+  const cx = ps.length ? ps.reduce((a, o) => a + o._x, 0) / ps.length : 540;
+  let s = fondo(e, T, cx);
+  const z = 1 + 0.03 * suave(lim(tl / Math.max(d, 0.1))) + 0.04 * (1 - salida(tramo(tl, 0, 0.35)));
+  let m = "";
+  const previa = idx > 0 ? (GUION.escenas[idx - 1].personas || []).map(o => o.id) : [];
+  // objetos (iconos) en el suelo o en el aire
+  (e.objetos || []).forEach((o, i) => {
+    const t0 = o.cuando ? cuandoDice(e, o.cuando, 0.25 + i * 0.15) : 0.25 + i * 0.15;
+    const p = tramo(tl, t0, 0.4);
+    if (p <= 0) return;
+    const k = o.escala || 0.9, x = posX(o.pos, 540);
+    const alto = { suelo: SUELO - 95 * k, mano: SUELO - 150, aire: 1020, arriba: 800 }[o.altura || "aire"] ?? 1020;
+    const fl = (o.altura || "aire") === "suelo" ? 0 : Math.sin(T * 2 + i) * 6;
+    m += `<g transform="translate(${f1(x)} ${f1(alto + fl)}) scale(${f2(rebote(p))})" opacity="${f2(lim(p * 3))}">`;
+    if (o.brillo !== false) m += `<circle r="${f1(110 * k)}" fill="${col(o.color || "main")}" opacity="0.12" filter="url(#b20)"/>`;
+    m += icono(o.tipo, k, T, o.color, o.texto);
+    if (o.etiqueta) m += etiqueta(0, -125 * k - 30, o.etiqueta, o.color_etiqueta || o.color || "main", tramo(tl, t0 + 0.2, 0.3), 26);
+    m += `</g>`;
+    if (o.tachar !== undefined) { const q = salida(tramo(tl, cuandoDice(e, o.tachar, o.tachar_t ?? 1.2), 0.3)); if (q > 0) m += `<g transform="translate(${f1(x)} ${f1(alto)})" stroke="${P.rojo}" stroke-width="14" stroke-linecap="round"><line x1="${f1(-90 * q)}" y1="${f1(-90 * q)}" x2="${f1(90 * q)}" y2="${f1(90 * q)}"/><line x1="${f1(90 * q)}" y1="${f1(-90 * q)}" x2="${f1(-90 * q)}" y2="${f1(90 * q)}"/></g>`; }
+  });
+  // flechas entre cosas (flujo)
+  (e.flechas || []).forEach((f, i) => {
+    const xa = posX(f.de), xb = posX(f.a), y = f.y || 1020, q = salida(tramo(tl, 0.6 + i * 0.3, 0.5));
+    const xe = xa + (xb - xa) * q;
+    m += `<line x1="${f1(xa + Math.sign(xb - xa) * 90)}" y1="${y}" x2="${f1(xe - Math.sign(xb - xa) * 90 * q)}" y2="${y}" stroke="${col("main")}" stroke-width="7" stroke-dasharray="14 12" stroke-linecap="round" opacity="${f2(q)}"/>`;
+  });
+  // gente
+  ps.forEach((o, i) => {
+    const nuevo = !previa.includes(o.id);
+    const t0 = o.cuando ? cuandoDice(e, o.cuando, 0.05 + i * 0.08) : 0.05 + i * 0.08;
+    const pop = nuevo ? tramo(tl, t0, 0.4) : 1;
+    if (o.etiqueta && o.etiqueta_cuando) o.etiqueta_t = cuandoDice(e, o.etiqueta_cuando, 0.35);
+    if (o.tachar_cuando) o.tachar = cuandoDice(e, o.tachar_cuando, 1.2);
+    if (o.corona_cuando) o.corona = cuandoDice(e, o.corona_cuando, 0.8);
+    m += persona(o, tl, T, pop);
+  });
+  // piezas grandes
+  if (e.barras) m += barras(e.barras, tl, e.barras_y || 640);
+  if (e.contador) m += contador(e.contador, tl, e.contador_y || 860, d);
+  if (e.grafica) m += grafica(e.grafica, tl);
+  if (e.lista) m += lista(e.lista, tl, e);
+  if (e.cta) m += cta(e.cta, tl, T);
+  (e.etiquetas || []).forEach((t, i) => { m += etiqueta(posX(t.pos, 540), t.y || 760, t.texto, t.color || "oro", tramo(tl, t.cuando ? cuandoDice(e, t.cuando, 0.4) : 0.4 + i * 0.2, 0.35), t.tam || 34); });
+  s += `<g transform="translate(540 1150) scale(${z.toFixed(4)}) translate(-540 -1150)">${m}</g>`;
+  s += `<rect width="1080" height="1920" fill="url(#vineta)"/>`;
+  return s + textoArriba(e, tl, T, idx);
+}
+
+window.pintar = function (t) {
+  const g = window.GUION, E = g.escenas;
+  let i = E.findIndex(e => t < e.fin);
+  if (i < 0) i = E.length - 1;
+  const e = E[i], tl = t - e.inicio;
+  let s = dibujaEscena(e, tl, i, t);
+  if (i > 0 && tl < 0.14) { const pe = E[i - 1]; s += `<g opacity="${f2(1 - tl / 0.14)}">${dibujaEscena(pe, pe.fin - pe.inicio, i - 1, t)}</g>`; }
+  if (t > g.duracion - 0.4) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.4)) / 0.4))}"/>`;
+  document.getElementById("escena").innerHTML = s;
+};
+window.listo = Promise.all([700, 800, 900].map(w => document.fonts.load(`${w} 60px Montserrat`))).then(() => document.fonts.ready);
+</script>
+</body></html>
