@@ -1,0 +1,30 @@
+# Simulacro: cada vez que cambia el código de los bots, una ronda completa de la fábrica con IA, dibujos y subidas de
+# mentira (sin secretos ni repositorio privado). Si algo se rompe, se ve aquí antes de que llegue la ronda de verdad.
+name: Simulacro
+on:
+  push:
+    paths:
+      - "bots/**"
+      - "herramientas/**"
+      - "pruebas/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulacro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          pip install -q -r requirements.txt
+      - name: Ronda de mentira
+        run: |
+          cp -r pruebas/privado_ejemplo /tmp/privado
+          PRIVADO=/tmp/privado MEMORIA_DIR=/tmp/privado/memoria python pruebas/simulacro.py --maximo 3

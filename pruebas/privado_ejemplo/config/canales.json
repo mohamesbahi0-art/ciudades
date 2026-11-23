@@ -1,0 +1,15 @@
+{
+ "canales": {
+  "gta": {"nombre": "Canal de noticias de prueba", "tipo": "noticias", "horas": ["13:00", "17:30", "21:00"],
+          "voz": "es-MX-JorgeNeural", "dibujos": "AlbedoBase XL (SDXL)", "categoria": "20",
+          "tema": "noticias de un videojuego", "fuentes": {"noticias": ["videojuego"]}},
+  "terror": {"nombre": "Canal de historias de prueba", "tipo": "historias", "horas": ["21:00"],
+             "voz": "es-MX-JorgeNeural", "dibujos": "AlbedoBase XL (SDXL)", "tema": "historias cortas de miedo"}
+ },
+ "barrios": {
+  "barrio.prueba": {"nombre": "Barrio de prueba", "cuenta": "barrio.prueba", "estado": "activo",
+                    "redes": ["instagram", "tiktok"], "tipo": "motivacion", "idioma": "es-ES",
+                    "voz": "es-ES-AlvaroNeural", "segundos": [15, 25], "hora": "19:00",
+                    "dibujos": "AlbedoBase XL (SDXL)", "tema": "motivación"}
+ }
+}
