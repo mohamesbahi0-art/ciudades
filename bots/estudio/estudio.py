@@ -268,6 +268,7 @@ def voz_por_escenas(g, carpeta, canal, hueco=0.28, entrada=0.12, cola=1.4):
     """Graba cada escena por separado y coloca las escenas según lo que tarda cada frase (sin silencios muertos)."""
     voz, velocidad, tono = (canal.get("voz_estudio", "es-ES-AlvaroNeural"), canal.get("velocidad_estudio", "-6%"),
                             canal.get("tono_estudio", "-2Hz"))
+    hueco, cola = float(canal.get("hueco_estudio", hueco)), float(canal.get("cola_estudio", cola))   # ritmo por perfil
     t, partes = entrada, []
     for i, e in enumerate(g["escenas"]):
         d = os.path.join(carpeta, f"voz{i}")

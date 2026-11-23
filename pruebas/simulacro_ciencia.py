@@ -16,13 +16,18 @@ from bots.comun import almacen, gemini, privado  # noqa: E402
 from bots.central import turno  # noqa: E402
 
 GUION = {"titulo": "Een octopus heeft drie harten", "escenas": [
-    {"voz": "Een octopus heeft drie harten.", "clave": ["harten."], "plano": "grande", "ilustracion": "emoji:🐙",
-     "color": "paars", "componentes": [{"tipo": "numero", "valor": "3", "titulo": "harten"}]},
+    {"voz": "Een octopus heeft drie harten.", "clave": ["harten."], "plano": "gancho", "ilustracion": "emoji:🐙",
+     "golpe": {"texto": "3 harten", "sub": "in één dier"}, "color": "paars"},
+    {"voz": "Maar waarom?", "clave": ["waarom?"], "plano": "pregunta", "color": "blauw"},
+    {"voz": "Ze kloppen samen zo'n honderdduizend keer per dag.", "clave": ["honderdduizend"], "plano": "numero",
+     "ilustracion": "corazon", "contador": {"desde": 0, "hasta": 100000, "label": "slagen per dag"}, "aviso": "het gekste komt nog"},
     {"voz": "Als hij zwemt, stopt er een.", "clave": ["stopt"], "plano": "grafica", "ilustracion": "corazon",
      "color": "rood", "componentes": [{"tipo": "onda", "label": "ZWEMMEN", "color": "rood", "picos": 0},
                                       {"tipo": "inventado"}]},
-    {"voz": "En zijn bloed is blauw.", "clave": ["blauw."], "plano": "lado", "ilustracion": "noexiste",
-     "ilustracion2": "gota", "color": "rosa_inventado"},
+    {"voz": "En zijn bloed is blauw.", "clave": ["blauw."], "plano": "vs", "ilustracion": "noexiste",
+     "ilustracion2": "gota", "izquierda": "mens", "derecha": "octopus", "color": "rosa_inventado"},
+    {"voz": "Zijn ruggengraat? Die heeft hij niet.", "clave": ["niet."], "plano": "primerplano", "ilustracion": "columna",
+     "animar": "comprimir", "color": "geel"},
     {"voz": "Wist jij dit al?", "clave": ["al?"], "plano": "grande", "ilustracion": "emoji:🐙", "botones": ["ja", "nee"]}],
     "descripcion": "test", "hashtags": ["octopus"]}
 
@@ -41,8 +46,8 @@ almacen.guardar = lambda etiqueta, ruta, nombre=None: f"https://example.invalid/
 cfg = privado.config()
 for b in cfg.get("barrios", {}).values():
     b.update(estudio="animacion", formato_estudio="ciencia", voz_estudio="nl-NL-MaartenNeural|nl-BE-ArnaudNeural", idioma="nl",
-             musica_estudio="ninguna",
-             velocidad_estudio="-4%", tono_estudio="+0Hz")
+             musica_estudio="ninguna", hueco_estudio=0.12, cola_estudio=1.3,
+             velocidad_estudio="+6%", tono_estudio="+0Hz")
 privado.escribir(os.path.join("config", "canales.json"), cfg)
 codigo = turno.main(["--canal", "barrio-1", "--salida", os.path.join(os.environ["PRIVADO"], "trabajo")])
 estado = privado.leer(os.path.join("estado", "central", "barrio.prueba.json"), {})["ultimo_turno"]

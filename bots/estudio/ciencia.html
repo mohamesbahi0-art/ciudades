@@ -417,15 +417,32 @@ ILU.pez = (T) => {
   for (let i = 0; i < 4; i++) s += `<path d="M ${-60 + i * 50} -70 Q ${-30 + i * 50} 0 ${-60 + i * 50} 70" stroke="#FFFFFF" stroke-width="3" fill="none" opacity="0.35"/>`;
   return s + `<circle cx="-150" cy="-20" r="22" fill="#FFFFFF"/><circle cx="-155" cy="-20" r="11" fill="#0A0D14"/></g>`;
 };
+
+ILU.columna = (T, p = {}) => {
+  const q = suave(lim((p.__tl ?? 0) / 2.2)), modo = p.animar;
+  const disco = modo === "comprimir" ? 30 - 16 * q : modo === "expandir" ? 14 + 16 * q : 26;
+  if (!DEFS.gHueso) DEFS.gHueso = `<linearGradient id="gHueso" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF6E6"/><stop offset="1" stop-color="#C9B58E"/></linearGradient>`;
+  if (!DEFS.gDisco) DEFS.gDisco = `<linearGradient id="gDisco" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9FE3FF"/><stop offset="1" stop-color="#2E86C1"/></linearGradient>`;
+  const n = 6, h = 58, total = n * h + (n - 1) * disco;
+  let y = -total / 2, s = "";
+  for (let i = 0; i < n; i++) {
+    s += `<g filter="url(#schaduw)"><rect x="-80" y="${f1(y)}" width="160" height="${h}" rx="22" fill="url(#gHueso)"/></g><rect x="70" y="${f1(y + 14)}" width="70" height="26" rx="13" fill="#E6D7B8"/><rect x="-62" y="${f1(y + 8)}" width="40" height="12" rx="6" fill="#FFFFFF" opacity="0.5"/>`;
+    y += h;
+    if (i < n - 1) { s += `<rect x="-72" y="${f1(y)}" width="144" height="${f1(disco)}" rx="${f1(disco / 2)}" fill="url(#gDisco)" filter="url(#gloed)"/>`; y += disco; }
+  }
+  const top = -total / 2, bot = total / 2;
+  s += `<line x1="-150" y1="${f1(top)}" x2="-150" y2="${f1(bot)}" stroke="#5ED3F3" stroke-width="4"/><line x1="-170" y1="${f1(top)}" x2="-130" y2="${f1(top)}" stroke="#5ED3F3" stroke-width="4"/><line x1="-170" y1="${f1(bot)}" x2="-130" y2="${f1(bot)}" stroke="#5ED3F3" stroke-width="4"/>`;
+  return s;
+};
 function emoji(caracter, c) {
   return `<circle r="250" fill="${c}" opacity="0.16" filter="url(#b40)"/><text x="0" y="120" text-anchor="middle" font-size="340" font-family="Noto Color Emoji" filter="url(#schaduw)">${esc(caracter)}</text>`;
 }
 
 // =============================== COMPONENTES ===============================
-function etiquetaLinea(x0, y0, x1, y1, titulo, sub, p, color = "#FFFFFF") {
+function etiquetaLinea(x0, y0, x1, y1, titulo, sub, p, color = "#FFFFFF", centro = false) {
   const q = salida(p), xe = x0 + (x1 - x0) * q, ye = y0 + (y1 - y0) * q, der = x1 >= x0;
   let s = `<circle cx="${f1(x0)}" cy="${f1(y0)}" r="7" fill="${color}" opacity="${f2(lim(p * 3))}"/><line x1="${f1(x0)}" y1="${f1(y0)}" x2="${f1(xe)}" y2="${f1(ye)}" stroke="${color}" stroke-width="2.2" opacity="0.85"/>`;
-  const o = lim((p - 0.55) / 0.45), dx = der ? 14 : -14, a = der ? "start" : "end";
+  const o = lim((p - 0.55) / 0.45), dx = centro ? 0 : der ? 14 : -14, a = centro ? "middle" : der ? "start" : "end";
   s += `<g opacity="${f2(o)}"><text x="${f1(x1 + dx)}" y="${f1(y1 + 8)}" text-anchor="${a}" font-weight="700" font-size="38" fill="#FFFFFF">${esc(titulo)}</text>`;
   if (sub) s += `<text x="${f1(x1 + dx)}" y="${f1(y1 + 44)}" text-anchor="${a}" font-weight="300" font-size="27" fill="#AEB6C7">${esc(sub)}</text>`;
   return s + `</g>`;
@@ -510,9 +527,14 @@ function pildora(x, y, texto, p, color = "#8A93A6", relleno = "rgba(8,10,16,0.75
 
 function final(tl, botones) {
   const [a, b] = botones && botones.length === 2 ? botones : ["wist ik al", "nieuw voor mij"];
-  let s = pildora(340, 1540, a, tramo(tl, 0.35, 0.5)) + pildora(740, 1540, b, tramo(tl, 0.5, 0.5), "#5ED3F3");
-  const toque = tramo(tl, 1.6, 0.5);
-  if (toque > 0 && toque < 1) s += `<circle cx="740" cy="1540" r="${f1(40 + 120 * toque)}" fill="none" stroke="#5ED3F3" stroke-width="4" opacity="${f2(1 - toque)}"/>`;
+  const toque = tramo(tl, 1.2, 0.45), apriete = toque > 0 && toque < 1 ? 1 - 0.1 * Math.sin(Math.PI * toque) : 1;
+  let s = pildora(340, 1540, a, tramo(tl, 0.25, 0.45));
+  s += `<g transform="translate(740 1540) scale(${f2(apriete)}) translate(-740 -1540)">${pildora(740, 1540, b, tramo(tl, 0.34, 0.45), "#5ED3F3", toque >= 1 ? "rgba(94,211,243,0.25)" : "rgba(8,10,16,0.75)")}</g>`;
+  if (toque > 0 && toque < 1) s += `<circle cx="740" cy="1540" r="${f1(40 + 140 * toque)}" fill="none" stroke="#5ED3F3" stroke-width="4" opacity="${f2(1 - toque)}"/>`;
+  for (let i = 0; i < 6; i++) {   // corazones que suben desde el botón pulsado
+    const u = tramo(tl, 1.35 + i * 0.16, 1.4);
+    if (u > 0 && u < 1) s += `<text x="${f1(740 + Math.sin(u * 7 + i) * 40 + (i - 2.5) * 14)}" y="${f1(1500 - 520 * u)}" text-anchor="middle" font-size="${f1(40 + 16 * (i % 3))}" font-family="Noto Color Emoji" opacity="${f2(1 - u)}">❤️</text>`;
+  }
   const p = tramo(tl, 0.8, 0.5), frase = "Schrijf een reactie…", n = Math.floor(frase.length * lim((tl - 1.0) / 1.2));
   s += `<g opacity="${f2(lim(p * 2))}" transform="translate(0 ${f1((1 - salida(p)) * 30)})"><rect x="130" y="1648" width="820" height="100" rx="50" fill="rgba(8,10,16,0.85)" stroke="#5ED3F3" stroke-width="3" filter="url(#gloed)"/>`;
   s += `<text x="180" y="1710" font-weight="300" font-size="34" fill="#AEB6C7">${esc(frase.slice(0, n))}${(tl * 2) % 1 < 0.5 ? "|" : ""}</text>`;
@@ -540,7 +562,7 @@ function trozos(ws, clave) {
   if (out.length > 1 && out[out.length - 1].length === 1) { const u = out.pop(); out[out.length - 1].push(u[0]); }
   return out;
 }
-function texto(e, t) {
+function texto(e, t, idx = 1) {
   const clave = new Set((e.clave || []).flatMap(c => String(c).split(/\s+/)).map(norm).filter(Boolean));
   const ts = trozos(palabrasDe(e), clave);
   let i = ts.findIndex((c, k) => k === ts.length - 1 || t < ts[k + 1][0].a - 0.06);
@@ -554,14 +576,14 @@ function texto(e, t) {
     const total = L.reduce((a, o) => a + o.w, 0) + 24 * (L.length - 1);
     let x = 540 - total / 2; const y = 352 + li * 104 - (lineas.length - 1) * 40;
     L.forEach(o => {
-      const q = salida(tramo(t, o.x.a - 0.05, 0.2));
+      const adelanto = idx === 0 ? 0.12 : 0.06, q = salida(tramo(t, o.x.a - adelanto, 0.16)), sc = 0.82 + 0.18 * atras(tramo(t, o.x.a - adelanto, 0.26));
       if (q > 0) {
-        const dy = (1 - q) * 16;
+        const dy = (1 - q) * 20, cx = x + o.w / 2;
         if (o.k) {
-          const qb = muelle(tramo(t, o.x.a - 0.05, 0.4));
-          s += `<g opacity="${f2(q)}" transform="translate(0 ${f1(dy)})"><rect x="${f1(x + (1 - qb) * o.w / 2)}" y="${y - 66}" width="${f1(o.w * qb)}" height="90" rx="16" fill="rgba(6,9,16,0.8)" stroke="#5ED3F3" stroke-width="3.5"/>`;
+          const qb = muelle(tramo(t, o.x.a - adelanto, 0.4));
+          s += `<g opacity="${f2(q)}" transform="translate(${f1(cx)} ${f1(y - 20 + dy)}) scale(${f2(sc)}) translate(${f1(-cx)} ${f1(-(y - 20))})"><rect x="${f1(x + (1 - qb) * o.w / 2)}" y="${y - 66}" width="${f1(o.w * qb)}" height="90" rx="16" fill="rgba(6,9,16,0.8)" stroke="#5ED3F3" stroke-width="3.5"/>`;
           s += `<text x="${f1(x + 20)}" y="${y}" font-weight="700" font-size="74" fill="#FFFFFF">${esc(o.x.p)}</text></g>`;
-        } else s += `<text x="${f1(x)}" y="${f1(y + dy)}" font-weight="300" font-size="74" fill="#FFFFFF" opacity="${f2(q * 0.92)}">${esc(o.x.p)}</text>`;
+        } else s += `<g transform="translate(${f1(cx)} ${f1(y - 20 + dy)}) scale(${f2(sc)}) translate(${f1(-cx)} ${f1(-(y - 20))})"><text x="${f1(x)}" y="${y}" font-weight="300" font-size="74" fill="#FFFFFF" opacity="${f2(q * 0.94)}">${esc(o.x.p)}</text></g>`;
       }
       x += o.w + 24;
     });
@@ -571,8 +593,10 @@ function texto(e, t) {
 
 // =============================== ESCENA ===============================
 const PLANOS = {
-  grande: { x: 540, y: 1010, k: 1.3 }, dato: { x: 540, y: 850, k: 0.95 }, grafica: { x: 845, y: 640, k: 0.42 },
-  lado: { x: 300, y: 1000, k: 0.72 }, banda: { x: 540, y: 1010, k: 1 }, final: { x: 540, y: 1000, k: 1.05 },
+  grande: { x: 540, y: 1010, k: 1.3 }, primerplano: { x: 570, y: 1080, k: 1.9 }, dato: { x: 540, y: 850, k: 0.95 },
+  grafica: { x: 845, y: 640, k: 0.42 }, lado: { x: 300, y: 1000, k: 0.72 }, vs: { x: 270, y: 1010, k: 0.6 },
+  banda: { x: 540, y: 1010, k: 1 }, final: { x: 540, y: 1000, k: 1.05 }, gancho: { x: 540, y: 1330, k: 0.5 },
+  pregunta: { x: 540, y: 1420, k: 0.42 }, numero: { x: 540, y: 760, k: 0.62 },
 };
 const ANCLAS = { arriba: [0, -190], abajo: [0, 190], izquierda: [-170, 0], derecha: [170, 0], centro: [0, 0] };
 const PUNTOS = {
@@ -583,31 +607,129 @@ const PUNTOS = {
   celula: { nucleo: [-24, -12], membrana: [196, 0], mitocondria: [90, 60] }, diente: { esmalte: [-90, -100], raiz: [-50, 200] },
   tierra: { atmosfera: [150, -150] }, sol: { nucleo: [0, 0], corona: [0, -240] }, planeta: { anillos: [260, -90] },
   bombilla: { filamento: [0, -20] }, cohete: { motor: [0, 230], ventana: [0, -40] }, pulmones: { traquea: [0, -200] },
+  columna: { disco: [70, 0], vertebra: [-80, -110] },
 };
+const expo = x => (x >= 1 ? 1 : x <= 0 ? 0 : 1 - Math.pow(2, -10 * x));
+const atras = x => { if (x <= 0) return 0; if (x >= 1) return 1; const c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const numNLGrande = (v, d) => { const [e, f] = Number(v).toFixed(d).split("."); return e.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : ""); };
 
-function escena(e, t, prevIlu) {
-  const T = t, tl = t - e.inicio, d = Math.max(0.5, e.fin - e.inicio), c = kleur(e.color);
-  const plano = PLANOS[e.plano] ? e.plano : "grande", P = PLANOS[plano];
-  let s = `<rect width="1080" height="1920" fill="#05070C"/>`;
-  s += `<ellipse cx="${P.x === 845 ? 540 : P.x === 300 ? 540 : P.x}" cy="${plano === "grafica" ? 1000 : P.y}" rx="760" ry="900" fill="${gloedVan(c)}"/>`;
-  for (let i = 0; i < 40; i++) {
-    const x = azar(i) * 1080, y = ((azar(i + 50) * 1920 - T * (8 + azar(i + 3) * 14)) % 1920 + 1920) % 1920;
-    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.5 + azar(i + 9) * 3)}" fill="#FFFFFF" opacity="${f2(0.05 + 0.12 * azar(i + 7))}"/>`;
+function tiempoClave(e) {
+  const cl = new Set((e.clave || []).flatMap(c => String(c).split(/\s+/)).map(norm).filter(Boolean));
+  const w = palabrasDe(e).find(x => cl.has(norm(x.p)));
+  return w ? w.a : e.inicio + 0.6;
+}
+
+// Cámara: empuje lento y deriva lateral; golpe de zoom cuando se dice la palabra clave (con anticipación);
+// en el gancho arranca desde muy cerca y se suelta de golpe.
+function camara(e, tl, d, idx) {
+  const lado = idx % 2 ? -1 : 1, q = suave(lim(tl / d));
+  let z = 1 + 0.07 * q, x = lado * 28 * q, y = -16 * q;
+  const u = tl - (tiempoClave(e) - e.inicio);
+  if (u > -0.1 && u < 0) z -= 0.018 * Math.sin(Math.PI * (u + 0.1) / 0.1);
+  if (u >= 0) z += 0.065 * Math.exp(-u / 0.24) * Math.cos(u * 9);
+  if (idx === 0) z += 0.38 * (1 - expo(lim(tl / 0.42)));
+  if (d > 2.4) {   // reencuadre: la cámara se acerca y se desplaza a mitad de escena (también en el cierre)
+    const r = expo(tramo(tl, 1.5, 0.38)), fuerte = ["gancho", "numero", "pregunta"].includes(e.plano) ? 0.1 : 0.26;
+    z += fuerte * r; x += lado * 85 * r; y -= 50 * r;
+    if (d > 3.1) {     // escenas largas: tercer golpe de cámara, hacia el otro lado
+      const r2 = expo(tramo(tl, 2.55, 0.35));
+      z -= 0.14 * r2; x -= lado * 170 * r2; y += 40 * r2;
+    }
   }
-  const entra = salida(tramo(tl, 0, 0.55)), z = (0.94 + 0.06 * entra) * (1 + 0.04 * suave(lim(tl / d)));
-  const flota = i => Math.sin(T * 1.1 + i) * 7;
+  return { z, x, y };
+}
+const capa = (svg, cam, f, cx = 540, cy = 1000) =>
+  `<g transform="translate(${f1(cx + cam.x * f)} ${f1(cy + cam.y * f)}) scale(${(1 + (cam.z - 1) * f).toFixed(4)}) translate(${-cx} ${-cy})">${svg}</g>`;
+
+function golpe(o, tl, c) {
+  const p = tramo(tl, 0.02, 0.5), k = p > 0 ? 1 + 0.42 * Math.exp(-7 * p) * Math.cos(10 * p) : 1.42;
+  const sx = 16 * Math.exp(-p * 8) * Math.sin(p * 70), sy = 11 * Math.exp(-p * 8) * Math.cos(p * 63);
+  const txt = String(o.texto || ""), tam = Math.min(300, 980 / Math.max(1, ancho(txt, 800, 100) / 100));
+  let s = `<circle cx="540" cy="900" r="${f1(140 + 760 * expo(p))}" fill="none" stroke="${c}" stroke-width="${f1(10 * (1 - p) + 1)}" opacity="${f2(0.7 * (1 - p))}"/>`;
+  const late = 1 + 0.018 * Math.sin(tl * 5.5);
+  s += `<g transform="translate(${f1(540 + sx)} ${f1(900 + sy)}) scale(${(k * late).toFixed(3)})" opacity="${f2(lim(tl / 0.06))}">`;
+  s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="${c}" opacity="${f2(0.4 + 0.25 * Math.sin(tl * 5.5))}" filter="url(#b18)">${esc(txt)}</text>`;
+  s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="#FFFFFF">${esc(txt)}</text></g>`;
+  if (o.sub) { const q = atras(tramo(tl, 0.22, 0.35)); s += `<text x="540" y="${f1(900 + tam * 0.36 + 96)}" text-anchor="middle" font-weight="700" font-size="56" fill="${c}" opacity="${f2(lim(q))}" transform="translate(0 ${f1((1 - q) * 30)})">${esc(o.sub)}</text>`; }
+  return s;
+}
+
+function pregunta(tl, c, T) {
+  const p = atras(tramo(tl, 0, 0.38)), pulso = 1 + 0.045 * Math.sin(T * 6.5);
+  let s = `<g transform="translate(540 900) rotate(${f1(T * 40)})"><circle r="${f1(300 * p)}" fill="none" stroke="${c}" stroke-width="5" stroke-dasharray="26 22" opacity="0.6"/></g>`;
+  for (let i = 0; i < 10; i++) { const a = i * 36 * R + T * 0.8, r = 430 - 140 * ((T * 0.9 + i * 0.13) % 1); s += `<circle cx="${f1(540 + Math.cos(a) * r)}" cy="${f1(900 + Math.sin(a) * r)}" r="7" fill="${c}" opacity="0.7"/>`; }
+  s += `<g transform="translate(540 900) scale(${f2(p * pulso)})"><text x="0" y="190" text-anchor="middle" font-weight="800" font-size="560" fill="${c}" opacity="0.5" filter="url(#b18)">?</text>`;
+  return s + `<text x="0" y="190" text-anchor="middle" font-weight="800" font-size="560" fill="#FFFFFF">?</text></g>`;
+}
+
+function contador(o, tl, c) {
+  const p = expo(tramo(tl, 0.12, 1.15)), v = Number(o.desde ?? 0) + (Number(o.hasta ?? 0) - Number(o.desde ?? 0)) * p;
+  const txt = `${o.prefijo || ""}${numNLGrande(v, o.decimales ?? 0)}${o.sufijo || ""}`;
+  const final = `${o.prefijo || ""}${numNLGrande(Number(o.hasta ?? 0), o.decimales ?? 0)}${o.sufijo || ""}`;
+  const tam = Math.min(250, 960 / Math.max(1, ancho(final, 800, 100) / 100)), fin = tramo(tl, 1.27, 0.35);
+  const k = (0.85 + 0.15 * atras(tramo(tl, 0, 0.3))) * (1 + 0.08 * Math.exp(-fin * 6) * (fin > 0 ? 1 : 0));
+  let s = fin > 0 && fin < 1 ? `<circle cx="540" cy="1140" r="${f1(160 + 500 * expo(fin))}" fill="none" stroke="${c}" stroke-width="6" opacity="${f2(0.6 * (1 - fin))}"/>` : "";
+  s += `<g transform="translate(540 1140) scale(${f2(k)})"><text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="${c}" opacity="0.5" filter="url(#b18)">${esc(txt)}</text>`;
+  s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="#FFFFFF">${esc(txt)}</text></g>`;
+  if (o.label) { const q = atras(tramo(tl, 0.3, 0.35)); s += `<text x="540" y="${f1(1140 + tam * 0.36 + 90)}" text-anchor="middle" font-weight="700" font-size="52" fill="${c}" opacity="${f2(lim(q))}">${esc(o.label)}</text>`; }
+  return s;
+}
+
+function versus(e, tl, T, c, c2, dibuja) {
+  const pa = expo(tramo(tl, 0, 0.32)), pb = expo(tramo(tl, 0.09, 0.32)), pv = atras(tramo(tl, 0.18, 0.32));
+  let s = `<g transform="translate(${f1(-200 * (1 - pa))} 0)"><rect x="0" y="0" width="540" height="1920" fill="${c}" opacity="0.07"/><ellipse cx="270" cy="1010" rx="420" ry="620" fill="${gloedVan(c)}"/>${dibuja(e.ilustracion, 270, 1000, 0.6, 0)}`;
+  if (e.izquierda) s += `<text x="270" y="1330" text-anchor="middle" font-weight="700" font-size="48" fill="#FFFFFF">${esc(e.izquierda)}</text>`;
+  if (e.izquierda_sub) s += `<text x="270" y="1380" text-anchor="middle" font-weight="300" font-size="32" fill="#AEB6C7">${esc(e.izquierda_sub)}</text>`;
+  s += `</g><g transform="translate(${f1(200 * (1 - pb))} 0)"><rect x="540" y="0" width="540" height="1920" fill="${c2}" opacity="0.07"/><ellipse cx="810" cy="1010" rx="420" ry="620" fill="${gloedVan(c2)}"/>${dibuja(e.ilustracion2, 810, 1000, 0.6, 2)}`;
+  if (e.derecha) s += `<text x="810" y="1330" text-anchor="middle" font-weight="700" font-size="48" fill="#FFFFFF">${esc(e.derecha)}</text>`;
+  if (e.derecha_sub) s += `<text x="810" y="1380" text-anchor="middle" font-weight="300" font-size="32" fill="#AEB6C7">${esc(e.derecha_sub)}</text>`;
+  s += `</g><line x1="540" y1="560" x2="540" y2="1500" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3"/>`;
+  return s + `<g transform="translate(540 1010) scale(${f2(0.6 + 0.4 * pv)})" opacity="${f2(lim(pv * 2))}"><circle r="60" fill="#0A0E18" stroke="#FFFFFF" stroke-width="4"/><text x="0" y="17" text-anchor="middle" font-weight="800" font-size="46" fill="#FFFFFF">VS</text></g>`;
+}
+
+function aviso(texto, tl) {
+  const q = atras(tramo(tl, 0.06, 0.3)), w = ancho("⚡ " + texto, 700, 34) + 70, b = 0.5 + 0.5 * Math.sin(tl * 9);
+  return `<g transform="translate(540 512) scale(${f2(0.7 + 0.3 * q)})" opacity="${f2(lim(q * 2))}"><rect x="${f1(-w / 2)}" y="-36" width="${f1(w)}" height="72" rx="36" fill="#2A1606" stroke="#FFB020" stroke-width="${f1(2 + 2 * b)}"/><text x="0" y="12" text-anchor="middle" font-weight="700" font-size="34" fill="#FFD27A">⚡ ${esc(texto)}</text></g>`;
+}
+
+function escena(e, t, idx) {
+  const T = t, tl = t - e.inicio, d = Math.max(0.5, e.fin - e.inicio), c = kleur(e.color), c2 = kleur(e.color2 || "roze");
+  const plano = PLANOS[e.plano] ? e.plano : "grande", P = PLANOS[plano], cam = camara(e, tl, d, idx);
+  const tk = tiempoClave(e) - e.inicio;
+  // capa 0: fondo y resplandor (se mueve poco); capa 1: polvo (aún menos)
+  let fondo = `<ellipse cx="${plano === "grafica" || plano === "numero" || plano === "gancho" || plano === "pregunta" ? 540 : P.x}" cy="${plano === "grafica" ? 1000 : plano === "gancho" || plano === "pregunta" ? 920 : P.y}" rx="780" ry="920" fill="${gloedVan(c)}"/>`;
+  let polvo = "";
+  for (let i = 0; i < 46; i++) {
+    const x = azar(i) * 1080, y = ((azar(i + 50) * 1920 - T * (10 + azar(i + 3) * 18)) % 1920 + 1920) % 1920;
+    polvo += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.5 + azar(i + 9) * 3)}" fill="#FFFFFF" opacity="${f2(0.05 + 0.13 * azar(i + 7))}"/>`;
+  }
+  let s = `<rect width="1080" height="1920" fill="#05070C"/>` + capa(fondo, cam, 0.5) + capa(polvo, cam, 0.3);
+  // capa 2: la ilustración, con muelle al entrar (anticipación y rebote)
+  const entra = 0.8 + 0.2 * muelle(tramo(tl, 0, 0.5)), alfa = lim(tl / 0.12);
+  const flota = i => Math.sin(T * 1.3 + i) * 9;
   const dibuja = (nombre, x, y, k, i = 0) => {
     if (!nombre) return "";
-    const datos = Object.assign({}, e, { __tl: tl });
-    if (String(nombre).startsWith("emoji:")) return `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${f2(k * z)})">${emoji(nombre.slice(6), c)}</g>`;
-    return ILU[nombre] ? `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${f2(k * z)})">${ILU[nombre](T, datos)}</g>` : "";
+    const datos = Object.assign({}, e, { __tl: tl }), kk = f2(k * entra);
+    if (String(nombre).startsWith("emoji:")) return `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${kk})">${emoji(nombre.slice(6), c)}</g>`;
+    return ILU[nombre] ? `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${kk})">${ILU[nombre](T, datos)}</g>` : "";
   };
-  let m = "";
-  if (plano === "lado") {
-    m += dibuja(e.ilustracion, 300, 1000, 0.72, 0) + dibuja(e.ilustracion2, 790, 1000, 0.72, 2);
-  } else if (plano === "banda") {
-    m += dibuja(e.ilustracion || "tejido", 540, 1010, 1);
-  } else {
+  let m = "", letras = "";      // letras: cifras y «?» enormes, en su propia capa (la cámara casi no las agranda)
+  if (plano === "vs") m += versus(e, tl, T, c, c2, dibuja);
+  else if (plano === "lado") m += dibuja(e.ilustracion, 300, 1000, 0.72, 0) + dibuja(e.ilustracion2, 790, 1000, 0.72, 2);
+  else if (plano === "banda") m += dibuja(e.ilustracion || "tejido", 540, 1010, 1);
+  else if (plano === "gancho" || plano === "numero") {
+    const b = d > 2.4 && e.ilustracion ? expo(tramo(tl, 1.55, 0.4)) : 0;     // composición B
+    const cyL = plano === "gancho" ? 900 : 1140, dy = (640 - cyL) * b, kl = 1 - 0.38 * b;
+    const base = plano === "gancho" ? golpe(e.golpe || {}, tl, c) : contador(e.contador || {}, tl, c);
+    letras = `<g transform="translate(540 ${f1(cyL + dy)}) scale(${f2(kl)}) translate(-540 ${-cyL})">${base}</g>`;
+    if (e.ilustracion) {
+      const yi = P.y + (1180 - P.y) * b, ki = P.k * (1 + (plano === "gancho" ? 1.5 : 0.9) * b);
+      m += dibuja(e.ilustracion, P.x, yi, ki);
+    }
+  }
+  else if (plano === "pregunta") { letras = pregunta(tl, c, T); m += e.ilustracion ? dibuja(e.ilustracion, P.x, P.y, P.k) : ""; }
+
+  else {
     m += dibuja(e.ilustracion, P.x, P.y, P.k);
     if (e.ilustracion2 && (ILU[e.ilustracion2] || String(e.ilustracion2).startsWith("emoji:"))) {
       const k2 = e.ilustracion2 === "pluma" ? P.k * 0.85 : P.k * 0.42;
@@ -615,30 +737,47 @@ function escena(e, t, prevIlu) {
       m += dibuja(e.ilustracion2, P.x + off[0] * P.k, P.y + off[1] * P.k, k2, 2);
     }
   }
-  s += `<g opacity="${f2(lim(entra * 1.6))}">${m}</g>`;
-  // componentes
+  s += capa(`<g opacity="${f2(alfa)}">${m}</g>`, cam, 1);
+  if (letras) s += capa(letras, cam, 0.3, 540, 1000);
+  // capa 3: componentes y etiquetas, al ritmo de la palabra clave, escalonados (90 ms)
+  const arranque = plano === "dato" || plano === "grafica" ? 0.15 : Math.max(0.12, Math.min(0.55, tk - 0.12));
+  let fr = "";
   (e.componentes || []).slice(0, 3).forEach((o, i) => {
-    const p = tramo(tl, 0.45 + 0.35 * i, 1.4), yb = plano === "dato" ? 1330 + i * 40 : plano === "grafica" ? 900 + i * 300 : 1480;
-    if (o.tipo === "onda") s += onda(140, yb, 800, o.label || "", kleur(o.color || "blauw"), Math.max(0, Math.min(5, o.picos ?? 3)), p);
-    else if (o.tipo === "deslizador") s += deslizador(150, yb, 780, o, p);
-    else if (o.tipo === "medidor") s += medidor(540, yb + 40, o, p);
-    else if (o.tipo === "escala") s += escala(150, yb + 60, 780, o, p);
-    else if (o.tipo === "barras") s += barras(150, yb - 40, 780, o, p);
-    else if (o.tipo === "numero") s += numero(540, yb + 50, o, p);
-    else if (o.tipo === "pildora") s += pildora(540, yb + 40, o.texto || "", p);
+    const t0 = arranque + 0.09 * i, p = tramo(tl, t0, 1.2), pop = atras(tramo(tl, t0, 0.3));
+    const yb = plano === "dato" ? 1330 + i * 40 : plano === "grafica" ? 900 + i * 300 : 1480;
+    let x = "";
+    if (o.tipo === "onda") x = onda(140, yb, 800, o.label || "", kleur(o.color || "blauw"), Math.max(0, Math.min(5, o.picos ?? 3)), p);
+    else if (o.tipo === "deslizador") x = deslizador(150, yb, 780, o, p);
+    else if (o.tipo === "medidor") x = medidor(540, yb + 40, o, p);
+    else if (o.tipo === "escala") x = escala(150, yb + 60, 780, o, p);
+    else if (o.tipo === "barras") x = barras(150, yb - 40, 780, o, p);
+    else if (o.tipo === "numero") x = numero(540, yb + 50, o, p);
+    else if (o.tipo === "pildora") x = pildora(540, yb + 40, o.texto || "", p);
     else if (o.tipo === "etiqueta") {
-      const [ax, ay] = (PUNTOS[e.ilustracion] || {})[o.punto] || ANCLAS[o.punto] || ANCLAS.centro, k = P.k * z, x0 = P.x + ax * k, y0 = P.y + ay * k;
+      const [ax, ay] = (PUNTOS[e.ilustracion] || {})[o.punto] || ANCLAS[o.punto] || ANCLAS.centro, k = P.k * cam.z, x0 = P.x + ax * k, y0 = P.y + ay * k;
       const tw = Math.max(ancho(o.texto || "", 700, 38), ancho(o.sub || "", 300, 27)) + 30;
       let der = (o.lado || (ax <= 0 ? "izquierda" : "derecha")) === "derecha";
       if (der && x0 + 170 + tw > 1040) der = false;
       if (!der && x0 - 170 - tw < 40) der = true;
-      const x1 = der ? Math.min(1040 - tw, x0 + 170) : Math.max(40 + tw, x0 - 170), y1 = Math.min(1600, y0 + (ay < 0 ? -60 : 150));
-      s += etiquetaLinea(x0, y0, x1, y1, o.texto || "", o.sub || "", p);
+      let x1 = der ? Math.min(1040 - tw, x0 + 170) : Math.max(40 + tw, x0 - 170), y1 = Math.min(1600, y0 + (ay < 0 ? -60 : 150));
+      const medio = 300 * k, tapa = der ? x1 < P.x + medio : x1 > P.x - medio;
+      if (tapa) { x1 = 540; y1 = Math.min(1630, P.y + medio + 70); }
+      x = etiquetaLinea(x0, y0, x1, y1, o.texto || "", o.sub || "", p, "#FFFFFF", tapa);
     }
+    const cy = yb;
+    fr += `<g transform="translate(540 ${cy}) scale(${f2(0.85 + 0.15 * pop)}) translate(-540 ${-cy})">${x}</g>`;
   });
+  s += capa(fr, { z: 1, x: cam.x, y: cam.y }, 1.2);
   if (plano === "final") s += final(tl, e.botones);
+  if (e.aviso) s += aviso(e.aviso, tl);
   s += `<rect width="1080" height="1920" fill="url(#gVignet)"/>`;
-  return s + texto(e, t);
+  return s + texto(e, t, idx);
+}
+
+function rayas(p) {   // estelas del barrido
+  let s = "";
+  for (let i = 0; i < 9; i++) { const y = 200 + azar(i + 300) * 1500, w = 300 + azar(i + 310) * 600; s += `<rect x="${f1(1080 * (1 - p) - w * 0.5)}" y="${f1(y)}" width="${f1(w)}" height="${f1(3 + azar(i + 320) * 6)}" rx="3" fill="#FFFFFF" opacity="${f2(0.25 * Math.sin(Math.PI * p))}"/>`; }
+  return s;
 }
 
 window.pintar = function (t) {
@@ -646,14 +785,22 @@ window.pintar = function (t) {
   DEFS = {};
   let i = E.findIndex(e => t < e.fin);
   if (i < 0) i = E.length - 1;
-  let s = escena(E[i], t);
-  const tl = t - E[i].inicio;
-  if (i > 0 && tl < 0.3) s += `<g opacity="${f2(1 - suave(tl / 0.3))}">${escena(E[i - 1], E[i - 1].fin - 0.001)}</g>`;
-  // cabecera: WIST JE DAT y una barrita que avanza con el vídeo
+  let s = escena(E[i], t, i);
+  const tl = t - E[i].inicio, TR = 0.24;
+  if (i > 0 && tl < TR) {     // corte con zoom (impares) o con barrido lateral (pares), nunca un fundido plano
+    const p = tl / TR, prev = E[i - 1], viejo = escena(prev, prev.fin - 0.001, i - 1);
+    if (i % 2) {
+      s = `<g transform="translate(540 960) scale(${(0.88 + 0.12 * expo(p)).toFixed(4)}) translate(-540 -960)">${s}</g>` +
+          `<g opacity="${f2(1 - p)}" transform="translate(540 960) scale(${(1 + 0.32 * p * p).toFixed(4)}) translate(-540 -960)">${viejo}</g>`;
+    } else {
+      s = `<g transform="translate(${f1(1080 * (1 - expo(p)))} 0)">${s}</g><g transform="translate(${f1(-1080 * p * p)} 0)">${viejo}</g>` + rayas(p);
+    }
+    s += `<rect width="1080" height="1920" fill="#FFFFFF" opacity="${f2(0.14 * (1 - p))}"/>`;
+  }
   const pr = lim(t / (g.duracion || 1));
   s += `<text x="540" y="168" text-anchor="middle" font-weight="600" font-size="24" letter-spacing="10" fill="#8B93A3">${esc(g.cabecera || "WIST JE DAT")}</text>`;
   s += `<rect x="440" y="192" width="200" height="4" rx="2" fill="#FFFFFF" opacity="0.12"/><rect x="440" y="192" width="${f1(200 * pr)}" height="4" rx="2" fill="#5ED3F3"/>`;
-  if (t > g.duracion - 0.4) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.4)) / 0.4))}"/>`;
+  if (t > g.duracion - 0.35) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.35)) / 0.35))}"/>`;
   document.getElementById("scene").innerHTML = `<defs>${Object.values(DEFS).join("")}</defs>` + s;
 };
 window.listo = Promise.all([300, 600, 700, 800].map(w => document.fonts.load(`${w} 60px Poppins`))).then(() => document.fonts.ready);

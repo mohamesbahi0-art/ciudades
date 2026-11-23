@@ -17,17 +17,26 @@ from bots.comun import gemini, privado  # noqa: E402
 from bots.estudio.estudio import SIN_MIEDO  # noqa: E402
 
 MUSICA = "calma"
-PLANOS = ("grande", "dato", "grafica", "lado", "banda", "final")
+PLANOS = ("gancho", "pregunta", "numero", "vs", "primerplano", "grande", "dato", "grafica", "lado", "banda", "final")
 ILUSTRACIONES = ("pie pluma cerebro estomago corazon ojo mano pulmones diente celula tejido tierra luna sol gota rayo "
                  "planta gato reloj bateria virus adn atomo termometro planeta cohete bombilla trofeo piramide telefono "
-                 "platano taza pez").split()
+                 "platano taza pez columna").split()
 COLORES = ("blauw", "roze", "oranje", "groen", "paars", "rood", "geel")
 PUNTOS = ("arriba", "abajo", "izquierda", "derecha", "centro", "cerebelo", "delante", "detras", "tronco", "acido", "pared",
           "esofago", "salida", "talon", "dedos", "planta", "aorta", "ventriculo", "pupila", "iris", "nucleo", "membrana",
-          "mitocondria", "esmalte", "raiz", "atmosfera", "corona", "anillos", "filamento", "motor", "ventana", "traquea")
+          "mitocondria", "esmalte", "raiz", "atmosfera", "corona", "anillos", "filamento", "motor", "ventana", "traquea",
+          "disco", "vertebra")
 BOTONES = ["wist ik al", "nieuw voor mij"]
 
-VOCABULARIO = f"""plano (cómo se reparte la pantalla):
+VOCABULARIO = f"""plano (cómo se reparte la pantalla; ALTERNA, que no se repita el mismo dos veces seguidas):
+- "gancho": SOLO la primera escena. Una afirmación o cifra ENORME que entra de golpe: "golpe": {{"texto": "-1 cm",
+  "sub": "kleiner dan vanochtend"}} (texto de 1 a 3 palabras o una cifra), con una ilustración pequeña debajo
+- "pregunta": un «?» gigante; para abrir la pregunta del vídeo («Maar waarom?») justo después del gancho
+- "numero": una cifra a pantalla completa que sube contando: "contador": {{"desde": 0, "hasta": 100000, "decimales": 0,
+  "prefijo": "", "sufijo": "", "label": "slagen per dag"}}, con ilustración pequeña arriba
+- "vs": pantalla partida para comparar: ilustracion e ilustracion2, "izquierda"/"derecha" (texto corto de cada lado,
+  y si quieres "izquierda_sub"/"derecha_sub"), "color2" para el lado derecho
+- "primerplano": la ilustración enorme, casi saliéndose de la pantalla (para un detalle)
 - "grande": una ilustración grande (y si acaso una etiqueta o un número debajo)
 - "dato": ilustración más pequeña arriba y UN componente debajo (número, deslizador, medidor, barras…)
 - "grafica": el componente manda (una o dos ondas, una escala, barras) y la ilustración va pequeña arriba
@@ -36,7 +45,9 @@ VOCABULARIO = f"""plano (cómo se reparte la pantalla):
 - "final": cierre con la ilustración, dos botones y una caja de comentario (solo la última escena)
 ilustracion / ilustracion2: {", ".join(ILUSTRACIONES)}.
   Si ninguna encaja, "emoji:<un emoji>" (p. ej. "emoji:🦒", "emoji:🍕", "emoji:🏰", "emoji:🧊", "emoji:🐝").
-  "pluma" como ilustracion2 junto a "pie" o "mano" = cosquillas.
+  "pluma" como ilustracion2 junto a "pie" o "mano" = cosquillas. "columna" = columna vertebral; con "animar":
+  "comprimir" (los discos se aplastan) o "expandir" (se hinchan).
+"aviso" (opcional, en UNA escena hacia la mitad): adelanto corto en neerlandés, p. ej. "het gekste komt nog".
 puntos con nombre para las etiquetas: cerebro (cerebelo, delante, detras, tronco), estomago (acido, pared, esofago,
   salida), pie (talon, dedos, planta), corazon (aorta, ventriculo), ojo (pupila, iris), celula (nucleo, membrana,
   mitocondria), diente (esmalte, raiz), planeta (anillos), cohete (motor, ventana), bombilla (filamento); en cualquier
@@ -53,7 +64,15 @@ componentes (0 a 2 por escena; los textos en neerlandés, cortos):
 - {{"tipo": "barras", "items": [{{"label": "afbraak", "valor": 35, "color": "rood"}}, {{"label": "opbouw", "valor": 35, "color": "groen"}}]}}
 - {{"tipo": "pildora", "texto": "schild tegen het zuur"}}"""
 
-EJEMPLO = {"titulo": "Waarom kun je jezelf niet kietelen?", "escenas": [
+EJEMPLO = {"titulo": "Waarom ben je ’s avonds kleiner?", "escenas": [
+    {"voz": "Vanavond ben je een centimeter kleiner dan vanochtend.", "clave": ["kleiner"], "plano": "gancho",
+     "golpe": {"texto": "-1 cm", "sub": "kleiner dan vanochtend"}, "ilustracion": "columna", "color": "blauw"},
+    {"voz": "Maar waarom eigenlijk?", "clave": ["waarom"], "plano": "pregunta", "color": "paars"},
+    {"voz": "Eerst dit: je hart klopt zo'n honderdduizend keer per dag.", "clave": ["honderdduizend"], "plano": "numero",
+     "ilustracion": "corazon", "color": "rood", "contador": {"desde": 0, "hasta": 100000, "label": "slagen per dag"}},
+    {"voz": "En het gekste komt nog.", "clave": ["gekste"], "plano": "primerplano", "ilustracion": "columna",
+     "color": "geel", "aviso": "het gekste komt nog"}]}
+EJEMPLO_VIEJO = {"titulo": "Waarom kun je jezelf niet kietelen?", "escenas": [
     {"voz": "Probeer jezelf maar eens te kietelen.", "clave": ["kietelen."], "plano": "grande", "ilustracion": "pie",
      "ilustracion2": "pluma", "color": "oranje", "componentes": [{"tipo": "etiqueta", "texto": "jij zelf", "punto": "planta"}]},
     {"voz": "Dat komt door je kleine hersenen.", "clave": ["hersenen."], "plano": "grande", "ilustracion": "cerebro",
@@ -66,8 +85,8 @@ EJEMPLO = {"titulo": "Waarom kun je jezelf niet kietelen?", "escenas": [
 
 PLANTILLA = """Eres el guionista de «{nombre}», una cuenta de TikTok e Instagram en NEERLANDÉS de curiosidades («Wist je
 dat?»). Cuenta datos ciertos y sorprendentes de cualquier tema: cuerpo humano, animales, espacio, comida, historia,
-objetos de casa, récords, inventos… Vídeos de 22 a 30 segundos con voz de hombre pausada y clara. Así son los vídeos del
-dueño (sacado de sus propios vídeos):
+objetos de casa, récords, inventos… Vídeos de 22 a 28 segundos, con ritmo de TikTok: el dueño dice que tienen que
+ser «interesantes, que te apetezca quedarte». Así son los vídeos del dueño (sacado de sus propios vídeos):
 {formula}
 
 Lo que ha aprendido la cuenta (lo del dueño manda):
@@ -80,15 +99,25 @@ REGLAS
 - Todo lo que se dice y se lee va en neerlandés natural de los Países Bajos.
 - {sin_miedo}
 - Solo datos ciertos y comprobables; las cifras, las de verdad. Nada inventado ni exagerado.
-- De 7 a 9 escenas, UNA frase corta por escena (de 5 a 14 palabras). La primera engancha en 2 segundos: un reto
-  («Probeer…»), una pregunta o un dato que choca. La última es una pregunta a quien lo ve, con plano "final" y dos
-  botones que peguen con el tema (p. ej. «wist ik al» / «nieuw voor mij», «lukt niet» / «lukt wél?!»).
+- RETENCIÓN, lo primero:
+  · Gancho en 1,5 segundos: la escena 1 es plano "gancho" con lo MÁS sorprendente en una cifra o afirmación enorme
+    («-1 cm», «3 harten», «100.000×»). Nada de introducciones.
+  · Bucle de curiosidad: la escena 2 abre una pregunta (plano "pregunta", p. ej. «Maar waarom eigenlijk?») que solo
+    se responde al final, justo antes del cierre.
+  · 2 o 3 datos que van subiendo de nivel (del curioso al que deja con la boca abierta), mejor con cifras.
+  · Hacia la mitad, un adelanto en "aviso" («het gekste komt nog…»).
+  · De 8 a 10 escenas, UNA frase corta por escena (de 4 a 11 palabras): algo nuevo cada 2 segundos.
+  · La última es una pregunta a quien lo ve, con plano "final" y dos botones que peguen con el tema (p. ej.
+    «wist ik al» / «nieuw voor mij», «lukt niet» / «lukt wél?!»).
 - Lo más importante: CADA ESCENA ENSEÑA LO QUE DICE. Elige la ilustración y el componente que lo explican: una cifra →
   "numero"; una comparación → "barras", "escala" o plano "lado"; algo que cambia → "deslizador"; algo que se mide →
   "medidor"; una señal o un ritmo → "onda"; una parte concreta → "etiqueta" con su punto.
 - "clave": la palabra más importante de la frase (copiada tal cual de "voz", con su signo si lo lleva).
-- Varía los temas y los colores; nada de repetir la misma ilustración en dos escenas seguidas salvo que se siga
-  hablando de lo mismo.
+- Varía los planos y los colores: alterna gancho, primer plano, gráfica, pantalla partida («vs») y cifra que sube
+  («numero»); nunca el mismo plano dos veces seguidas. Nada de repetir la misma ilustración en dos escenas seguidas
+  salvo que se siga hablando de lo mismo.
+- Temas que enganchan de verdad: el propio cuerpo de quien lo ve, cosas cotidianas con un dato que choca, récords
+  y comparaciones con cifras. Mejor «3 dingen die je niet wist over …» que un solo dato suelto.
 
 Lo que puedes usar:
 {vocabulario}
@@ -178,9 +207,13 @@ def limpiar(g):
         if not claves:
             claves = [max(palabras, key=lambda p: len(p.strip(".,!?")))]
         plano = e.get("plano") if e.get("plano") in PLANOS else "grande"
-        ilu = _ilustracion(e.get("ilustracion")) or ("tejido" if plano == "banda" else "atomo")
+        if plano == "gancho" and not _texto((e.get("golpe") or {}).get("texto"), 14):
+            plano = "grande"
+        if plano == "numero" and not isinstance(e.get("contador"), dict):
+            plano = "grande"
+        ilu = _ilustracion(e.get("ilustracion")) or ("tejido" if plano == "banda" else None if plano in ("pregunta", "gancho", "numero") else "atomo")
         ilu2 = _ilustracion(e.get("ilustracion2"))
-        if plano == "lado" and not ilu2:
+        if plano in ("lado", "vs") and not ilu2:
             plano = "grande"
         comps = [c for c in (_componente(o) for o in (e.get("componentes") or [])[:2]) if c]
         x = {"voz": voz, "clave": claves, "plano": plano, "ilustracion": ilu, "color": e.get("color") if e.get("color") in COLORES else COLORES[i % len(COLORES)],
@@ -190,6 +223,23 @@ def limpiar(g):
         for k in ("resalta", "objeto", "nivel", "rapido"):
             if e.get(k) is not None:
                 x[k] = e[k]
+        if not x["ilustracion"]:
+            x.pop("ilustracion")
+        if e.get("animar") in ("comprimir", "expandir"):
+            x["animar"] = e["animar"]
+        if plano == "gancho":
+            x["golpe"] = {"texto": _texto(e["golpe"].get("texto"), 14), "sub": _texto(e["golpe"].get("sub"), 30)}
+        if plano == "numero":
+            c = e["contador"]
+            x["contador"] = {"desde": _num(c.get("desde"), 0), "hasta": _num(c.get("hasta"), 0), "decimales": int(_num(c.get("decimales"), 0, 0, 2)),
+                             "prefijo": _texto(c.get("prefijo"), 4), "sufijo": _texto(c.get("sufijo"), 6), "label": _texto(c.get("label"), 28)}
+        if plano == "vs":
+            for k in ("izquierda", "derecha", "izquierda_sub", "derecha_sub"):
+                if e.get(k):
+                    x[k] = _texto(e[k], 18)
+            x["color2"] = e.get("color2") if e.get("color2") in COLORES else ("roze" if x["color"] != "roze" else "blauw")
+        if _texto(e.get("aviso"), 30):
+            x["aviso"] = _texto(e.get("aviso"), 30)
         escenas.append(x)
     if len(escenas) < 3:
         raise ValueError("el guion tiene muy pocas escenas")
@@ -241,25 +291,49 @@ def guionizar(canal, lecciones):
     raise ValueError(f"Gemini no dio un guion válido para «ciencia» ({ultimo})")
 
 
+def _clave_en(e):
+    """Cuándo se dice la palabra clave (segundos desde el principio del vídeo)."""
+    claves = {c.lower().strip(".,!?") for c in e.get("clave", [])}
+    for w in e.get("palabras", []):
+        if w["p"].lower().strip(".,!?") in claves:
+            return w["a"]
+    return e["inicio"] + 0.6
+
+
 def eventos(g):
-    """Sonidos: whoosh suave al cambiar de escena, pop cuando sale la palabra clave y cada componente, tic en los
-    deslizadores y medidores, brillo y toque en los botones del final."""
+    """Golpes de sonido para que nada pase en silencio (sin música): whoosh en cada corte, golpe en el gancho y en las
+    cifras, pop en la palabra clave y en cada cosa que sale, tic-tic mientras sube un contador, brillo en el «?», el
+    aviso y el final."""
     ev = []
     for i, e in enumerate(g["escenas"]):
-        a = e["inicio"]
+        a, plano = e["inicio"], e.get("plano")
         if i:
-            ev.append(("whoosh", max(0.0, a - 0.1), 0.32))
-        claves = {c.lower().strip(".,!?") for c in e.get("clave", [])}
-        for w in e.get("palabras", []):
-            if w["p"].lower().strip(".,!?") in claves:
-                ev.append(("pop", max(0.0, w["a"] - 0.03), 0.22))
-                break
+            ev.append(("whoosh", max(0.0, a - 0.08), 0.55))
+        tk = _clave_en(e)
+        ev.append(("pop", max(0.0, tk - 0.02), 0.3))
+        arranque = a + (0.15 if plano in ("dato", "grafica") else max(0.12, min(0.55, tk - a - 0.12)))
         for k, c in enumerate(e.get("componentes", [])):
-            ev.append(("pop", a + 0.45 + 0.35 * k, 0.28))
+            ev.append(("pop", arranque + 0.09 * k, 0.32))
             if c["tipo"] in ("deslizador", "medidor"):
-                ev.append(("tic", a + 0.9 + 0.35 * k, 0.4))
+                ev.append(("tic", arranque + 0.5 + 0.09 * k, 0.4))
             if c["tipo"] == "numero":
-                ev.append(("golpe", a + 0.5 + 0.35 * k, 0.45))
-        if e.get("plano") == "final":
-            ev += [("brillo", a + 0.4, 0.3), ("tic", a + 1.6, 0.45)]
+                ev.append(("golpe", arranque + 0.09 * k, 0.5))
+        if plano == "gancho":
+            ev += [("golpe", a + 0.04, 0.95), ("brillo", a + 0.25, 0.3)]
+        elif plano == "pregunta":
+            ev.append(("brillo", a + 0.05, 0.4))
+        elif plano == "numero":
+            ev += [("tic", a + 0.15 + 0.11 * n, 0.2) for n in range(10)] + [("golpe", a + 1.28, 0.6)]
+        elif plano == "vs":
+            ev += [("pop", a + 0.05, 0.35), ("pop", a + 0.14, 0.35), ("golpe", a + 0.2, 0.4)]
+        elif plano == "final":
+            ev += [("brillo", a + 0.35, 0.35), ("pop", a + 0.5, 0.3), ("tic", a + 1.6, 0.45)]
+        if e.get("aviso"):
+            ev.append(("brillo", a + 0.08, 0.35))
+        if e["fin"] - a > 2.4:      # el reencuadre de la cámara a mitad de escena
+            ev.append(("whoosh", a + 1.5, 0.25))
+        if e["fin"] - a > 3.1:      # y el tercer golpe de cámara en las escenas largas
+            ev.append(("whoosh", a + 2.55, 0.22))
+        if plano == "final":
+            ev += [("pop", a + 1.4 + 0.16 * n, 0.18) for n in range(4)]
     return ev
