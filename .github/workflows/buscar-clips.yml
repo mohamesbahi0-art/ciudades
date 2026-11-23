@@ -1,0 +1,53 @@
+# Buscador de clips: busca con la API oficial vídeos de GTA con licencia Creative Commons (los únicos de otros creadores
+# que se pueden reutilizar sin permiso). Solo busca y apunta en el repositorio privado; no descarga nada.
+# Cada lunes y cuando Claude deja peticiones/clips.json.
+name: Buscar clips
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  push:
+    paths:
+      - "peticiones/clips.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: buscar-clips
+  cancel-in-progress: false
+jobs:
+  buscar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Buscar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+        run: python bots/central/buscador_clips.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('buscador de clips') else 1)"
