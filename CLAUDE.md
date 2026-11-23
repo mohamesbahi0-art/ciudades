@@ -21,6 +21,7 @@ Las claves y los permisos van en los secretos de GitHub. Los datos privados (la 
 - `.github/workflows/`: los turnos que corren solos en GitHub, aunque Claude y el ordenador estén apagados:
   - `fabrica.yml`: cada 2 horas (minuto 17); también con `peticiones/fabrica.json` (`{"solo": "gta", "maximo": 1}`).
   - `revisar-canales.yml`: cada 3 horas (minuto 37): Jefes de canal y Analista.
+  - `derechos.yml`: cada día (10:29 UTC): Derechos Sociales (Doctora, Equipo de mejora, Defensora, Guía, Psicóloga y Jefe) cuidan de los robots; `estudio.yml` (cada día) lleva también al Entrenador.
   - `ojeador.yml`: cada 3 horas (minuto 7): el Ojeador de redes mira TikTok e Instagram sin cuenta (si una red dice que no, la deja en paz unas horas; nunca se salta un bloqueo).
   - `conectar-canales.yml`, `prueba-central.yml` y `probar-descarga.yml`: solo con su fichero de `peticiones/`.
 - `docs/plantillas-nube/`: plantillas de turnos que todavía no están activos.

@@ -18,6 +18,7 @@ from bots.comun import privado  # noqa: E402
 
 # Cada cuántas horas debería pasar cada turno con horario (si no, algo va mal)
 ESPERADO = {"fabrica.yml": 2, "revisar-canales.yml": 3, "ojeador.yml": 3, "radar.yml": 24, "estudio.yml": 24,
+            "derechos.yml": 24,
             "buscar-clips.yml": 168, "latido.yml": 168}
 
 

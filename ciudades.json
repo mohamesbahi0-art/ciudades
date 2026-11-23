@@ -21,6 +21,11 @@
    "id": "influencers",
    "nombre": "Influencers",
    "numero": 4
+  },
+  {
+   "id": "derechos",
+   "nombre": "Derechos Sociales",
+   "numero": 5
   }
  ],
  "bots": [
@@ -619,6 +624,90 @@
    "donde": "ciudad",
    "grupo": "Nuevos",
    "hace": "Cada 3 horas mira TikTok e Instagram sin cuenta, como quien cotillea el móvil: qué se hace viral, qué nichos tiran, qué canciones y hashtags se repiten y cómo están hechos los vídeos. Se lo pasa a los Influencers y a los guionistas.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "entrenador",
+   "nombre": "Entrenador",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Lee cómo van de verdad las cuentas y les pone los deberes de la semana: qué repetir, una cosa que mejorar, ideas concretas y una prueba.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "doctora_robots",
+   "nombre": "Doctora de los robots",
+   "ciudad": "derechos",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Revisa cada día la salud de cada robot: cuánto trabaja, cuántas veces falla y si lleva días parado.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "equipo_mejora",
+   "nombre": "Equipo de mejora",
+   "ciudad": "derechos",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Junta los fallos que se repiten, propone el arreglo y lo convierte en una lección para el robot.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "defensora_robots",
+   "nombre": "Defensora de los robots",
+   "ciudad": "derechos",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Escucha lo que necesita cada robot (una llave, un permiso, una lista) y lo pide por él.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "guia_nuevos",
+   "nombre": "Guía de los nuevos",
+   "ciudad": "derechos",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Recibe a cada robot nuevo y le pasa las mejores lecciones de sus compañeros.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "psicologa_robots",
+   "nombre": "Psicóloga de los robots",
+   "ciudad": "derechos",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Deja una nota a los robots que van de caída con lo que sí hicieron bien y un paso concreto.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "jefe_derechos",
+   "nombre": "Jefe de Derechos Sociales",
+   "ciudad": "derechos",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Lee la línea directa y lo de todos, y decide lo de hoy: qué va a Claude, qué al dueño y qué ya está hecho.",
    "origen": "nuevo",
    "lote": 2,
    "codigo": "nuevo",

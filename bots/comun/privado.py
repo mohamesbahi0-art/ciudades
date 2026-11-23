@@ -171,7 +171,7 @@ def fusionar(ruta, suyo, nuestro):
         for clave in set(suyo.get("canales") or {}) | set(nuestro.get("canales") or {}):
             a, b = (suyo.get("canales") or {}).get(clave) or {}, (nuestro.get("canales") or {}).get(clave) or {}
             base = dict(b if (b.get("fecha") or "") >= (a.get("fecha") or "") else a)
-            for parte in ("radar", "ojeador"):
+            for parte in ("radar", "ojeador", "entrenador"):
                 partes = [x[parte] for x in (a, b) if x.get(parte)]
                 if partes:
                     base[parte] = max(partes, key=lambda r: r.get("fecha") or "")

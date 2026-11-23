@@ -161,7 +161,7 @@ def recetas(clave, tema, lista, palabras):
     todas = privado.leer(os.path.join(CARPETA, "recetas.json"), {}) or {}
     anterior = todas.setdefault("canales", {}).get(clave) or {}
     todas["canales"][clave] = dict(receta, fecha=privado.ahora(), basada_en=len(top))
-    for parte in ("radar", "ojeador"):           # lo que han visto el Radar de nichos y el Ojeador de redes se queda
+    for parte in ("radar", "ojeador", "entrenador"):   # lo del Radar, el Ojeador y el Entrenador se queda
         if anterior.get(parte):
             todas["canales"][clave][parte] = anterior[parte]
     privado.guardar_estado("influencers/recetas.json", {"canales": todas["canales"]})
