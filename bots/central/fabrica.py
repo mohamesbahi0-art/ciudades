@@ -132,8 +132,9 @@ def main():
     if not a.prueba:
         try:                                    # el Archivero: los clips grabados, limpios a la videoteca
             guardados = videoteca.archivar(paso=lambda t: print(privado.limpiar(t), flush=True))
-            if guardados:
-                guardar(f"videoteca: {guardados} toma(s) nuevas")
+            repasadas = videoteca.repasar_marcas(paso=lambda t: print(privado.limpiar(t), flush=True))
+            if guardados or repasadas:
+                guardar(f"videoteca: {guardados} toma(s) nuevas y {repasadas} sin logos")
         except Exception as e:
             print(f"videoteca: el Archivero no ha podido trabajar ({type(e).__name__})", flush=True)
 

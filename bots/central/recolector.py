@@ -158,8 +158,13 @@ def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
         return None
     nuevo = _siguiente_id(estado)
     crudo = _cortar(url, inicio + desde, hasta - desde, os.path.join(tmp, f"{nuevo}-crudo.mp4"))
-    rev = {"bandas": clips.bandas(crudo), "recorte": clips._recorte_valido(x.get("recorte")),
-           "sonido": x.get("habla_creador") is False and clips._tiene_audio(crudo)}
+    franjas = clips.bandas(crudo)
+    quieto = clips.marcas(crudo, previo=f"crop={franjas}," if franjas else "")   # logos o marcas de agua del autor
+    junto = clips.juntar_recortes(clips._recorte_valido(x.get("recorte")), quieto)
+    recorte = clips._recorte_valido(junto) if junto else None
+    if junto and recorte is None and (junto["ancho"] < 0.98 or junto["alto"] < 0.98):
+        return None                                      # quitar lo del autor dejaría muy poca imagen: fuera
+    rev = {"bandas": franjas, "recorte": recorte, "sonido": x.get("habla_creador") is False and clips._tiene_audio(crudo)}
     limpio = videoteca.limpiar(crudo, rev, os.path.join(tmp, f"{nuevo}.mp4"))
     almacen.guardar(videoteca.ESTANTERIA, limpio, f"{nuevo}.mp4")
     juego = x.get("juego") if x.get("juego") in videoteca.JUEGOS else origen["juego"]
@@ -168,7 +173,7 @@ def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
             "etiquetas": videoteca.etiquetas_de({"etiquetas": x.get("etiquetas") or [], "que_se_ve": que}),
             "que_se_ve": que, "segundos": round(clips._segundos(limpio), 1), "sonido": bool(rev["sonido"]),
             "creador": origen["creador"], "enlace": origen["enlace"], "licencia": origen["licencia"],
-            "calidad": _num(x.get("nota") if momento else x.get("calidad")), "origen": "archive.org",
+            "calidad": _num(x.get("nota") if momento else x.get("calidad")), "origen": "archive.org", "marcas": "revisada",
             "fuente": origen["fuente"], "entrada": privado.ahora(), "usos": 0}
     lista = videoteca.tomas() + [toma]
     videoteca._guardar(lista)
@@ -239,6 +244,12 @@ def recoger_video(doc, estado, tmp, paso=print):
 
 def recoger(maximo=5, paso=print):
     """Mira hasta `maximo` vídeos nuevos. Devuelve cuántas tomas y momentos ha traído."""
+    try:
+        repasadas = videoteca.repasar_marcas(paso)        # las tomas de antes del detector de logos, también limpias
+        if repasadas:
+            paso(f"recolector: {repasadas} tomas repasadas sin logos")
+    except Exception as e:
+        paso(f"recolector: no ha podido repasar los logos ({type(e).__name__})")
     if len(videoteca.tomas()) >= TOPE_VIDEOTECA:
         paso(f"recolector: la videoteca ya tiene {TOPE_VIDEOTECA} tomas o más; hoy no recoge")
         return {"tomas": 0, "momentos": 0, "vistos": 0}

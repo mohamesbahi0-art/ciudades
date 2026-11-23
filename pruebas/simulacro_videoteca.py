@@ -247,6 +247,25 @@ comprobar(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=wid
 comprobar(videoteca.parejas(videoteca.tomas()) == ["agua", "coches", "policía"],
           f"parejas para el versus: {videoteca.parejas(videoteca.tomas())}")
 
+# 1b. Las tomas de antes del detector de logos se repasan: la del logo se guarda otra vez, ya sin él
+logo = os.path.join(ESTANTES, "videoteca", "V-9.mp4")
+subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x360:rate=30", "-t", "8",
+                "-vf", "crop=640:360:'mod(t*160,640)':0,drawbox=x=560:y=10:w=64:h=44:color=white:t=fill,"
+                "drawbox=x=574:y=20:w=36:h=24:color=black:t=fill", "-c:v", "libx264", "-preset", "ultrafast", "-an", logo],
+               check=True)
+indice = json.load(open(os.path.join(PRIV, "estado", "clips", "videoteca.json"), encoding="utf-8"))
+indice["tomas"].append({"id": "V-9", "archivo": "V-9.mp4", "juego": "gta5", "etiquetas": ["armas"], "segundos": 8.0,
+                        "que_se_ve": "toma con el logo del autor", "sonido": False, "usos": 0, "creador": "Logo",
+                        "enlace": "https://youtu.be/logo", "licencia": "CC BY"})
+json.dump(indice, open(os.path.join(PRIV, "estado", "clips", "videoteca.json"), "w", encoding="utf-8"), ensure_ascii=False)
+repasadas = videoteca.repasar_marcas(paso=print)
+marcadas = {t["id"]: t.get("marcas") for t in videoteca.tomas()}
+ancho = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width", "-of", "csv=p=0", logo],
+                       capture_output=True, text=True).stdout.strip()
+comprobar(repasadas == 1 and marcadas["V-9"] == "quitadas" and int(ancho) < 640,
+          f"la toma con logo se repasa y se guarda sin él ({repasadas}, {ancho} px)")
+comprobar(all(m for m in marcadas.values()), "todas las tomas quedan repasadas")
+
 # 2. GTA 5 contra GTA 6 con tomas
 codigo, resumen, videos, guion = turno_de("versus")
 comprobar(codigo == 0 and resumen.get("formato") == "versus_clips" and resumen.get("destino_resultado") == "subido",

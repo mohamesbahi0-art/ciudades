@@ -237,6 +237,74 @@ def bandas(clip):
     return f"{w}:{h}:{x}:{y}"
 
 
+def marcas(clip, previo="", n=16):
+    """Busca lo que se queda QUIETO pegado a una esquina mientras el juego se mueve: logos, marcas de agua, nombres o
+    textos del creador (y, de paso, el minimapa). Devuelve el recorte que lo quita (fracciones de la imagen, después de
+    `previo`) o None. No depende de la IA: la IA a veces no ve un logo pequeño."""
+    import numpy as np
+    from PIL import Image
+    total = _segundos(clip)
+    tmp = tempfile.mkdtemp()
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", clip, "-vf",
+                        f"{previo}fps={n / max(total, 1.0):.4f},scale=320:180,format=gray",
+                        os.path.join(tmp, "f%03d.png")], check=True, capture_output=True)
+        fotos = [np.asarray(Image.open(os.path.join(tmp, f)), dtype=np.float32) for f in sorted(os.listdir(tmp))]
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    if len(fotos) < 6:
+        return None
+    pila = np.stack(fotos)
+    quieto = pila.std(axis=0) < 6
+    if quieto.mean() > 0.6:              # la cámara apenas se mueve: no se puede distinguir un logo del juego
+        return None
+    media = pila.mean(axis=0)
+    bordes = (np.abs(np.diff(media, axis=1, prepend=media[:, :1])) + np.abs(np.diff(media, axis=0, prepend=media[:1, :]))) > 18
+    marca = quieto & bordes
+    alto, ancho = marca.shape
+    ch, cw, margen = int(alto * 0.25), int(ancho * 0.25), 4
+    x0, y0, x1, y1 = 0, 0, ancho, alto
+    for arriba in (True, False):
+        for izquierda in (True, False):
+            ys = slice(0, ch) if arriba else slice(alto - ch, alto)
+            xs = slice(0, cw) if izquierda else slice(ancho - cw, ancho)
+            zona = marca[ys, xs]
+            if zona.sum() < 20:
+                continue
+            yy, xx = np.nonzero(zona)
+            top, bot = int(yy.min()) + ys.start, int(yy.max()) + ys.start
+            izq, der = int(xx.min()) + xs.start, int(xx.max()) + xs.start
+            caja_al, caja_an = bot - top + 1, der - izq + 1
+            # un logo es pequeño y compacto; una raya o un borde del propio juego cruza toda la esquina: eso no se toca
+            if caja_al > alto * 0.2 or caja_an > ancho * 0.2 or zona.sum() / (caja_al * caja_an) < 0.06:
+                continue
+            pierde_h = (bot + margen) if arriba else (alto - top + margen)       # quitar una franja de arriba/abajo
+            pierde_v = (der + margen) if izquierda else (ancho - izq + margen)   # o una de un lado
+            if pierde_h / alto <= pierde_v / ancho:
+                if arriba:
+                    y0 = max(y0, bot + margen)
+                else:
+                    y1 = min(y1, top - margen)
+            elif izquierda:
+                x0 = max(x0, der + margen)
+            else:
+                x1 = min(x1, izq - margen)
+    if (x0, y0, x1, y1) == (0, 0, ancho, alto):
+        return None
+    return {"x": x0 / ancho, "y": y0 / alto, "ancho": max(0.0, x1 - x0) / ancho, "alto": max(0.0, y1 - y0) / alto}
+
+
+def juntar_recortes(a, b):
+    """Lo que queda después de quitar lo de los dos recortes (None si ninguno quita nada)."""
+    if not a or not b:
+        return a or b
+    x0, y0 = max(a["x"], b["x"]), max(a["y"], b["y"])
+    x1, y1 = min(a["x"] + a["ancho"], b["x"] + b["ancho"]), min(a["y"] + a["alto"], b["y"] + b["alto"])
+    return {"x": x0, "y": y0, "ancho": max(0.0, x1 - x0), "alto": max(0.0, y1 - y0)}
+
+
 def _recorte_valido(r):
     """El rectángulo que propone el Portero, si tiene sentido (deja al menos media imagen de juego)."""
     if not isinstance(r, dict):
@@ -307,14 +375,19 @@ def revisar(clip, carpeta, m=None):
             r = r[0]
         if not isinstance(r, dict):
             raise gemini.SinIA("el Portero de clips no ha contestado con la forma pedida")
-    recorte = _recorte_valido(r.get("recorte"))
-    limpio = r.get("limpio") is True
-    vale = r.get("vale") is not False and (limpio or recorte is not None)
+    quieto = marcas(clip, previo=base)          # logos y marcas de agua quietos en una esquina (la IA a veces no los ve)
+    junto = juntar_recortes(_recorte_valido(r.get("recorte")), quieto)
+    recorte = _recorte_valido(junto) if junto else None
+    demasiado = bool(junto) and recorte is None and (junto["ancho"] < 0.98 or junto["alto"] < 0.98)
+    limpio = r.get("limpio") is True and recorte is None and not demasiado
+    vale = r.get("vale") is not False and not demasiado and (r.get("limpio") is True or recorte is not None)
     # el sonido del juego solo se queda si alguien lo ha oído y el creador no habla; si no, música propia
     sonido = bool(oido and r.get("habla_creador") is False and not (m or {}).get("habla_creador") and _tiene_audio(clip))
+    problemas = [str(p)[:120] for p in (r.get("problemas") or [])][:6]
+    if quieto:
+        problemas.append("algo quieto en una esquina (logo o marca de agua): recortado")
     return {"vale": vale, "bandas": franjas, "recorte": recorte, "sonido": sonido, "limpio": limpio,
-            "problemas": [str(p)[:120] for p in (r.get("problemas") or [])][:6],
-            "que_se_ve": str(r.get("que_se_ve") or "")[:300], "quien": quien, "fotos": vistas}
+            "problemas": problemas, "que_se_ve": str(r.get("que_se_ve") or "")[:300], "quien": quien, "fotos": vistas}
 
 
 def guionizar(canal, m, lecciones="", segundos=15, imagenes=()):

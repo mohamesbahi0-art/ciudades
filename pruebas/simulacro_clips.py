@@ -163,6 +163,19 @@ comprobar(clips._recorte_valido({"x": 0, "y": 0, "ancho": 0.8, "alto": 1}) is no
 comprobar(clips._recorte_valido({"x": 0.3, "y": 0.3, "ancho": 0.3, "alto": 0.3}) is None,
           "un recorte que deja muy poco juego no vale")
 comprobar(clips.listo_para("clips")["codigo"] == "C-001", "elige el clip grabado con más nota (no el que falta grabar)")
+# un logo quieto en una esquina mientras el juego se mueve (la IA a veces no lo ve): se encuentra y se recorta
+movido = "crop=640:360:'mod(t*160,640)':0"
+logo = os.path.join(TMP, "logo.mp4")
+subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x360:rate=30", "-t", "8",
+                "-vf", movido + ",drawbox=x=560:y=10:w=64:h=44:color=white:t=fill,drawbox=x=574:y=20:w=36:h=24:color=black:t=fill",
+                "-c:v", "libx264", "-preset", "ultrafast", "-an", logo], check=True)
+sin_logo = os.path.join(TMP, "sin_logo.mp4")
+subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x360:rate=30", "-t", "8",
+                "-vf", movido, "-c:v", "libx264", "-preset", "ultrafast", "-an", sin_logo], check=True)
+quitar = clips.marcas(logo)
+comprobar(quitar is not None and (quitar["x"] + quitar["ancho"] <= 560 / 640 + 0.01 or quitar["y"] >= 54 / 360 - 0.01),
+          f"encuentra el logo quieto de la esquina y lo recorta ({quitar})")
+comprobar(clips.marcas(sin_logo) is None, "sin logo no recorta nada")
 cortado = clips.cortar(prueba, {"desde": 2, "hasta": 7})
 comprobar(abs(clips._segundos(cortado) - 5) < 0.3, f"si el móvil no pudo recortar, la fábrica corta el trozo ({clips._segundos(cortado):.1f} s)")
 comprobar(clips.cortar(prueba, None) == prueba, "sin corte, el clip se queda como está")

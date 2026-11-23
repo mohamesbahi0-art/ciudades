@@ -210,7 +210,7 @@ def archivar(paso=print, maximo=6):
                     "que_se_ve": rev["que_se_ve"] or m.get("que_pasa", ""), "segundos": round(clips._segundos(limpio), 1),
                     "sonido": bool(rev["sonido"]), "creador": m.get("creador"), "enlace": m.get("enlace"),
                     "licencia": m.get("licencia", "CC BY"), "calidad": clips._nota(m), "para": m.get("para"),
-                    "entrada": privado.ahora(), "usos": 0}
+                    "entrada": privado.ahora(), "usos": 0, "marcas": "revisada"}
             lista = [t for t in lista if t.get("id") != m["codigo"]] + [toma]
             _guardar(lista)
             es_toma = m.get("tipo") == "toma" or m.get("para") in ("videoteca", "versus")
@@ -229,6 +229,33 @@ def archivar(paso=print, maximo=6):
             shutil.rmtree(tmp, ignore_errors=True)
     cuaderno.guardar()
     return hechos
+
+
+def repasar_marcas(paso=print):
+    """Las tomas guardadas antes del detector de logos: se bajan, se les quita lo que esté quieto en una esquina (logo o
+    marca de agua del autor) y se vuelven a guardar. Solo las que no lo tienen hecho; sin IA."""
+    lista, hechas = tomas(), 0
+    for t in lista:
+        if t.get("marcas"):
+            continue
+        tmp = tempfile.mkdtemp(prefix="repaso-")
+        try:
+            ruta = almacen.bajar(ESTANTERIA, t["archivo"], tmp)
+            quieto = clips._recorte_valido(clips.marcas(ruta))
+            if quieto:
+                limpio = limpiar(ruta, {"recorte": quieto, "sonido": t.get("sonido")}, os.path.join(tmp, "limpio.mp4"))
+                almacen.guardar(ESTANTERIA, limpio, t["archivo"])
+                t["marcas"] = "quitadas"
+                hechas += 1
+                paso(f"videoteca: {t['id']} sin el logo del autor")
+            else:
+                t["marcas"] = "revisada"
+        except Exception as e:                # se vuelve a probar en la próxima pasada
+            paso(f"videoteca: no he podido repasar {t['id']} ({type(e).__name__})")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    _guardar(lista)
+    return hechas
 
 
 # ---------- el guion con tomas ----------
