@@ -229,10 +229,17 @@ def main():
         hechos.append("tendencias")
     except Exception as e:
         print(f"estudio: tendencias fallaron ({type(e).__name__})", flush=True)
-    lista_temas = sorted(temas().items())
-    if not a.todos:                         # 2 temas al día, rotando, para no gastar cuota
-        dia = dt.datetime.now(dt.timezone.utc).timetuple().tm_yday
-        lista_temas = [lista_temas[(dia * 2 + i) % len(lista_temas)] for i in range(min(2, len(lista_temas)))]
+    lista_temas = list(temas().items())
+    if not a.todos:                         # 2 temas al día para no gastar cuota: primero los que la fábrica está
+        recetas_hechas = (privado.leer(os.path.join(CARPETA, "recetas.json"), {}) or {}).get("canales", {})
+        orden = {k: i for i, k in enumerate(privado.ajustes().get("prioridad", []))}   # haciendo y no tienen receta
+
+        def urgencia(item):
+            clave = item[0]
+            fecha = (recetas_hechas.get(clave) or {}).get("fecha")
+            dias = (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(fecha.replace("Z", "+00:00"))).days if fecha else 99
+            return (-min(dias, 30), orden.get(clave, 99))
+        lista_temas = sorted(lista_temas, key=urgencia)[:2]
     listas = []
     for clave, tema in lista_temas:
         try:
