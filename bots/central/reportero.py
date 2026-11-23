@@ -54,6 +54,27 @@ def wikipedia(articulo, idioma="en", maximo=6000):
     return texto[:maximo]
 
 
+def wist_je_dat(idioma="nl"):
+    """Los datos curiosos de la portada de la Wikipedia (sección «Wist je dat…?» en neerlandés, «Did you know…?» en
+    inglés): frases cortas, comprobadas y que cambian cada pocos días."""
+    import html as html_mod
+    pagina = {"nl": "Hoofdpagina", "en": "Main_Page"}.get(idioma, "Hoofdpagina")
+    url = (f"https://{idioma}.wikipedia.org/w/api.php?action=parse&page={pagina}&prop=text&format=json"
+           "&formatversion=2&disablelimitreport=1")
+    texto = json.loads(_bajar(url))["parse"]["text"]
+    marca = {"nl": "wist je dat", "en": "did you know"}.get(idioma, "wist je dat")
+    i = texto.lower().find(marca)
+    if i < 0:
+        return []
+    trozo = texto[i:i + 8000]
+    datos = []
+    for item in re.findall(r"<li[^>]*>(.*?)</li>", trozo, flags=re.S):
+        limpio = html_mod.unescape(re.sub(r"<[^>]+>", "", item)).strip()
+        if 25 < len(limpio) < 400:
+            datos.append(limpio)
+    return datos[:12]
+
+
 def _clave(titulo):
     return re.sub(r"\W+", " ", titulo.lower()).strip()[:90]
 
@@ -72,6 +93,14 @@ def fuentes(clave, canal, registro=print):
             registro(f"reportero: Google Noticias no contesta ({type(e).__name__})")
     lista.sort(key=lambda n: n["fecha"], reverse=True)
     lista = lista[:25]
+    if cfg.get("wist_je_dat"):
+        try:
+            for dato in wist_je_dat(cfg.get("wist_je_dat_idioma", "nl")):
+                if _clave(dato) not in usados:
+                    lista.append({"tipo": "noticia", "titulo": dato, "fuente": "Wikipedia (Wist je dat)", "fecha": "",
+                                  "enlace": ""})
+        except Exception as e:
+            registro(f"reportero: la portada de Wikipedia no contesta ({type(e).__name__})")
     for articulo in cfg.get("wikipedia", []):
         try:
             texto = wikipedia(articulo, idioma=cfg.get("wikipedia_idioma", "en"))
