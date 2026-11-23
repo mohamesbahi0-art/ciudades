@@ -92,7 +92,7 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                         break
                     time.sleep(8)
                     continue
-                raise SinIA(ultimo)
+                break                                  # este modelo no acepta la petición (p. ej. audio): el siguiente
             except (KeyError, IndexError, ValueError) as e:
                 ultimo = f"{modelo}: respuesta rara ({type(e).__name__})"
                 time.sleep(3)
