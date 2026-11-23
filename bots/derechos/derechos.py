@@ -8,8 +8,9 @@
 - Guía de los nuevos: a cada robot nuevo le pasa las mejores lecciones de sus compañeros de ciudad, una sola vez.
 - Psicóloga: a los robots que van de caída les deja una nota con lo que sí hicieron bien y un paso concreto, y avisa al
   Jefe si la mala racha sigue (estilo de la skill «psicologo-robots»).
-- Jefe de Derechos Sociales: lee la línea directa (estado/derechos/sos.json, si la ronda de Claude la ha traído de la app),
-  lo de todos y decide lo de hoy: qué va a Claude, qué al dueño y qué ya está hecho.
+- Jefe de Derechos Sociales: lee la línea directa (estado/derechos/sos.json: los sos/ de la app que copia la ronda de
+  Claude, con la respuesta del dueño si la hay), lo de todos y decide lo de hoy: qué va a Claude, qué al dueño y qué ya
+  está hecho.
 
 No usa IA (no gasta cupo) ni toca el código: escribe estado/derechos/*.json (lo copia a la app la ronda de Claude) y
 los cuadernos. Uso:  python bots/derechos/derechos.py
@@ -219,10 +220,20 @@ def psicologa(salud, propuestas, anteriores):
 def jefe(peticiones, propuestas, notas, sos):
     """Decide lo de hoy: la línea directa primero, luego lo que bloquea a más robots."""
     decisiones = []
-    for m in (sos.get("mensajes") or [])[:5]:
-        if not m.get("respondido"):
-            decisiones.append({"que": f"Línea directa: {str(m.get('texto'))[:160]}", "para": "claude",
-                               "por_que": "Lo primero es la línea directa."})
+    # La línea directa (sos/ de la app, copiada por la ronda de Claude): robots que no pueden trabajar o necesitan un
+    # cambio urgente. Si el dueño ya ha contestado «Sí, hazlo» o «No», eso manda.
+    for m in (sos.get("mensajes") or [])[:10]:
+        estado = m.get("estado") or ("resuelta" if m.get("respondido") else "abierta")
+        if estado == "resuelta":
+            continue
+        if m.get("decisionDueno") in ("si", "no"):
+            dijo = "sí" if m["decisionDueno"] == "si" else "no"
+            decisiones.append({"que": f"El dueño ha dicho «{dijo}» a: {str(m.get('pregunta') or m.get('texto'))[:160]}",
+                               "para": "claude", "sos": m.get("id"),
+                               "por_que": "Respuesta del dueño en la línea directa: aplicarla (o dejarlo) y cerrarla."})
+        elif estado in ("abierta", "en_marcha"):
+            decisiones.append({"que": f"Línea directa ({m.get('robot') or 'un robot'}): {str(m.get('texto'))[:160]}",
+                               "para": "claude", "sos": m.get("id"), "por_que": "Lo primero es la línea directa."})
     for p in sorted(peticiones, key=lambda x: len(x.get("robots") or []), reverse=True):
         if p["a_quien"] == "dueno":
             decisiones.append({"que": p["pide"], "para": "dueno", "por_que": f"Lo necesitan {len(p.get('robots') or [])} "
