@@ -371,6 +371,12 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     g = limpiar(json.loads(json.dumps(guion))) if guion else guionizar(canal, lecciones)
     avisar("estudio: voz escena a escena")
     voz = voz_por_escenas(g, carpeta, canal)
+    g["voz_motor"] = locutor.MOTOR.get("motor", "edge")
+    if g["voz_motor"] == "elevenlabs" and canal.get("eleven_gratis", True):
+        # el plan gratis de ElevenLabs pide nombrarles al publicar
+        for campo in ("texto_tiktok", "texto_instagram", "descripcion"):
+            if g.get(campo):
+                g[campo] = f"{g[campo].rstrip()}\n🎙️ Voz: elevenlabs.io"
     with open(os.path.join(carpeta, "guion_estudio.json"), "w", encoding="utf-8") as f:
         json.dump(g, f, ensure_ascii=False, indent=1)
     avisar(f"estudio: dibujando {g['duracion']} s fotograma a fotograma")

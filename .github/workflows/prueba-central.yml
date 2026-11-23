@@ -35,6 +35,7 @@ jobs:
       - name: Hacer el vídeo de prueba
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
           ALMACEN_PRUEBAS: "1"
           PRIVADO: privado
