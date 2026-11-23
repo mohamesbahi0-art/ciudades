@@ -237,10 +237,52 @@ def bandas(clip):
     return f"{w}:{h}:{x}:{y}"
 
 
-def marcas(clip, previo="", n=16):
+def _esquinas(pila):
+    """Del montón de fotos (en gris), lo que se queda quieto y con bordes en cada esquina: devuelve el rectángulo que se
+    puede quedar (x0, y0, x1, y1 en píxeles) o None si no hay nada que quitar."""
+    import numpy as np
+    quieto = pila.std(axis=0) < 6
+    if quieto.mean() > 0.6:              # la cámara apenas se mueve: no se puede distinguir un rótulo del juego
+        return None
+    media = pila.mean(axis=0)
+    bordes = (np.abs(np.diff(media, axis=1, prepend=media[:, :1])) + np.abs(np.diff(media, axis=0, prepend=media[:1, :]))) > 18
+    marca = quieto & bordes
+    alto, ancho = marca.shape
+    zh, zw, margen = int(alto * 0.25), int(ancho * 0.4), 4
+    x0, y0, x1, y1 = 0, 0, ancho, alto
+    for arriba in (True, False):
+        for izquierda in (True, False):
+            ys = slice(0, zh) if arriba else slice(alto - zh, alto)
+            xs = slice(0, zw) if izquierda else slice(ancho - zw, ancho)
+            zona = marca[ys, xs]
+            if zona.sum() < 20:
+                continue
+            yy, xx = np.nonzero(zona)
+            top, bot = int(yy.min()) + ys.start, int(yy.max()) + ys.start
+            izq, der = int(xx.min()) + xs.start, int(xx.max()) + xs.start
+            caja_al, caja_an = bot - top + 1, der - izq + 1
+            # un logo o un rótulo es compacto (o una franja de texto): una raya del propio juego no se toca
+            if (min(caja_al, caja_an) < 6 or (caja_al > alto * 0.2 and caja_an > ancho * 0.2)
+                    or zona.sum() / (caja_al * caja_an) < 0.06):
+                continue
+            pierde_h = (bot + margen) if arriba else (alto - top + margen)       # quitar una franja de arriba/abajo
+            pierde_v = (der + margen) if izquierda else (ancho - izq + margen)   # o una de un lado
+            if pierde_h / alto <= pierde_v / ancho:
+                if arriba:
+                    y0 = max(y0, bot + margen)
+                else:
+                    y1 = min(y1, top - margen)
+            elif izquierda:
+                x0 = max(x0, der + margen)
+            else:
+                x1 = min(x1, izq - margen)
+    return None if (x0, y0, x1, y1) == (0, 0, ancho, alto) else (x0, y0, x1, y1)
+
+
+def marcas(clip, previo="", n=18):
     """Busca lo que se queda QUIETO pegado a una esquina mientras el juego se mueve: logos, marcas de agua, nombres o
-    textos del creador (y, de paso, el minimapa). Devuelve el recorte que lo quita (fracciones de la imagen, después de
-    `previo`) o None. No depende de la IA: la IA a veces no ve un logo pequeño."""
+    rótulos del creador (aunque solo salgan un rato). Devuelve el recorte que lo quita (fracciones de la imagen, después
+    de `previo`) o None. No depende de la IA: la IA a veces no ve un logo pequeño."""
     import numpy as np
     from PIL import Image
     total = _segundos(clip)
@@ -257,43 +299,17 @@ def marcas(clip, previo="", n=16):
     if len(fotos) < 6:
         return None
     pila = np.stack(fotos)
-    quieto = pila.std(axis=0) < 6
-    if quieto.mean() > 0.6:              # la cámara apenas se mueve: no se puede distinguir un logo del juego
+    alto, ancho = pila.shape[1:]
+    cajas = [_esquinas(pila)]                     # lo que está todo el clip...
+    tramo = max(5, len(fotos) // 3)
+    for i in range(0, len(fotos) - tramo + 1, tramo):   # ...y lo que sale solo un rato (un rótulo de capítulo)
+        cajas.append(_esquinas(pila[i:i + tramo]))
+    cajas = [c for c in cajas if c]
+    if not cajas:
         return None
-    media = pila.mean(axis=0)
-    bordes = (np.abs(np.diff(media, axis=1, prepend=media[:, :1])) + np.abs(np.diff(media, axis=0, prepend=media[:1, :]))) > 18
-    marca = quieto & bordes
-    alto, ancho = marca.shape
-    ch, cw, margen = int(alto * 0.25), int(ancho * 0.25), 4
-    x0, y0, x1, y1 = 0, 0, ancho, alto
-    for arriba in (True, False):
-        for izquierda in (True, False):
-            ys = slice(0, ch) if arriba else slice(alto - ch, alto)
-            xs = slice(0, cw) if izquierda else slice(ancho - cw, ancho)
-            zona = marca[ys, xs]
-            if zona.sum() < 20:
-                continue
-            yy, xx = np.nonzero(zona)
-            top, bot = int(yy.min()) + ys.start, int(yy.max()) + ys.start
-            izq, der = int(xx.min()) + xs.start, int(xx.max()) + xs.start
-            caja_al, caja_an = bot - top + 1, der - izq + 1
-            # un logo es pequeño y compacto; una raya o un borde del propio juego cruza toda la esquina: eso no se toca
-            if caja_al > alto * 0.2 or caja_an > ancho * 0.2 or zona.sum() / (caja_al * caja_an) < 0.06:
-                continue
-            pierde_h = (bot + margen) if arriba else (alto - top + margen)       # quitar una franja de arriba/abajo
-            pierde_v = (der + margen) if izquierda else (ancho - izq + margen)   # o una de un lado
-            if pierde_h / alto <= pierde_v / ancho:
-                if arriba:
-                    y0 = max(y0, bot + margen)
-                else:
-                    y1 = min(y1, top - margen)
-            elif izquierda:
-                x0 = max(x0, der + margen)
-            else:
-                x1 = min(x1, izq - margen)
-    if (x0, y0, x1, y1) == (0, 0, ancho, alto):
-        return None
-    return {"x": x0 / ancho, "y": y0 / alto, "ancho": max(0.0, x1 - x0) / ancho, "alto": max(0.0, y1 - y0) / alto}
+    x0, y0 = max(c[0] for c in cajas), max(c[1] for c in cajas)
+    x1, y1 = min(c[2] for c in cajas), min(c[3] for c in cajas)
+    return {"x": x0 / ancho, "y": y0 / alto, "ancho": max(0, x1 - x0) / ancho, "alto": max(0, y1 - y0) / alto}
 
 
 def juntar_recortes(a, b):
