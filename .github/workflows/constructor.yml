@@ -1,0 +1,73 @@
+# El Constructor de canales: levanta un canal de YouTube o una cuenta de TikTok/Instagram nueva con toda la maquinaria.
+# Arranca cuando Claude deja peticiones/canal_nuevo.json ({"alias": "nuevo-1"}); los datos de verdad van en el
+# repositorio privado (config/nuevos/<alias>.json). Cuando se conecte un canal nuevo de YouTube, Claude añade aquí (y en
+# fabrica.yml y revisar-canales.yml) sus YT_REFRESH_<CLAVE> e YT_ID_<CLAVE> y lo relanza para poner descripción y banner.
+name: Constructor de canales
+on:
+  push:
+    paths:
+      - "peticiones/canal_nuevo.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: constructor
+  cancel-in-progress: false
+jobs:
+  construir:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Construir
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          YT_ID_GTA: ${{ secrets.YT_ID_GTA }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_ID_CLIPS: ${{ secrets.YT_ID_CLIPS }}
+          YT_REFRESH_CURIOS: ${{ secrets.YT_REFRESH_CURIOS }}
+          YT_ID_CURIOS: ${{ secrets.YT_ID_CURIOS }}
+          YT_REFRESH_VERSUS: ${{ secrets.YT_REFRESH_VERSUS }}
+          YT_ID_VERSUS: ${{ secrets.YT_ID_VERSUS }}
+          YT_REFRESH_MAPAS: ${{ secrets.YT_REFRESH_MAPAS }}
+          YT_ID_MAPAS: ${{ secrets.YT_ID_MAPAS }}
+          YT_REFRESH_TERROR: ${{ secrets.YT_REFRESH_TERROR }}
+          YT_ID_TERROR: ${{ secrets.YT_ID_TERROR }}
+          YT_REFRESH_SOBSHORTS: ${{ secrets.YT_REFRESH_SOBSHORTS }}
+          YT_ID_SOBSHORTS: ${{ secrets.YT_ID_SOBSHORTS }}
+          YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
+          YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
+        run: |
+          alias=$(python -c "import json;print(json.load(open('peticiones/canal_nuevo.json')).get('alias',''))" 2>/dev/null | tr -cd 'a-z0-9-')
+          python bots/central/constructor.py ${alias:+--alias $alias}
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('constructor: canal nuevo') else 1)"

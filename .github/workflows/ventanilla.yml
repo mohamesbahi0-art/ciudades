@@ -50,4 +50,5 @@ jobs:
         if: always()
         env:
           PRIVADO: privado
-        run: python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('ventanilla: vídeos del dueño juzgados') else 1)"
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('ventanilla: vídeos del dueño juzgados') else 1)"

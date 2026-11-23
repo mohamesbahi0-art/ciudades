@@ -256,10 +256,10 @@
    "ciudad": "central",
    "donde": "ciudad",
    "grupo": "Servicios de la ciudad",
-   "hace": "Levanta un canal nuevo con toda la maquinaria.",
+   "hace": "Levanta un canal o una cuenta nueva con toda la maquinaria: ficha, descripción, etiquetas, foto, banner y su sitio en la fábrica. El dueño solo lo crea y pulsa «Permitir».",
    "origen": "antes",
    "lote": 1,
-   "codigo": "salvado",
+   "codigo": "reescrito",
    "tipo": "bot"
   },
   {
