@@ -7,8 +7,10 @@ import urllib.error
 import urllib.request
 
 API = "https://aihorde.net/api/v2"
-CABECERAS = {"apikey": os.environ.get("AIHORDE_KEY", "0000000000"), "Client-Agent": "ciudades:1:anon",
-             "Content-Type": "application/json"}
+# Cloudflare (delante de AI Horde) bloquea el nombre que pone Python por defecto: nos presentamos con el nuestro.
+AGENTE = "ciudades-bot/1.0 (cliente de AI Horde)"
+CABECERAS = {"apikey": os.environ.get("AIHORDE_KEY") or "0000000000", "Client-Agent": "ciudades:1:anon",
+             "Content-Type": "application/json", "User-Agent": AGENTE}
 NEGATIVO = "text, letters, words, watermark, signature, logo, blurry, deformed, extra fingers, gore"
 
 
@@ -55,7 +57,9 @@ def dibujar(escenas, modelo, carpeta, espera_maxima=1800):
                 try:
                     gen = _peticion("GET", f"/generate/status/{p['id']}")["generations"][0]
                     ruta = os.path.join(carpeta, f"escena{i + 1:02d}.webp")
-                    urllib.request.urlretrieve(gen["img"], ruta)
+                    req = urllib.request.Request(gen["img"], headers={"User-Agent": AGENTE})
+                    with urllib.request.urlopen(req, timeout=120) as r, open(ruta, "wb") as f:
+                        f.write(r.read())
                     hechas[i] = ruta
                 except (urllib.error.URLError, KeyError, IndexError) as err:
                     print(f"  escena {i + 1}: no se pudo descargar ({err})")
