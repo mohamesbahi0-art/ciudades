@@ -410,12 +410,18 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     pista = musica.crear(canal.get("musica_estudio") or getattr(m, "MUSICA", "inspira"), g["duracion"],
                          os.path.join(carpeta, "musica.m4a"))
     fx = efectos(g, carpeta, m.eventos(g) if hasattr(m, "eventos") else eventos_famoso(g))
-    mezcla = ("[1:a]volume=1.0[v];[2:a]volume=0.42[m];[3:a]volume=0.8[f];"
-              "[v][m][f]amix=inputs=3:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5[a]")
     salida = os.path.join(carpeta, "video.mp4")
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mudo, "-i", voz, "-i", pista, "-i", fx, "-filter_complex",
-                    mezcla, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
-                    "-t", str(g["duracion"]), "-movflags", "+faststart", salida], check=True)
+    if pista:
+        entradas = ["-i", mudo, "-i", voz, "-i", pista, "-i", fx]
+        mezcla = ("[1:a]volume=1.0[v];[2:a]volume=0.42[m];[3:a]volume=0.8[f];"
+                  "[v][m][f]amix=inputs=3:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5[a]")
+    else:       # sin música (el dueño la pone en TikTok): voz y efectos
+        entradas = ["-i", mudo, "-i", voz, "-i", fx]
+        mezcla = "[1:a]volume=1.0[v];[2:a]volume=0.7[f];[v][f]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5[a]"
+    g["musica"] = bool(pista)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *entradas, "-filter_complex", mezcla, "-map", "0:v", "-map", "[a]",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-t", str(g["duracion"]), "-movflags", "+faststart",
+                    salida], check=True)
     return salida, g
 
 

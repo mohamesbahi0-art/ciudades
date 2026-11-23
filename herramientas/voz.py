@@ -67,6 +67,7 @@ def _eleven(texto, voz_id, velocidad, carpeta):
 
 async def generar(texto, voz, velocidad, tono, carpeta):
     if str(voz).startswith("eleven:"):
+        voz, _, gratis = str(voz).partition("|")
         try:
             palabras = _eleven(texto, voz.split(":", 1)[1], velocidad, carpeta)
             MOTOR.update(motor="elevenlabs", aviso=None)
@@ -74,7 +75,7 @@ async def generar(texto, voz, velocidad, tono, carpeta):
         except (RuntimeError, OSError, ValueError, KeyError) as e:
             MOTOR.update(motor="edge", aviso=f"ElevenLabs no ha podido ({str(e)[:120]}); voz gratis")
             print(f"voz: {MOTOR['aviso']}", flush=True)
-            voz = os.environ.get("VOZ_GRATIS", VOZ_GRATIS)
+            voz = gratis or os.environ.get("VOZ_GRATIS", VOZ_GRATIS)
     else:
         MOTOR.update(motor="edge", aviso=None)
     if os.environ.get("EDGE_TTS_CA"):
