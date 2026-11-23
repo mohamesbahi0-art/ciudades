@@ -1,8 +1,9 @@
 {
- "estado": "conectado",
- "canal": "gta",
- "pedido": "gta",
- "coincide": true,
+ "estado": "esperando",
+ "canal": "clips",
+ "codigo": "VBB-SZC-YMMC",
+ "url": "https://www.google.com/device",
+ "caduca": "2026-11-23T02:16:34Z",
  "quedan": 7,
- "actualizado": "2026-11-23T01:46:32Z"
+ "actualizado": "2026-11-23T01:46:34Z"
 }
