@@ -49,6 +49,30 @@ def rellenar(imagenes):
     return salida
 
 
+def trozos(imagenes, duraciones, primero=2.5, maximo=3.5):
+    """Parte las escenas largas para que la imagen cambie a menudo (el Juzgado lo pidió: un primer cambio tardío hace
+    que la gente se vaya). El primer cambio llega a los 2,5 s y ninguna toma dura más de unos 3,5 s."""
+    segmentos = []
+    for n, (img, d) in enumerate(zip(imagenes, duraciones)):
+        partes, resto = [], d
+        if n == 0 and d > primero + 1.0:
+            partes.append(primero)
+            resto -= primero
+        while resto > maximo + 1.0:
+            partes.append(maximo)
+            resto -= maximo
+        partes.append(resto)
+        segmentos += [(img, p) for p in partes]
+    return segmentos
+
+
+MOVIMIENTOS = [   # cada toma empieza con un encuadre distinto de cómo acabó la anterior, para que se note el cambio
+    ("1+0.12*on/{c}", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),            # se acerca despacio
+    ("1.40-0.10*on/{c}", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),         # salto a primer plano
+    ("1.20", "(iw-iw/zoom)*on/{c}", "ih/2-(ih/zoom/2)"),                   # barrido de izquierda a derecha
+]
+
+
 def _gancho(texto, ancho_max=15):
     lineas, actual = [], ""
     for p in texto.upper().split():
@@ -68,13 +92,13 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
         imagenes = rellenar(imagenes)
         durs = duraciones_escenas(guion["escenas"], [{"inicio": w["i"]} for w in palabras_voz], total)
         clips = []
-        for n, (img, d) in enumerate(zip(imagenes, durs)):
+        for n, (img, d) in enumerate(trozos(imagenes, durs)):
             cuadros = max(1, round(d * FPS))
-            zoom = f"1+0.14*on/{cuadros}" if n % 2 == 0 else f"1.14-0.14*on/{cuadros}"
+            zoom, x, y = (m.format(c=cuadros) for m in MOVIMIENTOS[n % len(MOVIMIENTOS)])
             clip = os.path.join(tmp, f"c{n:02d}.mp4")
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", img, "-vf",
                             "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,scale=2160:3840,"
-                            f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={cuadros}:s=1080x1920:fps={FPS},"
+                            f"zoompan=z='{zoom}':x='{x}':y='{y}':d={cuadros}:s=1080x1920:fps={FPS},"
                             "format=yuv420p", "-frames:v", str(cuadros), "-c:v", "libx264", "-preset", "veryfast",
                             "-crf", "20", clip], check=True)
             clips.append(clip)
