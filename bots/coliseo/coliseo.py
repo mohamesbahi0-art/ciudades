@@ -127,6 +127,18 @@ def _texto_salida(s):
     return json.dumps({k: s.get(k) for k in ("titulo", "texto", "hashtags")}, ensure_ascii=False)
 
 
+def _directo(titulo, mensaje, prueba=False):
+    """El Coliseo en directo en el móvil del dueño (Cartero/ntfy): cuando entra un vídeo, cada ronda y el campeón.
+    Se apaga con config/fabrica.json → coliseo.en_directo: false. Nunca para el torneo."""
+    if prueba or ajustes().get("en_directo") is False:
+        return
+    try:
+        from bots.central import cartero
+        cartero.directo(titulo, mensaje, etiqueta="crossed_swords")
+    except Exception as e:
+        print(f"coliseo: no ha podido avisar en directo ({type(e).__name__})", flush=True)
+
+
 def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
     """Torneo para la salida de un vídeo aprobado. Devuelve el guion con la salida campeona (o el de siempre).
     forzar=True (los vídeos que sube el dueño en «Juzga mi vídeo»): hay torneo aunque hoy ya se hayan hecho todos."""
@@ -161,6 +173,9 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
               "fecha": privado.ahora(), "prueba": prueba, "video": original["titulo"], "nota_juzgado": juicio.get("total"),
               "antes": original, "gladiadores": [], "combates": []}
     paso("coliseo", f"torneo de {a['gladiadores']} gladiadores para la salida del vídeo")
+    _directo("⚔️ ¡Un vídeo llega al Coliseo!",
+             f"«{original['titulo']}» ha sacado {juicio.get('total')}/100 en el Juzgado. Ahora pelean "
+             f"{a['gladiadores']} gladiadores por su título, texto y hashtags. Te cuento cada ronda.", prueba)
     # 1. Cada gladiador propone su salida
     luchadores = []
     for nombre, carta, como in CARTAS[:int(a.get("gladiadores", 8))]:
@@ -218,9 +233,18 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
             siguientes.append(gana)
         if len(luchadores) % 2:                         # si son impares, el último pasa sin luchar
             siguientes.append(luchadores[-1])
+        de_ronda = [c for c in torneo["combates"] if c.get("ronda") == nombre_ronda]
+        if len(siguientes) > 1:                         # la final se cuenta con el campeón
+            _directo(f"⚔️ {str(nombre_ronda).capitalize()} del Coliseo",
+                     "\n".join(f"⚔️ {c['ganador']} gana a {c['b'] if c['ganador'] == c['a'] else c['a']}"
+                               + (f": {str(c.get('razon'))[:140]}" if c.get("razon") else "") for c in de_ronda)
+                     + f"\nSiguen {len(siguientes)}.", prueba)
         luchadores, ronda = siguientes, ronda + 1
     campeon = luchadores[0]
     torneo["campeon"] = {"nombre": campeon["nombre"], "carta": campeon["carta"], "salida": campeon["salida"]}
+    _directo(f"🏆 Campeón del Coliseo: {campeon['nombre']}",
+             f"Gana la carta «{campeon['carta']}». El vídeo sale con: «{campeon['salida'].get('titulo', '')}». "
+             "Lo tienes en la app, en El Coliseo.", prueba)
     _guardar(torneo, campeon)
     s = campeon["salida"]
     nuevo = dict(g, titulo=s["titulo"], hashtags=s["hashtags"])

@@ -179,6 +179,16 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
                  "defensa": alegatos.get("defensa", ""), "fiscalia": alegatos.get("fiscalia", ""), "votos": votos,
                  "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo",
                  "cerebro": ia.quien().get("motor", "gemini")}
+    try:                                                  # en directo al móvil del dueño
+        from bots.central import cartero
+        cartero.directo(f"⚖️ Juzgado: {total}/100 · {'APROBADO' if sube else 'NO PASA'} (hace falta {minima(canal)})",
+                        f"«{guion['titulo']}»\n🟢 Defensa: {alegatos.get('defensa', '')[:300]}\n🔴 Fiscalía: "
+                        f"{alegatos.get('fiscalia', '')[:300]}\n" + "\n".join(f"{'✅' if x['voto'] == 'sube' else '❌'} {x['juez']} "
+                        f"({x['nota']}): {x['razon'][:200]}" for x in votos) +
+                        (f"\n💡 {resultado['consejo'][:300]}" if resultado.get("consejo") else "")
+                        + (f"\n⛔ Fallos graves: {', '.join(fallos)}" if fallos else ""), etiqueta="scales")
+    except Exception:
+        pass
     with open(os.path.join(carpeta, "veredicto.json"), "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=1)
     return resultado

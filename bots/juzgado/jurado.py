@@ -97,6 +97,15 @@ def deliberar(guion, canal, alegatos, comun, forzar=False):
                  "veredicto": "culpable" if culpable > inocente else "inocente",
                  "rechaza": culpable >= int(a.get("rechazo", 9)), "nota_media": round(sum(notas) / len(notas)) if notas else None,
                  "cerebro": ia.quien().get("motor")}
+    if not comun.get("prueba"):                          # en directo al móvil del dueño
+        try:
+            from bots.central import cartero
+            cartero.directo(f"👥 Jurado: {inocente} a favor y {culpable} en contra" + (" · lo rechaza" if resultado["rechaza"] else ""),
+                            f"«{guion.get('titulo', '')}»\n" + "\n".join(
+                                f"{'✅' if x['voto'] == 'inocente' else '❌'} {x['jurado']}: {x['porque'][:110]}" for x in votos),
+                            etiqueta="busts_in_silhouette")
+        except Exception:
+            pass
     hoy["jurados"] = int(hoy.get("jurados", 0)) + 1
     privado.guardar_estado(os.path.join("juzgado", "jurado.json"), {"hoy": hoy, "ultimo": {
         "titulo": guion.get("titulo"), "inocente": inocente, "culpable": culpable, "fecha": privado.ahora()}})

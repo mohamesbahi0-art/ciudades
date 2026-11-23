@@ -44,8 +44,9 @@ def tema():
     return os.environ.get("NTFY_TEMA") or a.get("ntfy_tema")
 
 
-def avisar(titulo, mensaje, prioridad="normal", urgente=False, etiqueta="city_sunset", prueba=False):
-    """Manda el aviso. Devuelve True si ha salido. Nunca rompe nada: si falla, lo dice y sigue."""
+def avisar(titulo, mensaje, prioridad="normal", urgente=False, etiqueta="city_sunset", prueba=False, abrir_app=True):
+    """Manda el aviso. Devuelve True si ha salido. Nunca rompe nada: si falla, lo dice y sigue.
+    abrir_app: al tocar el aviso se abre la app (enlace en config/fabrica.json → cartero.enlace_app, privado)."""
     t = tema()
     if not t:
         return False
@@ -53,6 +54,8 @@ def avisar(titulo, mensaje, prioridad="normal", urgente=False, etiqueta="city_su
         return False                           # de noche, solo lo urgente
     opciones = {"title": titulo, "priority": PRIORIDAD.get(prioridad, "3"),
                 "tags": "rotating_light" if urgente else etiqueta}
+    if abrir_app and ajustes().get("enlace_app"):
+        opciones["click"] = ajustes()["enlace_app"]
     ENVIADOS.append({"titulo": titulo, "mensaje": mensaje, "opciones": opciones})
     if prueba or os.environ.get("CARTERO_PRUEBA"):
         print(f"cartero (prueba): {titulo} · {mensaje}", flush=True)
@@ -65,6 +68,18 @@ def avisar(titulo, mensaje, prioridad="normal", urgente=False, etiqueta="city_su
             return r.status == 200
     except Exception as e:
         print(f"cartero: no ha podido mandar el aviso ({type(e).__name__})", flush=True)
+        return False
+
+
+def directo(titulo, mensaje, etiqueta="eyes"):
+    """En directo: lo que opinan el Jurado, los jueces y los gladiadores de cada vídeo, según pasa. Lo pidió el dueño
+    («que pueda ver cómo opinan, todo en directo»). Se apaga con config/fabrica.json → cartero.directo: false."""
+    if ajustes().get("directo") is False:
+        return False
+    try:
+        return avisar(titulo, str(mensaje)[:3500], etiqueta=etiqueta)
+    except Exception as e:
+        print(f"cartero: no ha podido mandar el directo ({type(e).__name__})", flush=True)
         return False
 
 
