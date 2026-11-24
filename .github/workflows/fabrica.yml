@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        linea: [canales, cuentas]         # dos equipos a la vez: YouTube y TikTok/Instagram
+        linea: [canales, dibujos, cuentas, cuentas2]   # cuatro equipos a la vez (YouTube en dos y las cuentas en dos)
     concurrency:
       group: fabrica-${{ matrix.linea }}
       cancel-in-progress: false

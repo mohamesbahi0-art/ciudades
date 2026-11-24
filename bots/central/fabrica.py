@@ -31,7 +31,23 @@ def revisiones(cfg):
     return {k: privado.leer(os.path.join("estado", "canales", f"{k}.json"), {}) or {} for k in cfg.get("canales", {})}
 
 
-LINEAS = ("canales", "cuentas")  # dos equipos a la vez: YouTube por un lado y TikTok/Instagram por otro
+# Cuatro equipos a la vez (el dueño: «donde más se sature, duplicamos»): los canales de YouTube que dibujan (lo más
+# lento: el servicio gratis de dibujos tarda hasta media hora por vídeo), el resto de canales (animados y de clips) y
+# las cuentas de TikTok/Instagram repartidas en dos, para que ninguna espere a que acabe otra. Cada equipo lleva su
+# propio turno por el Jurado, el Juzgado y el Coliseo.
+LINEAS = ("canales", "dibujos", "cuentas", "cuentas2")
+
+
+def de_linea(linea, clave, c, cfg):
+    """¿Este canal o barrio lo hace esta línea? (sin línea, todos)."""
+    if not linea:
+        return True
+    if clave in (cfg.get("barrios") or {}):
+        activos = [k for k, b in cfg["barrios"].items() if b.get("estado") == "activo"]
+        par = (activos.index(clave) % 2 == 0) if clave in activos else True
+        return linea == ("cuentas" if par else "cuentas2")
+    dibuja = c.get("estudio") != "animacion" and not c.get("solo_clips") and c.get("tipo") != "clips" and clave != "clips"
+    return linea == ("dibujos" if dibuja else "canales")
 
 
 def fichero(linea=None):
@@ -108,7 +124,7 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
         return bool(motivo)
 
     for clave, c in cfg.get("canales", {}).items():
-        if (solo and clave not in solo) or linea == "cuentas":
+        if (solo and clave not in solo) or not de_linea(linea, clave, c, cfg):
             continue
         if c.get("pausado"):
             esperan[clave] = "en pausa"
@@ -142,7 +158,7 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
             candidatos.append((not pendiente(clave), clave not in con_clip, huecos.colchon(ocupadas, ahora),
                                orden.get(clave, 99), clave, hora))
     for clave, b in cfg.get("barrios", {}).items():
-        if (solo and clave not in solo) or linea == "canales":
+        if (solo and clave not in solo) or not de_linea(linea, clave, b, cfg):
             continue
         if b.get("estado") != "activo":
             esperan[clave] = b.get("motivo") or "en pausa"
@@ -297,7 +313,7 @@ def main():
     maximo = a.maximo or ajustes["videos_por_ronda"]
     revs = revisiones(cfg)
     rondas = (privado.leer(os.path.join("estado", fichero(a.linea)), {}) or {}).get("rondas", [])
-    tareas = a.linea != "cuentas"            # la cola, la videoteca y la limpieza las hace la línea de canales
+    tareas = a.linea in (None, "canales")    # la cola, la videoteca y la limpieza las hace la línea de canales
     ronda = {"empezada": privado.ahora(), "prueba": a.prueba, "turnos": []}
     trabajo = tempfile.mkdtemp(prefix="fabrica-")
 

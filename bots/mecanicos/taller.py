@@ -149,7 +149,7 @@ def rondas(e, lista, prueba):
 # ---------------- Mecánica de canales ----------------
 def _turnos_de_hoy():
     todas = []
-    for nombre in ("fabrica.json", "fabrica-cuentas.json"):       # las dos líneas de la fábrica
+    for nombre in ("fabrica.json", "fabrica-dibujos.json", "fabrica-cuentas.json", "fabrica-cuentas2.json"):   # las líneas
         f = privado.leer(os.path.join("estado", nombre), {}) or {}
         todas += list(f.get("rondas") or []) + [f]
     todas.sort(key=lambda r: str(r.get("empezada") or ""))
