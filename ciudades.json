@@ -36,6 +36,11 @@
    "id": "taller",
    "nombre": "El Taller",
    "numero": 7
+  },
+  {
+   "id": "cine",
+   "nombre": "El Cine",
+   "numero": 8
   }
  ],
  "bots": [
@@ -898,6 +903,30 @@
    "donde": "ciudad",
    "grupo": "Mecánicos",
    "hace": "Retira de «Ahora en la fábrica» los vídeos que se quedaron colgados y deja todo ordenado.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "publico_cine",
+   "nombre": "El Público",
+   "ciudad": "cine",
+   "donde": "ciudad",
+   "grupo": "En la sala",
+   "hace": "100 espectadores distintos (cada uno con su edad, su momento del día, su paciencia y sus gustos) miran el vídeo ya montado antes del juicio y dicen hasta qué segundo aguantan, por qué se van o se quedan y si lo compartirían.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "acomodador",
+   "nombre": "Acomodador",
+   "ciudad": "cine",
+   "donde": "ciudad",
+   "grupo": "En la sala",
+   "hace": "Cuenta la sala: cuántos paran el dedo, cuántos pasan del segundo 3, cuántos llegan al final y en qué segundo se va la gente. Le pasa el parte al Juzgado como prueba y al guionista para los arreglos.",
    "origen": "nuevo",
    "lote": 3,
    "codigo": "nuevo",

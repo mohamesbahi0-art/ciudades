@@ -172,6 +172,9 @@ def bloque_arreglo(arreglar):
         lineas.append(f"- FALLO GRAVE (con esto no se publica): {str(f)[:300]}")
     if v.get("consejo"):
         lineas.append(f"- Consejo del Juzgado: {str(v['consejo'])[:500]}")
+    if v.get("publico"):
+        from bots.juzgado import publico
+        lineas.append("- " + publico.en_palabras(v["publico"]) + " Arregla sobre todo el momento en que se van.")
     for f in arreglar.get("no_repetir") or []:
         if f:
             lineas.append(f"- OJO: una versión corregida anterior salió PEOR que esta; de aquella dijeron: {str(f)[:300]}")

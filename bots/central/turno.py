@@ -214,7 +214,7 @@ def _guardar_arreglo(clave, arreglar):
 
 def _para_arreglar(g, v, version, minimo):
     """Lo que necesita el guionista para rehacer el mismo vídeo: el guion que se grabó y lo que le vieron los jueces."""
-    veredicto = {k: v.get(k) for k in ("total", "consejo", "fallos_graves", "fiscalia", "defensa", "medidas")}
+    veredicto = {k: v.get(k) for k in ("total", "consejo", "fallos_graves", "fiscalia", "defensa", "medidas", "publico")}
     veredicto["votos"] = [{k: x.get(k) for k in ("juez", "nota", "razon")} for x in v.get("votos") or []]
     return {"guion": estudio_animacion.guion_escrito(g), "veredicto": veredicto, "version": version, "minimo": minimo,
             "titulo": g.get("titulo"), "jurado": g.get("jurado")}

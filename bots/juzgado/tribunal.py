@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 from bots.comun import gemini, ia, privado
-from bots.juzgado import juez_guardia
+from bots.juzgado import juez_guardia, publico
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 JUECES = {
@@ -135,8 +135,15 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
              "titulo": guion["titulo"], "gancho": guion.get("texto_pantalla", ""),
              "medidas": json.dumps(medidas, ensure_ascii=False),
              "exigencia": exigencia(canal) + juez_guardia.nota_formato(canal)}
+    try:                  # el Público mira el vídeo montado antes que nadie: su retención es una prueba más
+        gente = publico.mirar(guion, canal, imagenes, datos.get("duracion"))
+    except Exception:
+        gente = None
+    del_publico = ("\n- " + publico.en_palabras(gente) + " (es un público simulado: tenlo en cuenta como una prueba "
+                   "fuerte de si engancha, sobre todo dónde y por qué se va la gente)") if gente else ""
+    comun["exigencia"] += del_publico
     try:
-        alegatos = ia.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal),
+        alegatos = ia.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal) + del_publico,
                                                 lecciones=lecciones, **comun), papel="juez", imagenes=imagenes,
                                 solo_bueno=True, temperatura=0.5, audio=audio)
         jueces_txt = "\n".join(f"- {k}: {j['nombre']} ({j['sala']}): {j['especialidad']}" for k, j in JUECES.items())
@@ -178,7 +185,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
                  "consejo": " · ".join(x for x in (sala.get("consejo", ""), consejo_jurado) if x), "jurado": jurado_v,
                  "defensa": alegatos.get("defensa", ""), "fiscalia": alegatos.get("fiscalia", ""), "votos": votos,
                  "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo",
-                 "cerebro": ia.quien().get("motor", "gemini")}
+                 "cerebro": ia.quien().get("motor", "gemini"), "publico": gente}
     try:                                                  # en directo al móvil del dueño
         from bots.central import cartero
         cartero.directo(f"⚖️ Juzgado: {total}/100 · {'APROBADO' if sube else 'NO PASA'} (hace falta {minima(canal)})",
@@ -214,7 +221,8 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
         "version": v.get("version", 1), "arreglo_de": guion.get("arreglo_de"),
         "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro"), "guionista": guion.get("cerebro"),
-        "jurado": v.get("jurado")})
+        "jurado": v.get("jurado"), "publico": v.get("publico"),
+        "publico_resumen": publico.en_palabras(v.get("publico")) or None})
     for robot, que in (("detectives", "pruebas"), ("abogados", "alegatos"), ("jueces_sala", "votos"),
                        ("juez_mayor", "sentencia")):
         c = privado.cuaderno(robot)
