@@ -10,6 +10,7 @@ bolas-país de verdad (su bandera, sus ojos y su cara) sobre un mapa del mundo d
 Mapas: Natural Earth (dominio público). Banderas: flag-icons (MIT). Música: la de la fábrica (compuesta o dominio público).
 """
 import json
+import re
 
 from bots.comun import ia
 from bots.estudio import archivero_mapas, cartografo
@@ -45,6 +46,8 @@ REGLAS DEL GUION
   5 palabras como mucho, o vacío"}}. Países de verdad y que pegan (vecinos, rivales, socios). {regla_bola}
 - "texto": de 1 a 3 palabras grandes en pantalla, la clave de la escena.
 - "voz": lo que dice el narrador (números escritos como se dicen).
+- Lo que "dice" cada bola SE OYE: lo dice ella con la voz de su país, justo después del narrador. Que sea una réplica
+  corta y con gracia (de 2 a 7 palabras, como hablaría ese país), y que el narrador no la repita.
 Vecinos de {pais_nombre}: {vecinos}.
 Ya hechos en el canal (no repitas chistes ni títulos):
 {hechos}
@@ -106,6 +109,9 @@ def limpiar(g):
         for k, b in enumerate(e["bolas"]):
             p = m["paises"].get(b["pais"]) or m["paises"].get(e["foco"]) or {"centro": [m["ancho"] / 2, m["alto"] / 2]}
             b["x"], b["y"] = p["centro"][0] + (0 if b["pais"] in m["paises"] else 60 * (k + 1)), p["centro"][1]
+    for e in escenas:                    # lo que dice cada bola suena con la voz de su país, detrás del narrador
+        e["voces"] = [dict(voz_de(b["pais"]), texto=b["dice"], pais=b["pais"]) for b in e["bolas"]
+                      if len(re.findall(r"\w", b.get("dice") or "")) >= 2][:2]
     g["escenas"] = escenas
     g["pais"], g["parte"], g["partes"] = pais, parte, partes
     g["pais_nombre"] = cartografo.nombre(pais)
@@ -125,6 +131,34 @@ def limpiar(g):
     g["formato"], g["html"] = "bolas", "bolas.html"
     g["narracion"] = " ".join(e["voz"] for e in escenas)
     return g
+
+
+# Cada bola-país habla con SU voz (lo pidió el dueño): los países que hablan español, con una voz de su país; los
+# demás, con una voz de su idioma que sabe hablar español (se le nota el acento) o, si no hay, con una voz propia sacada
+# de su código (siempre la misma para ese país: más aguda o más grave, más rápida o más lenta).
+VOCES_PAIS = {"ES": "es-ES-AlvaroNeural", "MX": "es-MX-JorgeNeural", "AR": "es-AR-TomasNeural", "CO": "es-CO-GonzaloNeural",
+              "VE": "es-VE-SebastianNeural", "CL": "es-CL-LorenzoNeural", "PE": "es-PE-AlexNeural", "CU": "es-CU-ManuelNeural",
+              "UY": "es-UY-MateoNeural", "PY": "es-PY-MarioNeural", "BO": "es-BO-MarceloNeural", "EC": "es-EC-LuisNeural",
+              "CR": "es-CR-JuanNeural", "PA": "es-PA-RobertoNeural", "DO": "es-DO-EmilioNeural", "GT": "es-GT-AndresNeural",
+              "HN": "es-HN-CarlosNeural", "NI": "es-NI-FedericoNeural", "SV": "es-SV-RodrigoNeural", "PR": "es-PR-VictorNeural",
+              "GQ": "es-GQ-JavierNeural", "US": "en-US-AndrewMultilingualNeural", "GB": "en-US-BrianMultilingualNeural",
+              "FR": "fr-FR-RemyMultilingualNeural", "DE": "de-DE-FlorianMultilingualNeural", "IT": "it-IT-GiuseppeMultilingualNeural",
+              "BR": "pt-BR-ThalitaMultilingualNeural", "PT": "pt-BR-ThalitaMultilingualNeural", "KR": "ko-KR-HyunsuMultilingualNeural",
+              "CA": "en-US-AvaMultilingualNeural", "AU": "en-AU-WilliamMultilingualNeural", "BE": "fr-FR-VivienneMultilingualNeural",
+              "AT": "de-DE-SeraphinaMultilingualNeural", "CH": "de-DE-SeraphinaMultilingualNeural"}
+VOCES_RESTO = ("es-ES-ElviraNeural", "es-MX-DaliaNeural", "es-ES-XimenaNeural", "es-US-AlonsoNeural", "es-US-PalomaNeural",
+               "es-MX-JorgeNeural", "es-AR-ElenaNeural", "es-CO-SalomeNeural")
+RESERVA_VOZ = "es-ES-AlvaroNeural"
+
+
+def voz_de(pais):
+    """La voz de una bola-país: {"voz", "velocidad", "tono"} (siempre la misma para ese país)."""
+    iso = str(pais or "").upper()
+    if iso in VOCES_PAIS:
+        return {"voz": f"{VOCES_PAIS[iso]}|{RESERVA_VOZ}", "velocidad": "+6%", "tono": "+0Hz"}
+    n = sum(ord(c) * (i + 3) for i, c in enumerate(iso))
+    return {"voz": f"{VOCES_RESTO[n % len(VOCES_RESTO)]}|{RESERVA_VOZ}", "velocidad": f"{(n % 5) * 3:+d}%",
+            "tono": f"{((n // 5) % 7 - 3) * 6:+d}Hz"}
 
 
 def guionizar(canal, lecciones, arreglar=None):

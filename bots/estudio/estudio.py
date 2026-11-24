@@ -139,7 +139,7 @@ SIN_MIEDO = ("Sin miedo (lo pide el dueño): temas duros, oscuros, incómodos o 
 
 
 # Lo que añade la fábrica a un guion al grabarlo (tiempos de la voz, motor, juicio…): no es cosa del guionista.
-DE_LA_FABRICA = ("palabras", "inicio", "fin", "duracion", "voz_motor", "musica", "cerebro", "jurado", "jurado_anterior",
+DE_LA_FABRICA = ("palabras", "inicio", "fin", "duracion", "voces", "voz_motor", "musica", "cerebro", "jurado", "jurado_anterior",
                  "narracion", "texto_pantalla", "coliseo", "version", "arreglo_de", "mapa", "mundo", "html", "caja",
                  "pais_nombre")
 
@@ -346,6 +346,21 @@ def voz_por_escenas(g, carpeta, canal, hueco=0.28, entrada=0.12, cola=1.4):
         e["palabras"] = [{"p": w["palabra"], "a": round(t + w["inicio"], 3), "b": round(t + w["fin"], 3)} for w in palabras]
         e["inicio"] = 0.0 if i == 0 else round(t - hueco / 2, 3)
         partes.append((os.path.join(d, "voz.mp3"), t))
+        # Personajes que hablan en la escena con SU propia voz (las bolas-país): cada frase suena detrás del narrador
+        for k, x in enumerate(e.get("voces") or []):
+            dk = os.path.join(carpeta, f"voz{i}_{k}")
+            try:
+                os.makedirs(dk, exist_ok=True)
+                asyncio.run(locutor.generar(x["texto"], x["voz"], x.get("velocidad", "+0%"), x.get("tono", "+0Hz"), dk))
+                locutor.apretar(dk, hueco_max=0.3)
+                pk = json.load(open(os.path.join(dk, "palabras.json"), encoding="utf-8"))
+                dura = pk[-1]["fin"] + 0.1 if pk else _duracion(os.path.join(dk, "voz.mp3"))
+            except Exception as err:               # si una voz no sale, la escena sigue solo con el narrador
+                print(f"voz: el personaje de la escena {i + 1} no ha podido hablar ({type(err).__name__})", flush=True)
+                continue
+            x["a"], x["b"] = round(t + largo + 0.08, 3), round(t + largo + 0.08 + dura, 3)
+            partes.append((os.path.join(dk, "voz.mp3"), t + largo + 0.08))
+            largo += 0.08 + dura
         t += largo + hueco
     for i, e in enumerate(g["escenas"]):
         e["fin"] = g["escenas"][i + 1]["inicio"] if i + 1 < len(g["escenas"]) else round(t - hueco + cola, 3)

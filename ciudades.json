@@ -64,6 +64,18 @@
    "tipo": "bot"
   },
   {
+   "id": "fotografo",
+   "nombre": "Fotógrafo",
+   "ciudad": "central",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Busca en Wikimedia Commons una foto libre de verdad para cada escena de las biografías (solo dominio público, CC0 y CC BY) y la deja en vertical con su crédito.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
    "id": "locutor",
    "nombre": "Locutor",
    "ciudad": "central",
@@ -468,6 +480,18 @@
    "hace": "Es Claude. Arregla lo que los jefes no pueden, también el código, sin pedirte permiso.",
    "origen": "nuevo",
    "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "comisaria_videos",
+   "nombre": "Comisaria de vídeos",
+   "ciudad": "policia",
+   "donde": "ciudad",
+   "grupo": "Quién trabaja aquí",
+   "hace": "Cada hora lleva al Juzgado los vídeos que sube el dueño, pone en la app los vídeos nuevos de «Para subir» y lo que se está fabricando, y avisa al móvil solo de lo importante.",
+   "origen": "nuevo",
+   "lote": 3,
    "codigo": "nuevo",
    "tipo": "bot"
   },
