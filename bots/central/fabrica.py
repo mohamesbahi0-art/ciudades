@@ -186,6 +186,25 @@ def de_fuera(error):
     return e.startswith("SinIA") or ("faltan" in e and "dibujos" in e)
 
 
+def atender_al_dueno(paso=print, guardar=None):
+    """Si el dueño ha subido un vídeo («Juzga mi vídeo»), la fábrica lo juzga en este momento, sin esperar a su turno
+    de GitHub (que puede tardar una hora). Devuelve los segundos que ha tardado (no le quitan tiempo a la cola)."""
+    t0 = time.time()
+    try:
+        from bots.juzgado import ventanilla
+        if not ventanilla.ramas():
+            return 0.0
+        paso("hay un vídeo del dueño: se juzga ahora mismo, antes que la cola")
+        ventanilla.main([])
+        if guardar:
+            guardar("fábrica: vídeo del dueño juzgado")
+    except SystemExit:
+        pass
+    except Exception as e:
+        paso(f"el vídeo del dueño no se ha podido juzgar aquí ({type(e).__name__}): lo hará su turno")
+    return time.time() - t0
+
+
 def espera_del_dueno(paso=print, cada=60):
     """Los vídeos que sube el dueño en «Juzga mi vídeo» van antes que todo: si hay uno en el Juzgado (su rama
     juicio/<codigo> sigue viva), la fábrica para hasta que termine y luego sigue con la cola. Como mucho media hora por
@@ -295,7 +314,8 @@ def main():
     ronda["sin_sitio"] = [k for k, _ in plan[maximo:]]
     sin_ia = 0                       # turnos seguidos en los que la IA no ha contestado
     for clave, hora in plan[:maximo]:
-        if not a.prueba:             # lo del dueño, primero: si tiene un vídeo en el Juzgado, la cola espera
+        if not a.prueba:             # lo del dueño, primero: su vídeo se juzga aquí mismo, antes que la cola
+            inicio += atender_al_dueno(paso=lambda t: print(t, flush=True), guardar=guardar)
             inicio += espera_del_dueno(paso=lambda t: print(t, flush=True))   # la espera no le quita tiempo a la cola
         if (time.time() - inicio) / 60 > ajustes["minutos_por_ronda"]:
             print("se acaba el tiempo de la ronda: lo que falta, en la siguiente", flush=True)

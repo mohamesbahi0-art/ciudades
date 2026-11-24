@@ -14,6 +14,7 @@ Uso:  python bots/juzgado/ventanilla.py [--codigo X]
       python bots/juzgado/ventanilla.py --video prueba.mp4 --cuenta <clave> [--titulo "..."]   (prueba, sin rama)
 """
 import argparse
+import datetime as dt
 import json
 import os
 import re
@@ -114,6 +115,23 @@ def sacar(rama, carpeta):
 
 def borrar_rama(rama):
     return _git("push", "-q", "origin", "--delete", rama).returncode == 0
+
+
+def _cerrojo(codigo):
+    return f"juzgando/{codigo}-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d%H')}"
+
+
+def tomar(codigo):
+    """Cerrojo para que dos turnos no juzguen el mismo vídeo a la vez (la fábrica y «Juzga mi vídeo»): crea una rama
+    que solo se puede crear si no existe. El nombre lleva la hora, así que un cerrojo olvidado caduca solo."""
+    ref = f"refs/heads/{_cerrojo(codigo)}"
+    return _git("push", "-q", "origin", f"FETCH_HEAD:{ref}", f"--force-with-lease={ref}:").returncode == 0
+
+
+def soltar(codigo):
+    r = _git("ls-remote", "origin", f"refs/heads/juzgando/{codigo}-*", texto=True)
+    for linea in r.stdout.splitlines() if r.returncode == 0 else []:
+        borrar_rama(linea.split("refs/heads/", 1)[-1].strip())
 
 
 def preparar(original, carpeta):
@@ -298,13 +316,13 @@ def guardar(r):
     c.guardar()
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--codigo", help="solo esta rama (juicio/<codigo>)")
     p.add_argument("--video", help="prueba: juzga este archivo sin rama")
     p.add_argument("--cuenta", help="prueba: la cuenta (clave o alias)")
     p.add_argument("--titulo", default="")
-    a = p.parse_args()
+    a = p.parse_args(argv)
     paso = lambda robot, texto: print(privado.limpiar(f"[{robot}] {texto}"), flush=True)   # noqa: E731
     if a.video:
         with tempfile.TemporaryDirectory() as t:
@@ -322,6 +340,9 @@ def main():
             continue
         with tempfile.TemporaryDirectory() as t:
             original, peticion = sacar(rama, t)
+            if original and not tomar(codigo):
+                paso(ROBOT, f"{codigo}: ya lo está juzgando otro turno")
+                continue
             if not original:
                 r = {"codigo": codigo, "estado": "error", "problema": "No he encontrado el vídeo en el buzón."}
             else:
@@ -339,6 +360,7 @@ def main():
         guardar(r)
         if r.get("estado") != "error":     # con un fallo nuestro la rama se queda para el siguiente intento
             borrar_rama(rama)
+        soltar(codigo)
         try:
             avisar(r)
         except Exception:
