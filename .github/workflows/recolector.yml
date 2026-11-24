@@ -5,6 +5,7 @@ name: Recolector de clips
 on:
   schedule:
     - cron: "3 8 * * *"
+    - cron: "33 14 * * *"
   push:
     paths:
       - "peticiones/recolector.json"
@@ -44,7 +45,7 @@ jobs:
           MEMORIA_DIR: privado/memoria
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
-        run: python bots/central/recolector.py
+        run: python bots/central/recolector.py --maximo 15
       - name: Guardar en el repositorio privado
         if: always()
         env:

@@ -31,7 +31,15 @@ def revisiones(cfg):
     return {k: privado.leer(os.path.join("estado", "canales", f"{k}.json"), {}) or {} for k in cfg.get("canales", {})}
 
 
-def planear(ajustes, cfg, revs, solo=None, ahora=None):
+LINEAS = ("canales", "cuentas")  # dos equipos a la vez: YouTube por un lado y TikTok/Instagram por otro
+
+
+def fichero(linea=None):
+    """Dónde apunta su ronda cada línea (la de canales, en el de siempre, que es el que lee la app)."""
+    return "fabrica.json" if linea in (None, "canales") else f"fabrica-{linea}.json"
+
+
+def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
     """Devuelve [(clave, hora o None, motivo)] por orden de urgencia, y lo que se queda sin hacer y por qué."""
     ahora = ahora or dt.datetime.now(dt.timezone.utc)
     registro = privado.leer(subidor.REGISTRO, []) or []
@@ -42,7 +50,7 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
     candidatos, esperan = [], {}
     hoy = ahora.strftime("%Y-%m-%d")
     fallidos = {}
-    for r in (privado.leer(os.path.join("estado", "fabrica.json"), {}) or {}).get("rondas", []):
+    for r in (privado.leer(os.path.join("estado", fichero(linea)), {}) or {}).get("rondas", []):
         if str(r.get("empezada", "")).startswith(hoy) and not r.get("prueba"):
             for t in r.get("turnos", []):
                 if t.get("destino") == "suspendido":
@@ -65,11 +73,29 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
                               "(su formato necesita un arreglo; no se gasta IA en balde)")
             return False
         return True
+    try:                                      # lo que han decidido los Mecánicos (canales descansando, dibujos caídos)
+        from bots.mecanicos import taller
+        estado_taller = taller.leer()
+    except Exception:
+        taller, estado_taller = None, {}
+
+    def descansa(clave, dibuja=False):
+        if not taller:
+            return False
+        motivo = taller.en_cuarentena(clave, estado_taller, ahora)
+        if not motivo and dibuja and taller.dibujos_caidos(estado_taller, ahora):
+            motivo = "el servicio gratis de dibujos está caído: los mecánicos lo han dejado esperar unas horas"
+        if motivo:
+            esperan[clave] = motivo
+        return bool(motivo)
+
     for clave, c in cfg.get("canales", {}).items():
-        if solo and clave not in solo:
+        if (solo and clave not in solo) or linea == "cuentas":
             continue
         if c.get("pausado"):
             esperan[clave] = "en pausa"
+            continue
+        if descansa(clave, dibuja=c.get("estudio") != "animacion" and not c.get("solo_clips")):
             continue
         if (c.get("tipo") in SOLO_CON_CLIP or clave in SOLO_CON_CLIP) and clave not in con_clip:
             esperan[clave] = "esperando a que grabes un clip (la lista está en la app)"
@@ -79,6 +105,12 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
             continue
         if not os.environ.get(f"YT_REFRESH_{clave.upper()}"):
             esperan[clave] = "sin permiso de YouTube"
+            continue
+        if c.get("solo_clips") and not videoteca.suficientes(dict(c, clave=clave)):   # el dueño no quiere fotos en GTA
+            lista = videoteca.disponibles(dict(c, clave=clave))
+            esperan[clave] = (f"espera clips de juego de verdad (hay {len(lista)} tomas; hacen falta "
+                              f"{videoteca.MIN_TOMAS} de {videoteca.MIN_FUENTES} vídeos, o {videoteca.MIN_PAREJAS} parejas "
+                              "GTA 5/GTA 6): el Recolector las trae cada día. Nada de vídeos con fotos")
             continue
         if not cupo and cola_llena:
             esperan[clave] = "hoy no queda cupo de subidas y la cola está llena"
@@ -91,10 +123,12 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
         if insiste(clave):
             candidatos.append((clave not in con_clip, huecos.colchon(ocupadas, ahora), orden.get(clave, 99), clave, hora))
     for clave, b in cfg.get("barrios", {}).items():
-        if solo and clave not in solo:
+        if (solo and clave not in solo) or linea == "canales":
             continue
         if b.get("estado") != "activo":
             esperan[clave] = b.get("motivo") or "en pausa"
+            continue
+        if descansa(clave):
             continue
         pend = [d for d in parasubir.documentos() if d.get("barrio") == clave and d.get("estado") == "pendiente"]
         if len({d.get("titulo") for d in pend}) >= ajustes["pendientes_por_barrio"]:
@@ -186,13 +220,15 @@ def main():
     p.add_argument("--solo", help="claves separadas por comas")
     p.add_argument("--maximo", type=int)
     p.add_argument("--sin-guardar", action="store_true")
+    p.add_argument("--linea", choices=LINEAS, help="solo los canales de YouTube o solo las cuentas de TikTok/Instagram")
     a = p.parse_args()
     inicio = time.time()
     ajustes, cfg = privado.ajustes(), privado.config()
     solo = {privado.resolver(x) for x in a.solo.split(",")} if a.solo else None
     maximo = a.maximo or ajustes["videos_por_ronda"]
     revs = revisiones(cfg)
-    rondas = (privado.leer(os.path.join("estado", "fabrica.json"), {}) or {}).get("rondas", [])
+    rondas = (privado.leer(os.path.join("estado", fichero(a.linea)), {}) or {}).get("rondas", [])
+    tareas = a.linea != "cuentas"            # la cola, la videoteca y la limpieza las hace la línea de canales
     ronda = {"empezada": privado.ahora(), "prueba": a.prueba, "turnos": []}
     trabajo = tempfile.mkdtemp(prefix="fabrica-")
 
@@ -200,14 +236,14 @@ def main():
         if not a.prueba and not a.sin_guardar:
             privado.git_guardar(mensaje)
 
-    if not a.prueba:
+    if not a.prueba and tareas:
         subidos = subidor.vaciar_cola(ajustes, revs, trabajo)
         ronda["cola_subidos"] = subidos
         if subidos:
             print(f"cola: {subidos} vídeo(s) subidos", flush=True)
             guardar(f"fábrica: {subidos} vídeo(s) de la cola subidos")
 
-    if not a.prueba:
+    if not a.prueba and tareas:
         try:                                    # el Archivero: los clips grabados, limpios a la videoteca
             guardados = videoteca.archivar(paso=lambda t: print(privado.limpiar(t), flush=True))
             repasadas = videoteca.repasar_marcas(paso=lambda t: print(privado.limpiar(t), flush=True))
@@ -216,7 +252,7 @@ def main():
         except Exception as e:
             print(f"videoteca: el Archivero no ha podido trabajar ({type(e).__name__})", flush=True)
 
-    if not a.prueba:
+    if not a.prueba and tareas:
         try:
             ramas = clips.limpiar_ramas()       # las ramas temporales de clips ya usados o descartados
             if ramas:
@@ -224,7 +260,7 @@ def main():
         except Exception as e:
             print(f"buzón de clips: no he podido limpiar ({type(e).__name__})", flush=True)
 
-    if not a.prueba:
+    if not a.prueba and tareas:
         try:
             borrados = parasubir.limpiar()     # la estantería «para-subir» no crece sin fin
             if borrados:
@@ -239,7 +275,7 @@ def main():
     except Exception as e:
         print(f"discoteca: sin música libre ({type(e).__name__}); se compone", flush=True)
 
-    plan, esperan = planear(ajustes, cfg, revs, solo)
+    plan, esperan = planear(ajustes, cfg, revs, solo, linea=a.linea)
     ronda["plan"] = [k for k, _ in plan][:maximo]
     ronda["esperan"] = esperan
     barrios_hoy = [k for k in ronda["plan"] if k in cfg.get("barrios", {})]
@@ -284,7 +320,7 @@ def main():
         ultimo = estado.get("ultimo_turno", {})
         ronda["turnos"].append({"canal": clave, "codigo": codigo, "resultado": ultimo.get("resultado"),
                                 "destino": ultimo.get("destino_resultado"), "error": ultimo.get("error")})
-        privado.guardar_estado("fabrica.json", dict(ronda, cuota=subidor.cuota(), cola=len(subidor.en_cola()),
+        privado.guardar_estado(fichero(a.linea), dict(ronda, linea=a.linea, cuota=subidor.cuota(), cola=len(subidor.en_cola()),
                                                     rondas=rondas))
         guardar(f"fábrica: turno de {clave} ({ultimo.get('destino_resultado') or ultimo.get('resultado')})")
         sin_ia = sin_ia + 1 if codigo != 0 and str(ultimo.get("error") or "").startswith("SinIA") else 0
@@ -300,7 +336,7 @@ def main():
     gemini.apuntar_portero()
     ronda["terminada"] = privado.ahora()
     resumen_ronda = {k: ronda.get(k) for k in ("empezada", "terminada", "plan", "turnos", "cola_subidos", "sin_sitio")}
-    privado.guardar_estado("fabrica.json", dict(ronda, cuota=subidor.cuota(), cola=len(subidor.en_cola()),
+    privado.guardar_estado(fichero(a.linea), dict(ronda, linea=a.linea, cuota=subidor.cuota(), cola=len(subidor.en_cola()),
                                                 rondas=(rondas + [resumen_ronda])[-30:]))
     guardar("fábrica: fin de la ronda")
     fallos = [t for t in ronda["turnos"] if t["codigo"] != 0]

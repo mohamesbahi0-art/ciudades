@@ -19,12 +19,17 @@ on:
         required: false
 permissions:
   contents: read
-concurrency:
-  group: fabrica
-  cancel-in-progress: false
 jobs:
   ronda:
     if: github.actor != 'github-actions[bot]'
+    name: Línea de ${{ matrix.linea }}
+    strategy:
+      fail-fast: false
+      matrix:
+        linea: [canales, cuentas]         # dos equipos a la vez: YouTube y TikTok/Instagram
+    concurrency:
+      group: fabrica-${{ matrix.linea }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -86,7 +91,7 @@ jobs:
           YT_ID_SOBSHORTS: ${{ secrets.YT_ID_SOBSHORTS }}
           YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
           YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
-        run: python bots/central/fabrica.py ${{ steps.que.outputs.args }}
+        run: python bots/central/fabrica.py --linea ${{ matrix.linea }} ${{ steps.que.outputs.args }}
       - name: Guardar lo que quede en el repositorio privado
         if: always()
         env:

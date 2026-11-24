@@ -181,6 +181,12 @@ def fusionar(ruta, suyo, nuestro):
         dias.update({d: round(v, 4) for d, v in detalle.items()})
         junto["dias"] = dias
         return junto
+    if ruta == "estado/obras.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        obras = dict(suyo.get("obras") or {})                # cada vídeo, con lo último que se sepa de él
+        for k, o in (nuestro.get("obras") or {}).items():
+            if k not in obras or str(o.get("actualizado") or "") >= str(obras[k].get("actualizado") or ""):
+                obras[k] = o
+        return {"obras": obras, "actualizado": max(str(suyo.get("actualizado") or ""), str(nuestro.get("actualizado") or ""))}
     if ruta == "estado/cuota.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         if suyo.get("dia") != nuestro.get("dia"):          # el libro de un día nuevo gana entero
             return max(suyo, nuestro, key=lambda c: c.get("dia") or "")

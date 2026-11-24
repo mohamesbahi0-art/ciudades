@@ -1,0 +1,54 @@
+# El Taller de los Mecánicos: cada media hora miran cómo va todo y arreglan solos lo que falla (arrancar la fábrica si
+# lleva horas parada, repetir un turno roto, mandar a descansar al canal que falla igual 3 veces, limpiar lo colgado y
+# dejar el parte para Claude). Trabajan en GitHub: no dependen de Claude ni del plan del dueño.
+name: Mecánicos
+on:
+  schedule:
+    - cron: "13,43 * * * *"
+  push:
+    paths:
+      - "peticiones/mecanicos.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: mecanicos
+  cancel-in-progress: false
+jobs:
+  taller:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Revisar y arreglar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GH_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python bots/mecanicos/taller.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('mecánicos: revisión del taller') else 1)"

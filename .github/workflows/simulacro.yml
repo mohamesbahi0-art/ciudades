@@ -60,3 +60,5 @@ jobs:
         run: python pruebas/simulacro_directos.py
       - name: Canal de mapas (Archivero, Cartógrafo y un vídeo de bolas-país dibujado de verdad)
         run: python pruebas/simulacro_bolas.py
+      - name: Taller de los Mecánicos (arrancar, repetir, descansar, limpiar y dejar el parte)
+        run: python pruebas/simulacro_mecanicos.py

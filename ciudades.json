@@ -31,6 +31,11 @@
    "id": "coliseo",
    "nombre": "El Coliseo",
    "numero": 6
+  },
+  {
+   "id": "taller",
+   "nombre": "El Taller",
+   "numero": 7
   }
  ],
  "bots": [
@@ -811,6 +816,54 @@
    "hace": "Recibe los vídeos que sube el dueño en «Juzga mi vídeo»: los pasa por el Jurado popular, el Juzgado completo y, si aprueban, por el Coliseo. Si no, le devuelve los fallos y cómo arreglarlos.",
    "origen": "nuevo",
    "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "jefe_taller",
+   "nombre": "Jefe de taller",
+   "ciudad": "taller",
+   "donde": "ciudad",
+   "grupo": "Mecánicos",
+   "hace": "Diagnostica los fallos que nadie conoce y decide: lo arregla un mecánico, hace falta el dueño o es un fallo de código para Claude. Lleva los partes.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "mecanico_rondas",
+   "nombre": "Mecánico de rondas",
+   "ciudad": "taller",
+   "donde": "ciudad",
+   "grupo": "Mecánicos",
+   "hace": "Si la fábrica lleva más de 2 horas y media parada, la arranca; si un turno falló al preparar las herramientas, lo repite.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "mecanica_canales",
+   "nombre": "Mecánica de canales",
+   "ciudad": "taller",
+   "donde": "ciudad",
+   "grupo": "Mecánicos",
+   "hace": "Si un canal falla 3 veces seguidas igual, lo manda 12 horas a descansar; si los dibujos gratis están caídos, hace esperar a los canales que dibujan.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
+   "id": "mecanico_limpieza",
+   "nombre": "Mecánico de limpieza",
+   "ciudad": "taller",
+   "donde": "ciudad",
+   "grupo": "Mecánicos",
+   "hace": "Retira de «Ahora en la fábrica» los vídeos que se quedaron colgados y deja todo ordenado.",
+   "origen": "nuevo",
+   "lote": 3,
    "codigo": "nuevo",
    "tipo": "bot"
   }
