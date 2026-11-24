@@ -127,8 +127,9 @@ def limpiar(g):
     return g
 
 
-def guionizar(canal, lecciones):
-    """El Archivero elige país y parte; el guionista escribe; el Cartógrafo encuadra (en limpiar)."""
+def guionizar(canal, lecciones, arreglar=None):
+    """El Archivero elige país y parte; el guionista escribe; el Cartógrafo encuadra (en limpiar).
+    Con `arreglar` (la versión suspendida y lo que le vieron los jueces) rehace esa misma parte corrigiéndola."""
     clave = canal.get("clave", "mapas")
     toca = archivero_mapas.siguiente(clave)
     hechos = archivero_mapas.titulos(clave)[-40:]
@@ -147,9 +148,12 @@ def guionizar(canal, lecciones):
         hechos="\n".join(f"- {t}" for t in hechos) or "- (nada)")
     if ultima and toca["partes"] > 1:
         texto += "\nEs la ÚLTIMA parte: cierra la historia con un final redondo y una pregunta a quien lo ve."
+    if arreglar:
+        from bots.estudio import estudio
+        texto += estudio.bloque_arreglo(arreglar)
     ultimo = None
     for _ in range(3):
-        g = ia.preguntar(texto, papel="guionista", temperatura=0.95)
+        g = ia.preguntar(texto, papel="arreglo" if arreglar else "guionista", temperatura=0.95)
         if isinstance(g, list) and g:
             g = g[0]
         try:

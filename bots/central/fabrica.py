@@ -62,16 +62,34 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
     except Exception:
         con_clip = set()
 
+    cada_lejos = float(ajustes.get("horas_si_va_lejos", 2))   # el que va lejos del 90 no para: lo intenta cada 2 horas
+
+    def pendiente(clave):
+        """¿Tiene un vídeo que se quedó cerca de la nota y espera su versión corregida? Eso va antes que nada."""
+        try:
+            return bool(turno.arreglo_pendiente(clave))
+        except Exception:
+            return False
+
     def insiste(clave):
+        if pendiente(clave):
+            return True
         hechos = fallidos.get(clave, 0)
         if hechos >= tope:
             esperan[clave] = f"hoy ya lo ha intentado {hechos} veces sin llegar al 90: mañana más"
             return False
         mejor = mejor_nota(clave)
         if hechos >= lejos and mejor is not None and mejor < 80:
-            esperan[clave] = (f"hoy lo ha intentado {hechos} veces y su mejor nota es {mejor}: descansa hasta mañana "
-                              "(su formato necesita un arreglo; no se gasta IA en balde)")
-            return False
+            ultimo = ((privado.leer(os.path.join("estado", "central", f"{clave}.json"), {}) or {})
+                      .get("ultimo_turno") or {}).get("terminado")
+            try:
+                hace = (ahora - huecos.fecha(ultimo)).total_seconds() / 3600 if ultimo else cada_lejos
+            except (TypeError, ValueError):
+                hace = cada_lejos
+            if hace < cada_lejos:
+                esperan[clave] = (f"hoy lo ha intentado {hechos} veces y su mejor nota es {mejor}: mientras vaya lejos "
+                                  f"del 90 lo intenta cada {cada_lejos:g} horas en vez de cada ronda (no se gasta IA en balde)")
+                return False
         return True
     try:                                      # lo que han decidido los Mecánicos (canales descansando, dibujos caídos)
         from bots.mecanicos import taller
@@ -121,7 +139,8 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
             esperan[clave] = f"ya tiene vídeos para {ajustes['dias_maximos']} días"
             continue
         if insiste(clave):
-            candidatos.append((clave not in con_clip, huecos.colchon(ocupadas, ahora), orden.get(clave, 99), clave, hora))
+            candidatos.append((not pendiente(clave), clave not in con_clip, huecos.colchon(ocupadas, ahora),
+                               orden.get(clave, 99), clave, hora))
     for clave, b in cfg.get("barrios", {}).items():
         if (solo and clave not in solo) or linea == "canales":
             continue
@@ -140,9 +159,9 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
             esperan[clave] = "tiene vídeos para los próximos días"
             continue
         if insiste(clave):
-            candidatos.append((clave not in con_clip, dias, orden.get(clave, 99), clave, None))
+            candidatos.append((not pendiente(clave), clave not in con_clip, dias, orden.get(clave, 99), clave, None))
     candidatos.sort()
-    return [(clave, hora) for _, _, _, clave, hora in candidatos], esperan
+    return [(clave, hora) for *_, clave, hora in candidatos], esperan
 
 
 def mejor_nota(clave, cuantos=6):
@@ -166,24 +185,54 @@ def mejor_nota(clave, cuantos=6):
 
 
 def hay_ia():
-    """¿Hay con qué pensar ahora? Claude con presupuesto para esta hora, o Gemini contestando (una pregunta mínima)."""
+    """¿Hay con qué hacer un vídeo ahora? Hace falta quien escriba (Claude con presupuesto para esta hora, o Gemini
+    contestando) Y quien juzgue (Claude de reserva, o un modelo de Gemini de los que ven imágenes): sin juez, el vídeo
+    se haría para nada, porque nada sale sin juicio. Devuelve (sí o no, a quién le falta)."""
     from bots.comun import claude, gemini
+    escribe = juzga = False
     try:
-        if claude.puede("guionista"):
-            return True
+        escribe = claude.puede("guionista") or claude.puede("arreglo")
     except Exception:
         pass
+    if not escribe:
+        try:
+            gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, ligero_primero=True,
+                             paciencia=1)
+            escribe = True
+        except Exception:
+            escribe = False
+    if not escribe:
+        return False, "escritor"
     try:
-        gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, ligero_primero=True)
-        return True
+        juzga = claude.puede("juez", a_su_hora=True)     # a su hora: no se empiezan más vídeos de los que el día puede juzgar
     except Exception:
-        return False
+        pass
+    if not juzga:
+        try:
+            gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, solo_bueno=True,
+                             paciencia=0)
+            juzga = True
+        except Exception:
+            juzga = False
+    return (True, "") if juzga else (False, "juez")
 
 
-def de_fuera(error):
-    """Fallos que no son del código: la IA sin cupo o el servicio gratis de dibujos caído."""
-    e = str(error or "")
-    return e.startswith("SinIA") or ("faltan" in e and "dibujos" in e)
+def pausa_sin_ia(quien=""):
+    """Apunta la pausa para la app: por qué está parada la fábrica y hasta cuándo (cuando la IA de pago vuelve a tener
+    su parte; la gratis puede volver antes y entonces la pausa se quita sola)."""
+    from bots.central import obras
+    from bots.comun import claude
+    try:
+        hasta = claude.cuando_puede("juez" if quien == "juez" else "guionista")
+    except Exception:
+        hasta = None
+    motivo = ("No queda quien juzgue los vídeos ahora: la IA gratis que ve imágenes ha gastado su cupo de hoy y la de "
+              "pago, su parte del día." if quien == "juez" else
+              "La IA gratis está saturada y la de pago ya ha gastado su parte de esta hora.")
+    obras.pausar(motivo + " Lo que estaba a medias no se pierde: sigue solo en cuanto vuelva.", hasta)
+
+
+de_fuera = turno.de_fuera        # fallos que no son del código: la IA sin cupo o el servicio gratis de dibujos caído
 
 
 def atender_al_dueno(paso=print, guardar=None):
@@ -321,12 +370,17 @@ def main():
             print("se acaba el tiempo de la ronda: lo que falta, en la siguiente", flush=True)
             ronda["sin_sitio"] += [k for k, _ in plan[:maximo] if k not in {t["canal"] for t in ronda["turnos"]}]
             break
-        if not a.prueba and not hay_ia():    # sin IA no se empieza un turno (no se gastan voz, dibujos ni intentos)
+        con_ia, falta = (True, "") if a.prueba else hay_ia()
+        if not con_ia:               # sin IA no se empieza un turno (no se gastan voz, dibujos ni intentos)
             hechos = {t["canal"] for t in ronda["turnos"]}
             for k, _ in plan[:maximo]:
                 if k not in hechos:
-                    ronda["esperan"][k] = "la IA no tiene cupo a esta hora: lo intenta en la siguiente ronda"
-            print("no queda IA para esta hora: lo que falta, en la siguiente ronda", flush=True)
+                    ronda["esperan"][k] = ("no hay quien juzgue ahora (la IA ha gastado su parte): lo intenta en la "
+                                           "siguiente ronda" if falta == "juez" else
+                                           "la IA no tiene cupo a esta hora: lo intenta en la siguiente ronda")
+            print("no queda IA para esta hora" + (" (falta el juez)" if falta == "juez" else "")
+                  + ": lo que falta, en la siguiente ronda", flush=True)
+            pausa_sin_ia(falta)
             break
         if sin_ia:                   # la IA estaba saturada: un respiro antes del siguiente turno, en vez de perderlo
             respiro = int(ajustes.get("respiro_ia_segundos", 180))
@@ -344,6 +398,12 @@ def main():
                                                     rondas=rondas))
         guardar(f"fábrica: turno de {clave} ({ultimo.get('destino_resultado') or ultimo.get('resultado')})")
         sin_ia = sin_ia + 1 if codigo != 0 and str(ultimo.get("error") or "").startswith("SinIA") else 0
+        if not a.prueba:             # la pausa de la app: se quita en cuanto un turno trabaja con IA
+            if sin_ia:
+                pausa_sin_ia("juez" if "juez" in str(ultimo.get("error")) else "")
+            else:
+                from bots.central import obras
+                obras.reanudar()
         if sin_ia >= 2:              # dos veces seguidas sin IA: el resto espera a la siguiente ronda (no se gasta en balde)
             hechos = {t["canal"] for t in ronda["turnos"]}
             for k, _ in plan[:maximo]:

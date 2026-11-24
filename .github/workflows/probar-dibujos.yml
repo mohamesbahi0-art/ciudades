@@ -48,6 +48,15 @@ jobs:
                        {"prompt": "a lighthouse at night", "models": ["AlbedoBase XL (SDXL)"], "params": {"width": 512, "height": 512, "steps": 10, "n": 1}},
                        dict(ua, apikey="0000000000", **{"Client-Agent": "ciudades:1:anon"}))
           print("AIHORDE con nombre", c, b[:300].decode(errors="replace"))
+          # 1c) qué modelos tienen robots dibujando ahora mismo y cuánta cola (datos públicos del servicio)
+          c, b = pedir("https://aihorde.net/api/v2/status/models?type=image", cabeceras=ua)
+          try:
+              vivos = sorted(json.loads(b), key=lambda m: -m.get("count", 0))[:30]
+              for m in vivos:
+                  print("AIHORDE modelo", m.get("name"), "| robots", m.get("count"), "| cola", round(m.get("queued", 0)),
+                        "| espera", m.get("eta"), "| trabajos", m.get("jobs"))
+          except Exception as e:
+              print("AIHORDE modelos: no se pudo leer", c, type(e).__name__)
           # 2) Gemini: qué modelos de imagen hay con la clave gratis
           clave = os.environ.get("GEMINI_API_KEY", "")
           c, b = pedir("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", cabeceras={"x-goog-api-key": clave})

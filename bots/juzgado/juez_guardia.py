@@ -49,11 +49,25 @@ def nota_formato(canal):
             "tener música ni por el final tranquilo de un segundo (ahí entra su música).")
 
 
-def medidas_para(datos, canal):
-    """Las medidas que ven los jueces y abogados (en palabras), con la música dicha cuando falta a propósito."""
+def medidas_para(datos, canal, guion=None):
+    """Las medidas que ven los jueces y abogados (en palabras), con la música dicha cuando falta a propósito.
+    En los vídeos animados del estudio se añade lo que sabe el guion: cuántas escenas tiene y cuándo llega la segunda.
+    El detector de cortes de vídeo no cuenta una escena animada que entra con un fundido, así que solo con él un vídeo de
+    10 escenas salía con «0 cortes por minuto»."""
     medidas = fotogramas.para_jueces(datos)
     if sin_musica(canal):
         medidas["musica"] = "ninguna, a propósito: el dueño pone su música al subirlo (no es un fallo)"
+    try:
+        inicios = [float(e["inicio"]) for e in (guion or {}).get("escenas") or [] if isinstance(e, dict) and "inicio" in e]
+        duracion = float(medidas.get("duracion") or (guion or {}).get("duracion") or 0)
+        if len(inicios) >= 2 and duracion > 0:
+            medidas["escenas"] = len(inicios)
+            medidas["cambios_de_escena_por_minuto"] = round((len(inicios) - 1) / duracion * 60, 1)
+            medidas["segunda_escena_empieza"] = round(inicios[1], 2)
+            medidas["nota_ritmo"] = ("es animación: cada escena cambia lo que se ve; «cortes» solo cuenta los cambios "
+                                     "bruscos de imagen que detecta la máquina")
+    except (TypeError, ValueError, KeyError):
+        pass
     return medidas
 
 
@@ -62,7 +76,7 @@ def juzgar(video, guion, canal, lecciones, carpeta):
                    check=True, capture_output=True)
     with open(os.path.join(carpeta, "datos.json"), encoding="utf-8") as f:
         datos = json.load(f)
-    medidas = medidas_para(datos, canal)
+    medidas = medidas_para(datos, canal, guion)
     fallos = []
     negras = [n for n in datos.get("pantallas_negras") or [] if n.get("hasta", 0) - n.get("desde", 0) >= 0.8]
     if negras:                       # un fundido corto no cuenta: solo pantallas negras de casi un segundo o más

@@ -22,7 +22,8 @@ USO = {}                  # el Portero de Gemini lleva la cuenta: {modelo: {"bie
 
 
 def _contar(modelo, que):
-    USO.setdefault(modelo, {"bien": 0, "sin_cupo": 0, "fallos": 0})[que] += 1
+    uso = USO.setdefault(modelo, {"bien": 0, "sin_cupo": 0, "fallos": 0})
+    uso[que] = uso.get(que, 0) + 1          # «saturado» (503) se cuenta aparte dentro de los fallos
 
 
 def apuntar_portero():
@@ -53,8 +54,15 @@ def _limpiar_json(texto):
     return json.loads(texto)
 
 
+PACIENCIA = 2                  # vueltas de más por todos los modelos cuando están saturados (503) pero vivos
+ESPERAS = (20, 45, 60)         # segundos entre vuelta y vuelta
+
+
 def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False,
-              audio=None, video=None):
+              audio=None, video=None, paciencia=None):
+    """Pregunta a Gemini. Si todos los modelos fallan pero alguno está «vivo» (saturado, lento o con el límite por
+    minuto, no sin cupo del día), espera un poco y da otra vuelta (hasta `paciencia` más): a mediodía los modelos
+    ligeros contestan 1 de cada 5 veces y rendirse a la primera tiraba vídeos a medio hacer."""
     clave = os.environ.get("GEMINI_API_KEY")
     if not clave:
         raise SinIA("falta el secreto GEMINI_API_KEY")
@@ -73,54 +81,68 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"
     ultimo = "sin intentar"
     orden = BUENOS if solo_bueno else (LIGEROS + BUENOS if ligero_primero else BUENOS + LIGEROS)
-    modelos = [m for m in orden if m not in AGOTADOS]    # para texto sencillo, los ligeros primero: guardan cupo bueno
-    for modelo in modelos:
-        for intento in range(intentos):
-            req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
-                                         headers={"Content-Type": "application/json", "x-goog-api-key": clave})
-            try:
-                with urllib.request.urlopen(req, timeout=180) as r:
-                    datos = json.load(r)
-                texto_respuesta = "".join(p.get("text", "") for p in datos["candidates"][0]["content"]["parts"])
-                salida = _limpiar_json(texto_respuesta) if json_salida else texto_respuesta
-                _contar(modelo, "bien")
-                return salida
-            except urllib.error.HTTPError as e:
-                ultimo = f"{modelo}: HTTP {e.code}"
-                if e.code == 429:
-                    try:
-                        detalle = e.read().decode("utf-8", "replace")
-                    except Exception:
-                        detalle = ""
-                    _contar(modelo, "sin_cupo")
-                    if "PerDay" in detalle:            # sin cupo hasta mañana: no se vuelve a probar en esta ronda
+    paciencia = PACIENCIA if paciencia is None else max(0, int(paciencia))
+    for vuelta in range(paciencia + 1):
+        modelos = [m for m in orden if m not in AGOTADOS]    # para texto sencillo, los ligeros primero: guardan cupo bueno
+        vivos = False                 # ¿alguno está saturado o lento, pero con cupo? Entonces merece otra vuelta
+        for modelo in modelos:
+            for intento in range(intentos):
+                req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
+                                             headers={"Content-Type": "application/json", "x-goog-api-key": clave})
+                try:
+                    with urllib.request.urlopen(req, timeout=180) as r:
+                        datos = json.load(r)
+                    texto_respuesta = "".join(p.get("text", "") for p in datos["candidates"][0]["content"]["parts"])
+                    salida = _limpiar_json(texto_respuesta) if json_salida else texto_respuesta
+                    _contar(modelo, "bien")
+                    return salida
+                except urllib.error.HTTPError as e:
+                    ultimo = f"{modelo}: HTTP {e.code}"
+                    if e.code == 429:
+                        try:
+                            detalle = e.read().decode("utf-8", "replace")
+                        except Exception:
+                            detalle = ""
+                        _contar(modelo, "sin_cupo")
+                        if "PerDay" in detalle:            # sin cupo hasta mañana: no se vuelve a probar en esta ronda
+                            AGOTADOS.add(modelo)
+                            ultimo += " (sin cupo hoy)"
+                            break
+                        vivos = True
+                        if intento >= 1:                   # límite por minuto y ya ha esperado una vez: el siguiente modelo
+                            break
+                        time.sleep(25)                     # límite por minuto: esperar un poco y repetir con este modelo
+                        continue
+                    if e.code in (404, 403):               # modelo que no existe o sin permiso: siguiente modelo
                         AGOTADOS.add(modelo)
-                        ultimo += " (sin cupo hoy)"
+                        _contar(modelo, "sin_cupo")
                         break
-                    if intento >= 1:                   # límite por minuto y ya ha esperado una vez: el siguiente modelo
-                        break
-                    time.sleep(25)                     # límite por minuto: esperar un poco y repetir con este modelo
-                    continue
-                if e.code in (404, 403):               # modelo que no existe o sin permiso: siguiente modelo
-                    AGOTADOS.add(modelo)
-                    _contar(modelo, "sin_cupo")
-                    break
-                _contar(modelo, "fallos")
-                if e.code in (500, 502, 503, 504):
-                    if intento >= 1:                   # saturado: mejor probar otro modelo que esperar
-                        break
-                    time.sleep(8)
-                    continue
-                break                                  # este modelo no acepta la petición (p. ej. audio): el siguiente
-            except (KeyError, IndexError, ValueError) as e:
-                ultimo = f"{modelo}: respuesta rara ({type(e).__name__})"
-                time.sleep(3)
-            except urllib.error.URLError as e:
-                ultimo = f"{modelo}: sin conexión ({e.reason})"
-                time.sleep(5)
-            except (TimeoutError, OSError) as e:          # tarda demasiado en contestar: otro intento u otro modelo
-                ultimo = f"{modelo}: no contesta a tiempo ({type(e).__name__})"
-                time.sleep(5)
+                    _contar(modelo, "fallos")
+                    if e.code in (500, 502, 503, 504):
+                        vivos = True
+                        _contar(modelo, "saturado")
+                        if intento >= 1:                   # saturado: mejor probar otro modelo que esperar
+                            break
+                        time.sleep(8)
+                        continue
+                    break                                  # este modelo no acepta la petición (p. ej. audio): el siguiente
+                except (KeyError, IndexError, ValueError) as e:
+                    ultimo = f"{modelo}: respuesta rara ({type(e).__name__})"
+                    vivos = True
+                    time.sleep(3)
+                except urllib.error.URLError as e:
+                    ultimo = f"{modelo}: sin conexión ({e.reason})"
+                    vivos = True
+                    time.sleep(5)
+                except (TimeoutError, OSError) as e:          # tarda demasiado en contestar: otro intento u otro modelo
+                    ultimo = f"{modelo}: no contesta a tiempo ({type(e).__name__})"
+                    vivos = True
+                    time.sleep(5)
+        if not vivos or vuelta >= paciencia:
+            break
+        espera = ESPERAS[min(vuelta, len(ESPERAS) - 1)]
+        print(f"gemini: saturado; espero {espera} s y doy otra vuelta ({vuelta + 1} de {paciencia})", flush=True)
+        time.sleep(espera)
     raise SinIA(f"Gemini no contesta: {ultimo}")
 
 

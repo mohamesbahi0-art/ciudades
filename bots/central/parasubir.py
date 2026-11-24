@@ -51,6 +51,14 @@ def dejar(clave, canal, video, guion, duracion, juicio=None):
     enlace = almacen.guardar("para-subir", video, f"{base}.mp4")
     hora = cuando(clave, canal) or hoy + dt.timedelta(hours=2)
     ids = []
+    guion_id = None
+    try:        # el guion se guarda con el vídeo: así se le puede cambiar la voz o rehacerlo sin escribirlo otra vez
+        from bots.estudio import estudio
+        privado.escribir(os.path.join("estado", "guiones", f"{base}.json"),
+                         {"barrio": clave, "creado": privado.ahora(), "guion": estudio.guion_escrito(guion)})
+        guion_id = base
+    except Exception as e:
+        print(f"para subir: no he podido guardar el guion ({type(e).__name__})", flush=True)
     for red in canal.get("redes", ["instagram"]):
         texto = guion.get(f"texto_{red}") or guion.get("texto_instagram") or guion.get("descripcion", "")
         doc = {"barrio": clave, "red": red, "titulo": guion.get("titulo", ""), "texto": texto.strip(),
@@ -62,6 +70,12 @@ def dejar(clave, canal, video, guion, duracion, juicio=None):
                 doc["juzgo"] = juicio["cerebro"]             # quién juzgó: «claude» o «gemini» (lo enseña la app)
         if guion.get("cerebro"):
             doc["cerebro"] = guion["cerebro"]                # quién escribió el guion: «claude», «gemini» o «a mano»
+        if guion_id:
+            doc["guion_id"] = guion_id                       # estado/guiones/<guion_id>.json
+        if guion.get("voz_motor"):
+            doc["voz"] = guion["voz_motor"]                  # con qué voz salió: «edge» (gratis) o «elevenlabs»
+        if guion.get("version", 1) > 1:
+            doc["version"] = guion["version"]                # versión corregida tras un suspenso
         id_doc = f"{base}-{'ig' if red == 'instagram' else 'tt' if red == 'tiktok' else slug(red, 8)}"
         privado.escribir(os.path.join(CARPETA, f"{id_doc}.json"), doc)
         ids.append(id_doc)

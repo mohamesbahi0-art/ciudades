@@ -11,6 +11,7 @@ from bots.comun import privado
 
 ARCHIVO = os.path.join("estado", "obras.json")
 GUARDA_HORAS = 36
+ESPERA_HORAS = 12             # un vídeo «esperando» (sin IA) que nadie retoma en este tiempo se quita de la lista
 PASOS = {"reportero_gta6": "idea", "investigador": "idea", "sala_ideas": "sala_ideas", "escritor": "guion",
          "guionista": "guion", "jurado_popular": "jurado", "locutor": "voz", "dibujante": "dibujos",
          "editor_video": "montaje", "montador": "montaje", "portero_clips": "montaje", "juez_guardia": "juzgado",
@@ -20,6 +21,44 @@ PASOS = {"reportero_gta6": "idea", "investigador": "idea", "sala_ideas": "sala_i
 
 def _leer():
     return privado.leer(ARCHIVO, {}) or {}
+
+
+def retomar(canal):
+    """El vídeo de esta cuenta que se quedó «esperando» (sin IA o sin dibujos) en la ronda anterior: el turno nuevo sigue
+    en esa misma ficha en vez de abrir otra (así la app no se llena de intentos a medias). None si no hay."""
+    try:
+        esperando = [(str(o.get("actualizado") or ""), k) for k, o in (_leer().get("obras") or {}).items()
+                     if o.get("canal") == canal and o.get("estado") == "esperando"]
+        return max(esperando)[1] if esperando else None
+    except Exception:
+        return None
+
+
+def pausar(motivo, hasta=None):
+    """La fábrica está parada (sin IA): la app lo enseña arriba («⏸️ en pausa hasta…») en vez de parecer rota."""
+    try:
+        d = _leer()
+        ahora = privado.ahora()
+        antes = d.get("pausa") or {}
+        d["pausa"] = {"activa": True, "motivo": str(motivo)[:240], "hasta": hasta, "actualizado": ahora,
+                      "desde": antes.get("desde") if antes.get("activa") else ahora}
+        d["actualizado"] = ahora
+        privado.escribir(ARCHIVO, d)
+    except Exception as e:
+        print(f"obras: no se ha podido apuntar la pausa ({type(e).__name__})", flush=True)
+
+
+def reanudar():
+    """La fábrica vuelve a trabajar: se quita la pausa (si la había)."""
+    try:
+        d = _leer()
+        if (d.get("pausa") or {}).get("activa"):
+            ahora = privado.ahora()
+            d["pausa"] = {"activa": False, "actualizado": ahora}
+            d["actualizado"] = ahora
+            privado.escribir(ARCHIVO, d)
+    except Exception as e:
+        print(f"obras: no se ha podido quitar la pausa ({type(e).__name__})", flush=True)
 
 
 def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_marcha", paso=None):
@@ -40,8 +79,12 @@ def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_ma
             o["titulo"] = str(titulo)[:120]
         o["estado"], o["actualizado"] = estado, ahora
         limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=GUARDA_HORAS)
-        for k in [k for k, v in obras.items() if v.get("estado") in ("terminado", "descartado")
-                  and str(v.get("actualizado", "")) < limite.strftime("%Y-%m-%dT%H:%M:%SZ")]:
+        espera = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=ESPERA_HORAS)
+        for k in [k for k, v in obras.items() if k != id_obra and (
+                (v.get("estado") in ("terminado", "descartado")
+                 and str(v.get("actualizado", "")) < limite.strftime("%Y-%m-%dT%H:%M:%SZ")) or
+                (v.get("estado") == "esperando"                  # una espera vieja ya no dice nada: fuera
+                 and str(v.get("actualizado", "")) < espera.strftime("%Y-%m-%dT%H:%M:%SZ")))]:
             obras.pop(k)
         d["actualizado"] = ahora
         privado.escribir(ARCHIVO, d)

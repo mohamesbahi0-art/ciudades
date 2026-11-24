@@ -138,6 +138,71 @@ SIN_MIEDO = ("Sin miedo (lo pide el dueño): temas duros, oscuros, incómodos o 
              "personas y nada que rompa las normas de YouTube o TikTok.")
 
 
+# Lo que añade la fábrica a un guion al grabarlo (tiempos de la voz, motor, juicio…): no es cosa del guionista.
+DE_LA_FABRICA = ("palabras", "inicio", "fin", "duracion", "voz_motor", "musica", "cerebro", "jurado", "jurado_anterior",
+                 "narracion", "texto_pantalla", "coliseo", "version", "arreglo_de", "mapa", "mundo", "html", "caja",
+                 "pais_nombre")
+
+
+def guion_escrito(g):
+    """El guion tal como lo escribió el guionista: sin los tiempos de la voz ni lo que apunta la fábrica al grabarlo."""
+    def limpio(x):
+        if isinstance(x, dict):
+            return {k: limpio(v) for k, v in x.items() if k not in DE_LA_FABRICA and not str(k).startswith("_")}
+        if isinstance(x, list):
+            return [limpio(v) for v in x]
+        return x
+    return limpio(g or {})
+
+
+def bloque_arreglo(arreglar):
+    """Lo que se le añade al guionista cuando el vídeo es la SEGUNDA VERSIÓN de uno que el Juzgado suspendió por poco:
+    el guion que se grabó y, uno por uno, los fallos que le vieron, para que rehaga ESE vídeo corrigiéndolos (lo pidió el
+    dueño: «que vuelva a crear otro enseguida, mejorado con los fallos que ha tenido»)."""
+    if not arreglar or not arreglar.get("guion"):
+        return ""
+    v = arreglar.get("veredicto") or {}
+    lineas = []
+    for x in v.get("votos") or []:
+        if isinstance(x, dict) and x.get("razon"):
+            lineas.append(f"- {x.get('juez', 'Juez')} ({x.get('nota', '-')}/100): {str(x['razon'])[:400]}")
+    if v.get("fiscalia"):
+        lineas.append(f"- Fiscalía (los fallos, uno por uno): {str(v['fiscalia'])[:900]}")
+    for f in v.get("fallos_graves") or []:
+        lineas.append(f"- FALLO GRAVE (con esto no se publica): {str(f)[:300]}")
+    if v.get("consejo"):
+        lineas.append(f"- Consejo del Juzgado: {str(v['consejo'])[:500]}")
+    for f in arreglar.get("no_repetir") or []:
+        if f:
+            lineas.append(f"- OJO: una versión corregida anterior salió PEOR que esta; de aquella dijeron: {str(f)[:300]}")
+    for f in arreglar.get("inspector") or []:
+        lineas.append(f"- El Inspector de imagen (medido en el vídeo, sin opinar): {str(f)[:300]}")
+    medidas = v.get("medidas") or {}
+    if medidas:
+        lineas.append("- Medidas del vídeo que salió: " + json.dumps(
+            {k: medidas[k] for k in ("duracion", "cambios_de_plano_por_minuto", "primer_cambio_de_plano",
+                                     "cortes_por_minuto", "primer_corte") if medidas.get(k) is not None},
+            ensure_ascii=False))
+    bueno = f"\nLo que SÍ funcionaba (no lo pierdas): {str(v['defensa'])[:500]}" if v.get("defensa") else ""
+    version = int(arreglar.get("version") or 2)
+    return (f"\n\n=== VERSIÓN {version} DEL MISMO VÍDEO (esto manda sobre todo lo anterior) ===\n"
+            f"Este guion ya se grabó y el Juzgado le puso {v.get('total', '-')}/100; para publicarse hacen falta "
+            f"{arreglar.get('minimo', 90)}. NO escribas un vídeo nuevo: rehaz ESTE (el mismo tema y la misma idea, aunque "
+            "esté en la lista de «ya hechos o intentados») arreglando uno por uno los fallos de abajo.\n"
+            "Guion que se grabó:\n" + json.dumps(guion_escrito(arreglar["guion"]), ensure_ascii=False)[:9000] +
+            "\n\nLo que le han visto los jueces:\n" + "\n".join(lineas) + bueno +
+            "\n\nCómo arreglarlo:\n"
+            "1. Recorre los fallos uno a uno y cambia en el guion justo lo que causa cada uno (un texto que no cabe se "
+            "acorta; dos rótulos que se pisan pasan a uno o se acortan; una cifra en pantalla que no es la de la voz se "
+            "iguala; una frase que se repite arriba y abajo se quita de un sitio; un arranque lento se cambia por lo más "
+            "fuerte del vídeo en grande desde el primer fotograma y con su frase más corta).\n"
+            "2. Si dicen que va lento o quieto, parte las escenas largas en dos y que cada una cambie lo que se ve.\n"
+            "3. Si el título es flojo o no cuadra con el vídeo, cámbialo por uno que prometa justo lo que enseña.\n"
+            "4. Lo que no han criticado se queda igual. No lo alargues y no metas fallos nuevos: repasa cada texto de "
+            "pantalla (corto, entero, sin repetir) antes de entregar.\n"
+            "Devuelve SOLO el JSON del guion corregido, con la misma forma de siempre.")
+
+
 def referencias(clave):
     """La fórmula y 4 ejemplos de los vídeos de referencia del dueño, si están analizados."""
     d = privado.leer(os.path.join("estado", "referencias", f"{privado.alias(clave)}.json"), {}) or {}
@@ -235,7 +300,7 @@ def limpiar(g):
     return g
 
 
-def guionizar(canal, lecciones):
+def guionizar(canal, lecciones, arreglar=None):
     clave = canal["clave"]
     formula, ejemplos = referencias(clave)
     hechos = (privado.leer(os.path.join("estado", "estudio", f"{privado.alias(clave)}.json"), {}) or {}).get("videos", [])
@@ -244,9 +309,10 @@ def guionizar(canal, lecciones):
                              hechos="\n".join(f"- {h.get('famoso')}: {h.get('titulo')}" for h in hechos[-30:]) or "- (nada)",
                              extra="", sin_miedo=SIN_MIEDO, vocabulario=VOCABULARIO,
                              ejemplo=json.dumps(EJEMPLO, ensure_ascii=False), pelos="|".join(PELOS))
+    texto += bloque_arreglo(arreglar)
     ultimo = None
     for _ in range(3):
-        g = ia.preguntar(texto, papel="guionista", temperatura=0.95)
+        g = ia.preguntar(texto, papel="arreglo" if arreglar else "guionista", temperatura=0.95)
         if isinstance(g, list) and g:
             g = g[0]
         try:

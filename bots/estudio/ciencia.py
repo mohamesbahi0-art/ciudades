@@ -167,7 +167,84 @@ def _texto(v, n):
     if " " not in t[:n + 1]:
         return t[:n]
     corte = t[:n + 1].rsplit(" ", 1)[0].rstrip(" ,.;:-–")
+    # nada de dejar la frase colgando de un «van de» o un «uit de» («18–35% van de», «zuurstof rechtstreeks uit de»)
+    while " " in corte and _norm(corte.rsplit(" ", 1)[1]) in COLGANTES:
+        corte = corte.rsplit(" ", 1)[0].rstrip(" ,.;:-–")
     return corte if len(corte) >= max(3, n // 3) else t[:n]
+
+
+COLGANTES = set("de het een van voor met en of om te naar bij tot dan per zonder tussen tegen omdat maar want uit in op "
+                "aan door over als die dat je zijn haar hun".split())
+_UNIDADES = {"nul": 0, "een": 1, "twee": 2, "drie": 3, "vier": 4, "vijf": 5, "zes": 6, "zeven": 7, "acht": 8, "negen": 9,
+             "tien": 10, "elf": 11, "twaalf": 12, "dertien": 13, "veertien": 14, "vijftien": 15, "zestien": 16,
+             "zeventien": 17, "achttien": 18, "negentien": 19, "twintig": 20, "dertig": 30, "veertig": 40, "vijftig": 50,
+             "zestig": 60, "zeventig": 70, "tachtig": 80, "negentig": 90}
+
+
+def _numero_nl(p):
+    """Una cifra escrita en neerlandés («veertigduizend», «tweehonderddrieenveertig») → número; None si no lo es."""
+    if p in _UNIDADES:
+        return _UNIDADES[p]
+    for nombre, valor in (("miljard", 10 ** 9), ("miljoen", 10 ** 6), ("duizend", 1000), ("honderd", 100)):
+        if nombre in p:
+            antes, despues = p.split(nombre, 1)
+            a, d = (_numero_nl(antes) if antes else 1), (_numero_nl(despues) if despues else 0)
+            return None if a is None or d is None else a * valor + d
+    if "en" in p:                                   # «vijfendertig» = vijf + dertig
+        for i in range(2, len(p) - 4):
+            if p[i:i + 2] == "en" and p[:i] in _UNIDADES and _UNIDADES.get(p[i + 2:], 0) >= 20:
+                return _UNIDADES[p[:i]] + _UNIDADES[p[i + 2:]]
+    return None
+
+
+def _cifras_voz(voz):
+    """Las cifras que dice la voz de una escena, en número («40.000», «veertigduizend», «zes miljard»)."""
+    salida, palabras = [], str(voz or "").split()
+    for i, p in enumerate(palabras):
+        limpia = p.strip(".,;:!?()«»\"'")
+        m = re.fullmatch(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?", limpia)
+        v = float(limpia.replace(".", "").replace(",", ".")) if m else _numero_nl(_norm(limpia))
+        if v is None or (v == 1 and not m):          # «een» casi siempre es el artículo
+            continue
+        siguiente = _norm(palabras[i + 1]) if i + 1 < len(palabras) else ""
+        salida.append(float(v) * {"miljard": 10 ** 9, "miljoen": 10 ** 6, "duizend": 1000}.get(siguiente, 1))
+    return salida
+
+
+def _cifra_que_dice(voz, valor):
+    """La cifra de un contador o de un deslizador tiene que ser la que dice la voz: si la voz dice otra del mismo orden
+    (o la misma con los ceros bailados), manda la voz. Si no está claro, se queda como venía."""
+    dichas = [x for x in _cifras_voz(voz) if x > 0]
+    if not dichas or valor <= 0 or any(abs(x - valor) <= 0.02 * max(x, valor) for x in dichas):
+        return valor
+    for x in sorted(dichas, key=lambda x: abs(x - valor)):
+        if 0.5 <= x / valor <= 2 or any(abs(x / valor - f) < 1e-9 for f in (10, 100, 1000, 0.1, 0.01, 0.001)):
+            return x
+    return valor
+
+
+def _fichas(texto):
+    t = re.sub(r"(\d)\.(?=\d{3}(\D|$))", r"\1", str(texto or "").lower())
+    return [_norm(x) for x in re.findall(r"\d+(?:,\d+)?|[^\W\d_]+", t) if _norm(x)]
+
+
+def _repite(texto, voz):
+    """¿Este rótulo (de dos palabras o más) ya lo dice, tal cual, la frase de arriba? Los jueces lo ven como repetido."""
+    a, b = _fichas(texto), _fichas(voz)
+    return len(a) >= 2 and any(b[i:i + len(a)] == a for i in range(len(b) - len(a) + 1))
+
+
+def _sin_repetir(c, voz):
+    """Quita de un componente los rótulos que repiten la frase de arriba; None si se queda sin nada que enseñar."""
+    for campo in ("sub", "titulo", "label"):
+        if c.get(campo) and _repite(c[campo], voz):
+            c[campo] = ""
+    if c["tipo"] in ("etiqueta", "pildora") and _repite(c.get("texto"), voz):
+        return None
+    if c["tipo"] == "deslizador":
+        c["hasta"] = _cifra_que_dice(voz, c["hasta"])
+        c["max"] = max(c["max"], c["hasta"])
+    return c
 
 
 def _ilustracion(v):
@@ -198,7 +275,7 @@ def _componente(o):
                 "decimales": int(_num(o.get("decimales"), 1, 0, 2)), "color": o.get("color") if o.get("color") in COLORES else "geel"}
     if t == "medidor":
         return {"tipo": t, "label": _texto(o.get("label"), 16).upper(), "valor": _num(o.get("valor"), 0.5, 0, 1),
-                "texto": _texto(o.get("texto"), 18)}
+                "texto": _texto(o.get("texto"), 26)}
     if t == "escala":
         marcas = [{"valor": _num(m.get("valor"), 0), "texto": _texto(m.get("texto"), 14), "sub": _texto(m.get("sub"), 14),
                    "color": m.get("color") if m.get("color") in COLORES + ("wit",) else "wit"}
@@ -237,6 +314,7 @@ def limpiar(g):
         if plano in ("lado", "vs") and not ilu2:
             plano = "grande"
         comps = [c for c in (_componente(o) for o in (e.get("componentes") or [])[:2]) if c]
+        comps = [c for c in (_sin_repetir(c, voz) for c in comps) if c]       # ningún rótulo repite la frase de arriba
         x = {"voz": voz, "clave": claves, "plano": plano, "ilustracion": ilu, "color": e.get("color") if e.get("color") in COLORES else COLORES[i % len(COLORES)],
              "componentes": comps}
         if ilu2:
@@ -252,14 +330,14 @@ def limpiar(g):
             x["golpe"] = {"texto": _texto(e["golpe"].get("texto"), 14), "sub": _texto(e["golpe"].get("sub"), 30)}
         if plano == "numero":
             c = e["contador"]
-            x["contador"] = {"desde": _num(c.get("desde"), 0), "hasta": _num(c.get("hasta"), 0), "decimales": int(_num(c.get("decimales"), 0, 0, 2)),
+            x["contador"] = {"desde": _num(c.get("desde"), 0), "hasta": _cifra_que_dice(voz, _num(c.get("hasta"), 0)), "decimales": int(_num(c.get("decimales"), 0, 0, 2)),
                              "prefijo": _texto(c.get("prefijo"), 4), "sufijo": _texto(c.get("sufijo"), 6), "label": _texto(c.get("label"), 28)}
         if plano == "vs":
             for k in ("izquierda", "derecha", "izquierda_sub", "derecha_sub"):
                 if e.get(k):
                     x[k] = _texto(e[k], 18)
             x["color2"] = e.get("color2") if e.get("color2") in COLORES else ("roze" if x["color"] != "roze" else "blauw")
-        if _texto(e.get("aviso"), 30):
+        if _texto(e.get("aviso"), 30) and not _repite(e.get("aviso"), voz):     # si la frase ya lo dice, no se duplica
             x["aviso"] = _texto(e.get("aviso"), 30)
         escenas.append(x)
     if len(escenas) < 3:
@@ -269,7 +347,7 @@ def limpiar(g):
             e["plano"] = "grande"
     ultima = escenas[-1]
     ultima["plano"] = "final"
-    botones = [str(b).strip()[:18] for b in ((g.get("escenas") or [{}])[-1].get("botones") or []) if str(b).strip()]
+    botones = [_texto(b, 22) for b in ((g.get("escenas") or [{}])[-1].get("botones") or []) if str(b).strip()]
     ultima["botones"] = botones[:2] if len(botones) >= 2 else BOTONES
     ultima["componentes"] = []
     g["escenas"] = escenas
@@ -291,7 +369,8 @@ def referencias(clave):
     return json.dumps(d.get("formula") or {}, ensure_ascii=False)[:4000] or "(sin fórmula todavía)"
 
 
-def guionizar(canal, lecciones):
+def guionizar(canal, lecciones, arreglar=None):
+    from bots.estudio import estudio
     clave = canal["clave"]
     hechos = (privado.leer(os.path.join("estado", "estudio", f"{privado.alias(clave)}.json"), {}) or {}).get("videos", [])
     texto = PLANTILLA.format(nombre=canal.get("nombre", clave), formula=referencias(clave),
@@ -299,9 +378,10 @@ def guionizar(canal, lecciones):
                              hechos="\n".join(f"- {t}" for t in dict.fromkeys([h.get("titulo") for h in hechos[-40:]] +
                                                                                 privado.intentados(clave)) if t) or "- (nada)",
                              sin_miedo=SIN_MIEDO, vocabulario=VOCABULARIO, ejemplo=json.dumps(EJEMPLO, ensure_ascii=False))
+    texto += estudio.bloque_arreglo(arreglar)
     ultimo = None
     for _ in range(3):
-        g = ia.preguntar(texto, papel="guionista", temperatura=0.9)
+        g = ia.preguntar(texto, papel="arreglo" if arreglar else "guionista", temperatura=0.9)
         if isinstance(g, list) and g:
             g = g[0]
         try:

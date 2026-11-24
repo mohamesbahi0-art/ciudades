@@ -186,7 +186,12 @@ def fusionar(ruta, suyo, nuestro):
         for k, o in (nuestro.get("obras") or {}).items():
             if k not in obras or str(o.get("actualizado") or "") >= str(obras[k].get("actualizado") or ""):
                 obras[k] = o
-        return {"obras": obras, "actualizado": max(str(suyo.get("actualizado") or ""), str(nuestro.get("actualizado") or ""))}
+        junto = {"obras": obras,
+                 "actualizado": max(str(suyo.get("actualizado") or ""), str(nuestro.get("actualizado") or ""))}
+        pausas = [x.get("pausa") for x in (suyo, nuestro) if isinstance(x.get("pausa"), dict)]
+        if pausas:                                           # la pausa (o su final), la última que se apuntó
+            junto["pausa"] = max(pausas, key=lambda x: str(x.get("actualizado") or ""))
+        return junto
     if ruta == "estado/cuota.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         if suyo.get("dia") != nuestro.get("dia"):          # el libro de un día nuevo gana entero
             return max(suyo, nuestro, key=lambda c: c.get("dia") or "")

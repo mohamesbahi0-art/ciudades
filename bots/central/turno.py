@@ -15,6 +15,7 @@ Uso:  python bots/central/turno.py --canal terror [--hora 2026-12-01T20:00:00Z] 
 import argparse
 import asyncio
 import datetime as dt
+import inspect
 import json
 import os
 import shutil
@@ -53,6 +54,12 @@ CON_FUENTES = ("noticias", "datos", "versus")
 
 class _Hecho(Exception):
     """El turno ya está terminado (lo ha hecho el estudio de animación)."""
+
+
+def de_fuera(error):
+    """Fallos que no son del código: la IA sin cupo o saturada, o el servicio gratis de dibujos caído."""
+    e = str(error or "")
+    return e.startswith("SinIA") or ("faltan" in e and "dibujos" in e)
 
 
 def _jurado_guion(clave, canal, g, paso, a, reescribir, alegatos=None, veces=2):
@@ -172,56 +179,158 @@ def _canal_hipnotico(canal):
                 musica_estudio=canal.get("musica_estudio") or montador.musica.ambiente_de(canal))
 
 
+ARREGLOS = os.path.join("estado", "arreglos")      # el vídeo de cada cuenta que espera su versión corregida
+NOTA_PARA_ARREGLAR = 72       # desde esta nota, un vídeo suspendido se rehace corrigiendo sus fallos (no se tira)
+VERSIONES = 3                 # el vídeo y hasta 2 versiones corregidas; si ni así llega, tema nuevo
+CADUCA_ARREGLO = 20           # horas que un arreglo pendiente espera su turno
+
+
+def _ruta_arreglo(clave):
+    return os.path.join(ARREGLOS, f"{privado.alias(clave)}.json")
+
+
+def arreglo_pendiente(clave):
+    """El vídeo de esta cuenta que se quedó cerca de la nota en el turno anterior y espera su versión corregida
+    (None si no hay o si ya es viejo). Lo usa también la fábrica al planear: los arreglos van antes que lo nuevo."""
+    d = privado.leer(_ruta_arreglo(clave), {}) or {}
+    if not d.get("guion"):
+        return None
+    try:
+        hecho = dt.datetime.strptime(d.get("fecha", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        return None
+    if (dt.datetime.now(dt.timezone.utc) - hecho).total_seconds() > CADUCA_ARREGLO * 3600:
+        return None
+    return d
+
+
+def _guardar_arreglo(clave, arreglar):
+    """Deja apuntado (o borra, con None) el vídeo que hay que rehacer en el siguiente turno de la cuenta."""
+    if arreglar:
+        privado.escribir(_ruta_arreglo(clave), dict(arreglar, fecha=privado.ahora()))
+    elif os.path.exists(os.path.join(privado.carpeta(), _ruta_arreglo(clave))):
+        privado.escribir(_ruta_arreglo(clave), {"guion": None, "fecha": privado.ahora()})   # ya no hay nada pendiente
+
+
+def _para_arreglar(g, v, version, minimo):
+    """Lo que necesita el guionista para rehacer el mismo vídeo: el guion que se grabó y lo que le vieron los jueces."""
+    veredicto = {k: v.get(k) for k in ("total", "consejo", "fallos_graves", "fiscalia", "defensa", "medidas")}
+    veredicto["votos"] = [{k: x.get(k) for k in ("juez", "nota", "razon")} for x in v.get("votos") or []]
+    return {"guion": estudio_animacion.guion_escrito(g), "veredicto": veredicto, "version": version, "minimo": minimo,
+            "titulo": g.get("titulo"), "jurado": g.get("jurado")}
+
+
 def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, lecciones=None, ajustes=None):
-    """Turno de una cuenta animada: el estudio hace el vídeo, el Juzgado lo juzga (con segunda oportunidad) y va a
-    «Para subir». Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
+    """Turno de una cuenta animada: el estudio hace el vídeo y el Juzgado lo juzga. Si lo suspende por poco, el
+    guionista rehace ESE vídeo corrigiendo uno por uno los fallos que le han visto (hasta VERSIONES versiones); si se
+    queda lejos, se tira y se hace otro distinto. Lo que no da tiempo a arreglar en este turno queda apuntado y es lo
+    primero del siguiente. Devuelve el resumen igual que el turno normal (el «finally» de main lo guarda)."""
     lecciones = lecciones or cuadernos["escritor"].para_el_prompt()
+    ajustes = ajustes or privado.ajustes()
     consejo = ""
     intentos = int(canal.get("intentos_estudio", 3))
+    umbral = int(canal.get("nota_para_arreglar", ajustes.get("nota_para_arreglar", NOTA_PARA_ARREGLAR)))
+    versiones = int(ajustes.get("versiones_por_video", VERSIONES))
+    minimo = tribunal.minima(canal)
     _, formato = estudio_animacion.formato_de(canal)
-    video = None
-    for intento in range(1, intentos + 1):     # si el Juzgado lo suspende, se tira y se hace otro con su consejo
-        paso("escritor", "escribiendo el guion del estudio")
-        g0 = formato.guionizar(canal, lecciones + consejo)
-        g0["cerebro"] = ia.quien().get("motor", "gemini")
-        g0, vale = _jurado_guion(clave, canal, g0, paso, a,
-                                 reescribir=lambda extra: dict(formato.guionizar(canal, lecciones + consejo + extra),
-                                                               cerebro=ia.quien().get("motor", "gemini")))
-        if not vale:
-            paso("subidor", "el jurado popular no se convence con el guion: no se graba (se ahorran voz y dibujos)")
-            resumen.update(titulo=g0.get("titulo"), destino_resultado="suspendido", intento=intento,
-                           motivo="el jurado popular rechazó el guion")
-            consejo = ("\n- (El jurado popular ha rechazado varias versiones de «" + str(g0.get("titulo", "")) +
-                       "»: cambia de tema o de enfoque.)")
-            continue
+    try:                                           # ¿este formato sabe rehacer un vídeo con sus fallos?
+        acepta_arreglo = "arreglar" in inspect.signature(formato.guionizar).parameters
+    except (TypeError, ValueError):
+        acepta_arreglo = False
+    arreglar = None if a.prueba or not acepta_arreglo else arreglo_pendiente(clave)   # lo que quedó del turno anterior
+    if arreglar and int(arreglar.get("version") or 2) > versiones:
+        arreglar = None
+    video, sin_juez = None, False
+    for intento in range(1, intentos + 1):
+        version = int(arreglar.get("version") or 2) if arreglar else 1
+        if arreglar:                               # el mismo vídeo, corregido con lo que han dicho los jueces
+            nota_antes = (arreglar.get("veredicto") or {}).get("total", "-")
+            paso("escritor", f"versión {version} de «{arreglar.get('titulo', '')}» (se quedó en {nota_antes}/100): "
+                 "corrige uno por uno los fallos que le vieron los jueces",
+                 f"versión {version} del vídeo que se quedó en {nota_antes}/100: corrige sus fallos")
+            g0 = formato.guionizar(canal, lecciones, arreglar=arreglar)
+            g0.update(cerebro=ia.quien().get("motor", "gemini"), version=version, arreglo_de=arreglar.get("titulo"))
+            if arreglar.get("jurado"):             # el Jurado ya votó ese guion: no se reúne otra vez por un arreglo
+                g0["jurado"] = arreglar["jurado"]
+        else:
+            paso("escritor", "escribiendo el guion del estudio")
+            g0 = formato.guionizar(canal, lecciones + consejo)
+            g0["cerebro"] = ia.quien().get("motor", "gemini")
+            g0, vale = _jurado_guion(clave, canal, g0, paso, a,
+                                     reescribir=lambda extra: dict(formato.guionizar(canal, lecciones + consejo + extra),
+                                                                   cerebro=ia.quien().get("motor", "gemini")))
+            if not vale:
+                paso("subidor", "el jurado popular no se convence con el guion: no se graba (se ahorran voz y dibujos)")
+                resumen.update(titulo=g0.get("titulo"), destino_resultado="suspendido", intento=intento,
+                               motivo="el jurado popular rechazó el guion")
+                consejo = ("\n- (El jurado popular ha rechazado varias versiones de «" + str(g0.get("titulo", "")) +
+                           "»: cambia de tema o de enfoque.)")
+                continue
         video, g = estudio_animacion.hacer(canal, lecciones + consejo,
                                            carpeta=os.path.join(trabajo, f"estudio{intento}"),
                                            avisar=lambda t: paso("montador", t), guion=g0)
+        for campo in ("version", "arreglo_de"):
+            if g0.get(campo) is not None:
+                g[campo] = g0[campo]
         g["narracion"] = " ".join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
         g["texto_pantalla"] = g["escenas"][0].get("texto", "")
         id_guion = cuadernos["escritor"].apuntar("guion", {"canal": clave, "titulo": g.get("titulo"),
-                                                           "formato": g.get("formato"), "prueba": a.prueba})
+                                                           "formato": g.get("formato"), "prueba": a.prueba,
+                                                           "version": version})
         segundos = montador.duracion(video)
         cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1),
                                                   "estudio": g.get("formato")})
         audio = os.path.join(trabajo, f"estudio{intento}", "voz.mp3")
         v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                             os.path.join(trabajo, f"juicio{intento}"), audio=audio if os.path.exists(audio) else None)
+        if v.get("veredicto") == "sin_juicio" and not a.prueba:
+            # no hay juez ahora (ni la IA gratis ni la de pago): nada sale sin juicio y no cuenta como suspenso
+            paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; la cuenta espera")
+            sin_juez = True
+            break
         v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
+        v["version"] = version                  # y «versión corregida» cuando es el mismo vídeo arreglado
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
                                                                  "veredicto": v["veredicto"], "total": v.get("total")})
+        cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juzgado", v.get("consejo", ""))
         paso("juez_guardia", f"{v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
              f"{v['veredicto']} ({v.get('total', '-')}/100)")
         resumen.update(titulo=g.get("titulo"), veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
                        juicio=id_juicio, juicio_app=id_tribunal, segundos=round(segundos, 1), intento=intento,
-                       formato=g.get("formato"))
+                       formato=g.get("formato"), version=version)
         if v["veredicto"] == "aprobado" or a.prueba:
+            arreglar = None
             break
-        consejo = (f"\n- (El Juzgado ha suspendido el intento anterior, «{g.get('titulo', '')}»: {v.get('consejo', '')}. "
-                   "Haz otro vídeo distinto que no tenga ese fallo.)")
+        nota = v.get("total")
+        anterior = ((arreglar or {}).get("veredicto") or {}).get("total")
+        if acepta_arreglo and isinstance(nota, (int, float)) and nota >= umbral and version < versiones:
+            if arreglar and isinstance(anterior, (int, float)) and nota < anterior:
+                # el arreglo ha salido peor: se vuelve a partir de la versión buena, sabiendo qué no repetir
+                arreglar = dict(arreglar, version=version + 1,
+                                no_repetir=(arreglar.get("no_repetir") or []) + [str(v.get("consejo") or "")[:300]])
+            else:
+                arreglar = _para_arreglar(g, v, version + 1, minimo)
+            if intento < intentos:
+                paso("juez_guardia", f"se queda en {nota}/100: no se tira, se rehace corrigiendo lo que han visto los "
+                     f"jueces (versión {version + 1})")
+            continue
+        arreglar = None
+        consejo = (f"\n- (El Juzgado ha suspendido el intento anterior, «{g.get('titulo', '')}», con "
+                   f"{v.get('total', '-')}/100: {v.get('consejo', '')} "
+                   + " ".join(f"{x.get('juez')}: {str(x.get('razon'))[:200]}" for x in (v.get("votos") or [])[:3])
+                   + " Haz otro vídeo distinto que no tenga esos fallos.)")
         if intento < intentos:
-            paso("juez_guardia", "suspendido: se tira y se hace otro con el consejo del Juzgado")
+            paso("juez_guardia", "suspendido y lejos de la nota: se tira y se hace otro distinto con lo aprendido")
+    if not a.prueba and acepta_arreglo:        # lo que quede por arreglar es lo primero del siguiente turno de la cuenta
+        try:
+            _guardar_arreglo(clave, arreglar)
+            if arreglar:
+                resumen["arreglo_pendiente"] = {"version": arreglar.get("version"), "titulo": arreglar.get("titulo")}
+        except Exception as e:
+            paso("escritor", f"no he podido apuntar el arreglo pendiente ({type(e).__name__})")
+    if sin_juez:
+        raise ia.SinIA("no hay juez ahora: el vídeo se queda sin juzgar y la cuenta espera a la siguiente ronda")
     if video is None:          # el jurado popular rechazó todos los guiones: no se ha grabado nada
         paso("subidor", "el jurado popular rechazó todos los guiones: hoy no se graba nada (se ahorran voz y dibujos)")
         resumen.update(destino_resultado="suspendido", resultado="hecho")
@@ -233,10 +342,14 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         if os.environ.get("ALMACEN_PRUEBAS"):
             resumen["video_prueba"] = parasubir.almacen.guardar("pruebas", video, f"{os.path.basename(trabajo)}.mp4")
     elif v["veredicto"] != "aprobado":
-        paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): se tira, no se sube")
+        if arreglar:
+            paso("subidor", f"se queda en {v.get('total', '-')}/100: su versión corregida es lo primero del siguiente "
+                 "turno")
+        else:
+            paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): se tira, no se sube")
         resumen["destino_resultado"] = "suspendido"
     elif canal.get("destino") != "parasubir":        # un canal de YouTube con un formato del estudio (p. ej. hipnótico)
-        _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes or privado.ajustes(), paso, a, resumen)
+        _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
         estudio_animacion.apuntar(clave, g)
     else:
         ids = parasubir.dejar(clave, canal, video, g, segundos, v)
@@ -462,7 +575,8 @@ def main(argv=None):
 
     en_curso = {"robot": "escritor"}
 
-    id_obra = f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')}-{privado.alias(clave)}".replace(".", "-")
+    id_obra = ((None if a.prueba else obras.retomar(clave)) or     # sigue en la ficha que se quedó esperando
+               f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')}-{privado.alias(clave)}".replace(".", "-"))
 
     def paso(robot, texto, publico=None):
         if robot in cuadernos:
@@ -470,9 +584,10 @@ def main(argv=None):
         hora = dt.datetime.now(dt.timezone.utc).strftime('%H:%M:%S')
         registro.append(f"[{hora}] {robot}: {texto}")
         print(privado.limpiar(f"[{hora}] {clave} · {robot}: {publico if publico is not None else texto}"), flush=True)
-        if not a.prueba:                       # «Ahora en la fábrica» (la app): qué robot lo tiene y qué hace
-            obras.apuntar(id_obra, clave, robot=robot, detalle=publico if publico is not None else texto,
-                          titulo=resumen.get("titulo"))
+        if not a.prueba and robot != "turno":  # «Ahora en la fábrica» (la app): qué robot lo tiene y qué hace
+            obras.apuntar(id_obra, clave, robot=nombres.get(robot, robot),
+                          paso=obras.PASOS.get(nombres.get(robot, robot)) or obras.PASOS.get(robot),
+                          detalle=publico if publico is not None else texto, titulo=resumen.get("titulo"))
 
     resumen = {"canal": clave, "nombre": canal["nombre"], "destino": canal["destino"], "prueba": a.prueba,
                "empezado": privado.ahora()}
@@ -582,9 +697,11 @@ def main(argv=None):
                            juicio_idea=id_idea)
             if v["veredicto"] == "aprobado" or a.prueba or not ajustes.get("segunda_oportunidad", True):
                 break
-            aviso_juez = (f"\n- (Juez de guardia, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
+            aviso_juez = (f"\n- (Juzgado, sobre la versión anterior, suspendida con {v.get('total', '-')}/100) "
                           f"{v.get('consejo', '')} Fallos: {', '.join(v.get('fallos_graves') or []) or 'ninguno grave'}. "
-                          "Escribe un guion distinto que lo corrija.")
+                          + " ".join(f"{x.get('juez')} ({x.get('nota')}): {str(x.get('razon'))[:220]}"
+                                     for x in (v.get("votos") or [])[:3])
+                          + " Escribe un guion que corrija justo eso.)")
 
         g = _coliseo(clave, canal, g, v, paso, a, resumen)
         _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
@@ -593,7 +710,10 @@ def main(argv=None):
         pass
     except Exception as e:  # el turno nunca se queda a medias sin contarlo
         resumen.update(resultado="error", error=f"{type(e).__name__}: {e}", robot=nombres[en_curso["robot"]])
-        cuadernos[en_curso["robot"]].apuntar("error", {"canal": clave, "error": f"{type(e).__name__}: {str(e)[:300]}"})
+        if de_fuera(resumen["error"]):         # la IA sin cupo o el servicio de dibujos caído: el robot espera, no falla
+            cuadernos[en_curso["robot"]].apuntar("espera_ia", {"canal": clave, "motivo": str(e)[:200]})
+        else:
+            cuadernos[en_curso["robot"]].apuntar("error", {"canal": clave, "error": f"{type(e).__name__}: {str(e)[:300]}"})
         paso("turno", f"ERROR {type(e).__name__}: {e}", f"ERROR {type(e).__name__}")
         detalle = traceback.format_exc()
         with open(os.path.join(trabajo, "fallo.txt"), "w", encoding="utf-8") as f:
@@ -604,15 +724,30 @@ def main(argv=None):
         resumen["terminado"] = privado.ahora()
         if not a.prueba:                       # «Ahora en la fábrica»: cómo ha acabado
             fin = resumen.get("destino_resultado") or resumen.get("resultado")
-            obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"),
-                          estado="atasco" if resumen.get("resultado") == "error" else
-                          "descartado" if fin == "suspendido" else "terminado",
-                          paso={"para_subir": "para_subir", "subido": "subido", "programado": "programado",
-                                "cola": "programado", "suspendido": "juzgado"}.get(fin, "sale"),
-                          robot="juez_guardia" if fin == "suspendido" else None,
-                          detalle=("se ha atascado: lo mira la Policía" if resumen.get("resultado") == "error" else
-                                   f"no llega a la nota ({resumen.get('nota', '-')}/100): se tira" if fin == "suspendido"
-                                   else "terminado"))
+            if resumen.get("resultado") == "error":
+                # se queda en el paso donde se paró (no en «sale»): esperando si es cosa de fuera (la IA sin cupo o el
+                # servicio de dibujos caído), atasco si es una avería que tienen que mirar los Mecánicos
+                robot = nombres[en_curso["robot"]]
+                fuera = de_fuera(resumen.get("error"))
+                obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"), robot=robot,
+                              paso=obras.PASOS.get(robot) or obras.PASOS.get(en_curso["robot"], "guion"),
+                              estado="esperando" if fuera else "atasco",
+                              detalle=(("la IA no contesta ahora" if str(resumen.get("error")).startswith("SinIA")
+                                        else "el servicio gratis de dibujos no contesta ahora")
+                                       + ": lo vuelve a intentar en la siguiente ronda") if fuera else
+                              "se ha atascado aquí: lo miran los Mecánicos")
+            else:
+                pendiente = resumen.get("arreglo_pendiente")
+                obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"),
+                              estado="descartado" if fin == "suspendido" else "terminado",
+                              paso={"para_subir": "para_subir", "subido": "subido", "programado": "programado",
+                                    "cola": "programado", "suspendido": "juzgado"}.get(fin, "sale"),
+                              robot="juez_guardia" if fin == "suspendido" else None,
+                              detalle=(f"se queda en {resumen.get('nota', '-')}/100: su versión corregida "
+                                       f"(la {pendiente.get('version')}) es lo primero del siguiente turno"
+                                       if fin == "suspendido" and pendiente else
+                                       f"no llega a la nota ({resumen.get('nota', '-')}/100): se tira"
+                                       if fin == "suspendido" else "terminado"))
         with open(os.path.join(trabajo, "registro.txt"), "w", encoding="utf-8") as f:
             f.write("\n".join(registro) + "\n")
         json.dump(resumen, open(os.path.join(trabajo, "resumen.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)

@@ -18,7 +18,7 @@ from bots.comun import privado  # noqa: E402
 
 # Cada cuántas horas debería pasar cada turno con horario (si no, algo va mal)
 ESPERADO = {"fabrica.yml": 2, "revisar-canales.yml": 3, "ojeador.yml": 3, "radar.yml": 24, "estudio.yml": 24,
-            "derechos.yml": 24,
+            "derechos.yml": 24, "mecanicos.yml": 2, "recolector.yml": 24,
             "buscar-clips.yml": 168, "latido.yml": 168}
 
 
@@ -52,7 +52,13 @@ def main():
         t = turnos.get(nombre)
         hechas = [u for u in (t or {}).get("ultimas", []) if u["estado"] == "completed"]
         if not t or not hechas:
-            problemas.append(f"{nombre}: todavía no ha pasado ninguna vez")
+            try:                # un turno recién creado no es un problema hasta que le toque su primera vez
+                creado = dt.datetime.fromisoformat(api(f"/actions/workflows/{nombre}")["created_at"].replace("Z", "+00:00"))
+                nuevo = (ahora - creado).total_seconds() < (horas + 6) * 3600
+            except Exception:
+                nuevo = False
+            if not nuevo and not (t and t["ultimas"]):          # ni ha pasado ni está pasando ahora
+                problemas.append(f"{nombre}: todavía no ha pasado ninguna vez")
             continue
         ultima = dt.datetime.fromisoformat(t["ultimas"][0]["empezo"].replace("Z", "+00:00"))
         if (ahora - ultima).total_seconds() > (horas * 2 + 0.5) * 3600:
@@ -66,7 +72,9 @@ def main():
     # ¿Hay más trabajo que manos? Si en 4 de las 6 últimas rondas se quedan canales sin turno, hace falta más fábrica
     # (más vídeos por ronda o turnos a la vez). Si no pasa, duplicar robots solo gastaría antes la IA gratis.
     rondas = ((privado.leer(os.path.join("estado", "fabrica.json"), {}) or {}).get("rondas") or [])[-6:]
-    apretadas = [r for r in rondas if r.get("sin_sitio")]
+    # (una ronda que se quedó corta porque la IA no contestaba no cuenta: ahí no faltan manos, falta IA)
+    apretadas = [r for r in rondas if r.get("sin_sitio")
+                 and not any(str(t.get("error") or "").startswith("SinIA") for t in r.get("turnos") or [])]
     if len(rondas) >= 6 and len(apretadas) >= 4:
         faltan = sorted({privado.alias(k) for r in apretadas for k in r["sin_sitio"]})
         problemas.append(f"fabrica.yml: hay más trabajo que manos ({len(apretadas)} de las 6 últimas rondas dejan sin "

@@ -286,7 +286,7 @@ def limpiar(g):
     return g
 
 
-def guionizar(canal, lecciones):
+def guionizar(canal, lecciones, arreglar=None):
     from bots.estudio import estudio
     clave = canal["clave"]
     ref = privado.leer(os.path.join("estado", "referencias", f"{privado.alias(clave)}-nuevo.json"), {}) or {}
@@ -301,9 +301,10 @@ def guionizar(canal, lecciones):
                                                            privado.intentados(clave)) if t) or "- (nada)",
         exitos=privado.exitos(clave) or "- (todavía sin datos)", sin_miedo=estudio.SIN_MIEDO,
         vocabulario=VOCABULARIO, ejemplo=json.dumps(EJEMPLO, ensure_ascii=False))
+    texto += estudio.bloque_arreglo(arreglar)
     ultimo = None
     for _ in range(3):
-        g = ia.preguntar(texto, papel="guionista", temperatura=0.95)
+        g = ia.preguntar(texto, papel="arreglo" if arreglar else "guionista", temperatura=0.95)
         if isinstance(g, list) and g:
             g = g[0]
         try:

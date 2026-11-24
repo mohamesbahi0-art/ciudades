@@ -640,6 +640,18 @@
    "tipo": "bot"
   },
   {
+   "id": "contador_redes",
+   "nombre": "Contador de redes",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Cada 3 horas saca los números para los gráficos de la app: las visitas de hoy y de la semana de cada canal de YouTube y las cifras públicas de las cuentas de TikTok e Instagram (seguidores, «me gusta», publicaciones y visitas por vídeo), leídas sin cuenta. Si una red dice que no, la deja en paz unas horas.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
    "id": "entrenador",
    "nombre": "Entrenador",
    "ciudad": "influencers",

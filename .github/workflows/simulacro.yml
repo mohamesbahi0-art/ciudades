@@ -62,3 +62,5 @@ jobs:
         run: python pruebas/simulacro_bolas.py
       - name: Taller de los Mecánicos (arrancar, repetir, descansar, limpiar y dejar el parte)
         run: python pruebas/simulacro_mecanicos.py
+      - name: Arreglos (un vídeo suspendido por poco se rehace con sus fallos; sin juez, espera; la pausa de la app)
+        run: python pruebas/simulacro_arreglos.py

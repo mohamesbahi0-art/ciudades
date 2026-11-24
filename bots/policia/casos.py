@@ -57,6 +57,11 @@ def problemas():
             continue
         canal = d.get("canal") or ultimo.get("canal") or os.path.basename(ruta)[:-5]
         tipo = str(ultimo.get("error") or "error").split(":")[0].strip()[:40]
+        error = str(ultimo.get("error") or "")
+        if tipo == "SinIA" or ("faltan" in error and "dibujos" in error):
+            # esperar a la IA o al servicio gratis de dibujos no es una avería del canal ni de su robot: la fábrica lo
+            # reintenta sola (la app enseña la pausa) y de los dibujos caídos se ocupan los Mecánicos
+            continue
         vistos[f"turno:{canal}:{tipo}"] = {
             "robot": ultimo.get("robot") or "fabrica", "canal": canal,
             "problema": f"{d.get('nombre') or nombres.get(canal) or canal}: {TIPOS.get(tipo, 'el turno falló.')}",

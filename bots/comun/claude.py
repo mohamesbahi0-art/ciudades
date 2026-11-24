@@ -41,7 +41,8 @@ DEFECTO = {
     "dia_max_usd": 6.0,                  # nunca más de esto en un día, aunque sobre
     # trabajos que piensa Claude primero, con su esfuerzo (low, medium, high, xhigh, max)
     # «titulos» son los gladiadores del Coliseo (título, texto y hashtags): con el modelo pequeño cuestan céntimos
-    "papeles": {"guionista": "high", "ideas": "medium", "titulos": "low"},
+    # «arreglo» es la versión corregida de un vídeo que el Juzgado suspendió por poco (el mismo guion, con sus fallos)
+    "papeles": {"guionista": "high", "ideas": "medium", "titulos": "low", "arreglo": "medium"},
     # trabajos que piensa Gemini (gratis; el juez, además, es así de otro «jurado» y oye la voz) y Claude si Gemini no puede
     "reserva": {"juez": "medium", "jurado": "low"},
     # modelo de cada papel si no es el de siempre: el Jurado popular y el Coliseo van con el pequeño (40 veces más barato)
@@ -49,6 +50,10 @@ DEFECTO = {
     # reparto por horas: a cada hora del día (UTC) solo se puede llevar gastada su parte (más este adelanto), para que la
     # fábrica tenga IA las 24 horas en vez de gastarlo todo de madrugada
     "ritmo": True, "adelanto": 0.12,
+    # adelanto propio de algún papel: arreglar un vídeo que casi aprueba es lo que más rinde, así que va por delante
+    "adelantos": {"arreglo": 0.30, "juez": 0.20},
+    # dólares de más para un día concreto ({"2026-11-24": 1.5}), para una prueba; salen del mismo mes, no cuestan aparte
+    "extra_usd": {},
 }
 ESTADO = os.path.join("estado", "claude.json")
 DIAS_DETALLE = 40                        # días que se guarda cada llamada (después, solo el total del día)
@@ -74,7 +79,7 @@ def ajustes():
     propios = (privado.ajustes() or {}).get("claude") or {}
     if isinstance(propios, dict):
         a.update(propios)
-        for k in ("papeles", "reserva", "modelos"):      # lo de la configuración se suma a lo de siempre, no lo borra
+        for k in ("papeles", "reserva", "modelos", "adelantos"):   # lo de la configuración se suma, no borra
             a[k] = dict(DEFECTO[k], **(propios.get(k) or {}))
     return a
 
@@ -152,16 +157,51 @@ def presupuesto(e=None, a=None):
         tope_hoy = mes / 30
         quedan = None
     tope_hoy = max(0.0, min(tope_hoy, float(a.get("dia_max_usd") or DEFECTO["dia_max_usd"])))
-    tope_ahora = tope_hoy
-    if a.get("ritmo", True):                 # la parte del día que ya ha pasado (por horas), más un adelanto
-        hora = dt.datetime.now(dt.timezone.utc).hour
-        tope_ahora = tope_hoy * min(1.0, (hora + 1) / 24 + float(a.get("adelanto", 0.12)))
+    try:                                     # un extra para hoy (una prueba): sale del mismo mes, nunca de fuera
+        tope_hoy += max(0.0, float((a.get("extra_usd") or {}).get(hoy.isoformat()) or 0))
+    except (TypeError, ValueError, AttributeError):
+        pass
+    tope_ahora = _tope_ahora(tope_hoy, a)
     return {"hoy_usd": round(gastado_hoy, 4), "tope_hoy_usd": round(tope_hoy, 4), "tope_ahora_usd": round(tope_ahora, 4),
             "mes_usd": round(en_el_mes, 4), "tope_mes_usd": mes, "dias_para_creditos_nuevos": quedan}
 
 
-def puede(papel):
-    """¿Puede pensar Claude este trabajo ahora? Hace falta llave, el papel encendido y presupuesto de hoy."""
+def _tope_ahora(tope_hoy, a, papel=None, hora=None):
+    """Lo que se puede llevar gastado a esta hora (UTC): la parte del día que ya ha pasado, más el adelanto del papel."""
+    if not a.get("ritmo", True):
+        return tope_hoy
+    hora = dt.datetime.now(dt.timezone.utc).hour if hora is None else hora
+    adelanto = (a.get("adelantos") or {}).get(papel, a.get("adelanto", 0.12))
+    try:
+        adelanto = float(adelanto)
+    except (TypeError, ValueError):
+        adelanto = 0.12
+    return tope_hoy * min(1.0, (hora + 1) / 24 + adelanto)
+
+
+def cuando_puede(papel="guionista"):
+    """Si ahora no hay presupuesto para ese papel, cuándo vuelve a haberlo (UTC, ISO): la hora en que el reparto del día
+    le alcanza o, si hoy ya se ha gastado la parte entera, las 00:00 de mañana. None si no depende del reloj."""
+    try:
+        a, e = ajustes(), _estado()
+        p = presupuesto(e, a)
+    except Exception:
+        return None
+    if p["mes_usd"] + MARGEN > p["tope_mes_usd"]:
+        return None
+    ahora = dt.datetime.now(dt.timezone.utc)
+    for hora in range(ahora.hour, 24):
+        if p["hoy_usd"] + MARGEN <= _tope_ahora(p["tope_hoy_usd"], a, papel, hora):
+            cuando = ahora.replace(hour=hora, minute=0, second=0, microsecond=0)
+            return max(cuando, ahora.replace(microsecond=0)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    manana = (ahora + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return manana.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def puede(papel, a_su_hora=False):
+    """¿Puede pensar Claude este trabajo ahora? Hace falta llave, el papel encendido y presupuesto de hoy.
+    a_su_hora=True aplica el reparto por horas también a los papeles de reserva (el juez): la fábrica lo pregunta así
+    ANTES de empezar un vídeo, para no empezar más de los que el día puede juzgar; el vídeo ya hecho se juzga siempre."""
     if APAGADO or not papel or not os.environ.get("ANTHROPIC_API_KEY"):
         return False
     try:
@@ -182,8 +222,8 @@ def puede(papel):
     p = presupuesto(e, a)
     # El reparto por horas frena solo lo que Claude piensa primero y cuesta (guiones e ideas). Los jueces de reserva
     # no esperan a su hora (un vídeo ya hecho no se queda sin juicio) y el modelo pequeño cuesta céntimos.
-    con_ritmo = primero(papel, a) and not modelo_de(papel, a).startswith("claude-haiku")
-    tope = p.get("tope_ahora_usd", p["tope_hoy_usd"]) if con_ritmo else p["tope_hoy_usd"]
+    con_ritmo = (primero(papel, a) or a_su_hora) and not modelo_de(papel, a).startswith("claude-haiku")
+    tope = _tope_ahora(p["tope_hoy_usd"], a, papel) if con_ritmo else p["tope_hoy_usd"]
     return p["hoy_usd"] + MARGEN <= tope and p["mes_usd"] + MARGEN <= p["tope_mes_usd"]
 
 

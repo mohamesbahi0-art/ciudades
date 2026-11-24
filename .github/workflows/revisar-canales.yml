@@ -76,6 +76,12 @@ jobs:
           MEMORIA_DIR: privado/memoria
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python bots/influencers/analista.py
+      - name: El Contador de redes saca los números para los gráficos de la app
+        if: always()
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+        run: python bots/influencers/contador.py
       - name: Guardar en el repositorio privado
         if: always()
         env:

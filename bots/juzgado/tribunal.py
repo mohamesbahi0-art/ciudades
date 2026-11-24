@@ -121,7 +121,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
                    check=True, capture_output=True)
     with open(os.path.join(carpeta, "datos.json"), encoding="utf-8") as f:
         datos = json.load(f)
-    medidas = juez_guardia.medidas_para(datos, canal)
+    medidas = juez_guardia.medidas_para(datos, canal, guion)
     fallos = []
     negras = [n for n in datos.get("pantallas_negras") or [] if n.get("hasta", 0) - n.get("desde", 0) >= 0.8]
     if negras:                       # un fundido corto no cuenta: solo pantallas negras de casi un segundo o más
@@ -212,7 +212,9 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "sentencia": "sube" if v["veredicto"] == "aprobado" else "no_sube", "juez": v["juez_mayor"],
         "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"), "resumen": resumen, "consejo": v.get("consejo"),
         "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
-        "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro"), "jurado": v.get("jurado")})
+        "version": v.get("version", 1), "arreglo_de": guion.get("arreglo_de"),
+        "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro"), "guionista": guion.get("cerebro"),
+        "jurado": v.get("jurado")})
     for robot, que in (("detectives", "pruebas"), ("abogados", "alegatos"), ("jueces_sala", "votos"),
                        ("juez_mayor", "sentencia")):
         c = privado.cuaderno(robot)

@@ -1,11 +1,13 @@
-# La fábrica: cada hora (24/7), en los servidores de GitHub, sin Claude y sin ningún ordenador encendido.
+# La fábrica: cada media hora (24/7), en los servidores de GitHub, sin Claude y sin ningún ordenador encendido.
+# (Lo pidió el dueño: que un vídeo suspendido se rehaga enseguida. Si no hay nada que hacer o no queda IA para esa
+# hora, la ronda termina en un par de minutos.)
 # Sube lo que esperaba en la cola, decide qué canales y barrios necesitan vídeo, los hace, los juzga y los programa en
 # YouTube (o los deja en «Para subir» si son de TikTok/Instagram). Todo lo que pasa queda en el repositorio privado.
 # También arranca cuando Claude deja peticiones/fabrica.json ({"solo": "gta", "maximo": 1}) o a mano desde Actions.
 name: Fábrica
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17,47 * * * *"
   push:
     paths:
       - "peticiones/fabrica.json"
