@@ -27,7 +27,7 @@ Las claves y los permisos van en los secretos de GitHub. Los datos privados (la 
 - `bots/coliseo/coliseo.py`: el Coliseo (sexta ciudad). Cada vídeo que el Juzgado aprueba con 90 o más entra en un torneo de 8 gladiadores (cartas distintas) que pelean por su salida (título, texto y hashtags), con combates por parejas y un juez ciego; la campeona es la que se publica. Tope diario en `config/fabrica.json` → `coliseo`. Si algo falla, el vídeo sale con su salida de siempre.
 - `ciudades.json`: la lista pública de ciudades y bots, sin datos de canales.
 - `.github/workflows/`: los turnos que corren solos en GitHub, aunque Claude y el ordenador estén apagados:
-  - `fabrica.yml`: cada 2 horas (minuto 17); también con `peticiones/fabrica.json` (`{"solo": "gta", "maximo": 1}`).
+  - `fabrica.yml`: cada hora, 24/7 (minuto 17; una ronda espera a que acabe la anterior); también con `peticiones/fabrica.json` (`{"solo": "gta", "maximo": 1}`).
   - `revisar-canales.yml`: cada 3 horas (minuto 37): Jefes de canal y Analista.
   - `derechos.yml`: cada día (10:29 UTC): Derechos Sociales (Doctora, Equipo de mejora, Defensora, Guía, Psicóloga y Jefe) cuidan de los robots; `estudio.yml` (cada día) lleva también al Entrenador.
   - `ojeador.yml`: cada 3 horas (minuto 7): el Ojeador de redes mira TikTok e Instagram sin cuenta (si una red dice que no, la deja en paz unas horas; nunca se salta un bloqueo).
