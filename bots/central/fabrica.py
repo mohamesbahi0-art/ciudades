@@ -184,14 +184,15 @@ def mejor_nota(clave, cuantos=6):
     return max(notas[-cuantos:]) if notas else None
 
 
-def hay_ia():
+def hay_ia(arreglo=False):
     """¿Hay con qué hacer un vídeo ahora? Hace falta quien escriba (Claude con presupuesto para esta hora, o Gemini
     contestando) Y quien juzgue (Claude de reserva, o un modelo de Gemini de los que ven imágenes): sin juez, el vídeo
-    se haría para nada, porque nada sale sin juicio. Devuelve (sí o no, a quién le falta)."""
+    se haría para nada, porque nada sale sin juicio. `arreglo`: el turno empieza por la versión corregida de un vídeo
+    (tiene su propio presupuesto, por delante del de los guiones nuevos). Devuelve (sí o no, a quién le falta)."""
     from bots.comun import claude, gemini
     escribe = juzga = False
     try:
-        escribe = claude.puede("guionista") or claude.puede("arreglo")
+        escribe = claude.puede("guionista") or (arreglo and claude.puede("arreglo"))
     except Exception:
         pass
     if not escribe:
@@ -370,7 +371,11 @@ def main():
             print("se acaba el tiempo de la ronda: lo que falta, en la siguiente", flush=True)
             ronda["sin_sitio"] += [k for k, _ in plan[:maximo] if k not in {t["canal"] for t in ronda["turnos"]}]
             break
-        con_ia, falta = (True, "") if a.prueba else hay_ia()
+        try:
+            con_arreglo = bool(turno.arreglo_pendiente(clave))
+        except Exception:
+            con_arreglo = False
+        con_ia, falta = (True, "") if a.prueba else hay_ia(arreglo=con_arreglo)
         if not con_ia:               # sin IA no se empieza un turno (no se gastan voz, dibujos ni intentos)
             hechos = {t["canal"] for t in ronda["turnos"]}
             for k, _ in plan[:maximo]:
