@@ -608,7 +608,8 @@ def main(argv=None):
                           estado="atasco" if resumen.get("resultado") == "error" else
                           "descartado" if fin == "suspendido" else "terminado",
                           paso={"para_subir": "para_subir", "subido": "subido", "programado": "programado",
-                                "cola": "programado"}.get(fin, "sale" if fin != "suspendido" else None),
+                                "cola": "programado", "suspendido": "juzgado"}.get(fin, "sale"),
+                          robot="juez_guardia" if fin == "suspendido" else None,
                           detalle=("se ha atascado: lo mira la Policía" if resumen.get("resultado") == "error" else
                                    f"no llega a la nota ({resumen.get('nota', '-')}/100): se tira" if fin == "suspendido"
                                    else "terminado"))
