@@ -947,7 +947,7 @@
    "tipo": "bot",
    "id": "elite_espia",
    "nombre": "El Espía",
-   "hace": "Cada 2 horas lo mira todo desde arriba: lee los partes de la Policía, los Mecánicos y Derechos Sociales y saca los fallos que se repiten y de qué robot es la culpa."
+   "hace": "Cada hora junta el parte general de todas las ciudades (lee a la Policía, los Mecánicos, Derechos Sociales, el Juzgado, el Cine y la fábrica): cómo va cada cuenta, la IA, los casos abiertos y la salud de los robots. Saca los fallos que se repiten y de qué robot es la culpa."
   },
   {
    "ciudad": "elite",
@@ -959,7 +959,7 @@
    "tipo": "bot",
    "id": "elite_estratega",
    "nombre": "La Estratega",
-   "hace": "Cada 2 horas repasa la calidad de cada cuenta: las notas del Juzgado, dónde se va el público del Cine y lo que el dueño descarta. Señala los formatos que no llegan."
+   "hace": "Cada hora repasa la calidad y los resultados de cada cuenta: las notas del Juzgado, qué cerebro escribió cada guion, dónde se va el público del Cine, si los arreglos suben la nota y lo que el dueño descarta. Señala lo que no llega y por qué."
   },
   {
    "ciudad": "elite",
@@ -971,7 +971,7 @@
    "tipo": "bot",
    "id": "elite_arquitecto",
    "nombre": "El Arquitecto",
-   "hace": "Decide y ejecuta lo gordo: enseña una lección nueva al robot culpable, manda a reforma a la cuenta que gasta IA sin acercarse a la nota y deja a Claude la obra cuando hay que cambiar un robot o construir un sistema nuevo. Todo con su porqué, sus pruebas y cómo deshacerlo."
+   "hace": "El que manda. Con el cerebro más listo y sus skills decide y ejecuta: enseña una lección al robot culpable, mueve una palanca de una cuenta o de la fábrica entera (dentro de una lista cerrada), manda una cuenta a reforma o encarga a Claude un robot o un sistema nuevo. Mide cada cambio, deshace el que empeora y lo apunta en su cuaderno: aprende cada hora."
   }
  ]
 }

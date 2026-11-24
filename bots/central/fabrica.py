@@ -206,7 +206,7 @@ def mejor_nota(clave, cuantos=6):
     return max(notas[-cuantos:]) if notas else None
 
 
-def hay_ia(arreglo=False):
+def hay_ia(arreglo=False, solo_claude=False):
     """¿Hay con qué hacer un vídeo ahora? Hace falta quien escriba (Claude con presupuesto para esta hora, o Gemini
     contestando) Y quien juzgue (Claude de reserva, o un modelo de Gemini de los que ven imágenes): sin juez, el vídeo
     se haría para nada, porque nada sale sin juicio. `arreglo`: el turno empieza por la versión corregida de un vídeo
@@ -217,6 +217,8 @@ def hay_ia(arreglo=False):
         escribe = claude.puede("guionista") or (arreglo and claude.puede("arreglo"))
     except Exception:
         pass
+    if not escribe and solo_claude:          # esta cuenta solo la escribe Claude: sin su presupuesto, espera
+        return False, "escritor"
     if not escribe:
         try:
             gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, ligero_primero=True,
@@ -397,7 +399,11 @@ def main():
             con_arreglo = bool(turno.arreglo_pendiente(clave))
         except Exception:
             con_arreglo = False
-        con_ia, falta = (True, "") if a.prueba else hay_ia(arreglo=con_arreglo)
+        try:
+            solo_claude = privado.canal(clave).get("guionista") == "claude"
+        except BaseException:
+            solo_claude = False
+        con_ia, falta = (True, "") if a.prueba else hay_ia(arreglo=con_arreglo, solo_claude=solo_claude)
         if not con_ia:               # sin IA no se empieza un turno (no se gastan voz, dibujos ni intentos)
             hechos = {t["canal"] for t in ronda["turnos"]}
             for k, _ in plan[:maximo]:

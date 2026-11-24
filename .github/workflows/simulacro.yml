@@ -64,3 +64,5 @@ jobs:
         run: python pruebas/simulacro_mecanicos.py
       - name: Arreglos (un vídeo suspendido por poco se rehace con sus fallos; sin juez, espera; la pausa de la app)
         run: python pruebas/simulacro_arreglos.py
+      - name: La Élite (parte general, palancas con límites, reforma, obra, deshacer lo que empeora y respeto al dueño)
+        run: python pruebas/simulacro_elite.py

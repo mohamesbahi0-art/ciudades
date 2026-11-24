@@ -40,11 +40,32 @@ def config():
     return leer(os.path.join("config", "canales.json"), {"canales": {}, "barrios": {}})
 
 
+CAMBIOS_ELITE = os.path.join("estado", "elite", "ajustes.json")
+
+
+def cambios_elite():
+    """Lo que la Élite ha cambiado por encima de la configuración: {"canales": {clave: {campo: valor}}, "fabrica":
+    {"ruta.con.puntos": valor}}. Se aplica al leer y no toca los ficheros de config/: quitarlo de aquí lo deshace."""
+    d = leer(CAMBIOS_ELITE, {}) or {}
+    return {"canales": d.get("canales") or {}, "fabrica": d.get("fabrica") or {}}
+
+
 def ajustes():
-    """Ajustes de la fábrica (config/fabrica.json), con valores prudentes si falta alguno."""
+    """Ajustes de la fábrica (config/fabrica.json), con valores prudentes si falta alguno y con lo que haya cambiado la
+    Élite por encima."""
     base = {"subidas_por_dia": 8, "videos_por_ronda": 3, "dias_maximos": 30, "cola_maxima": 4,
             "pendientes_por_barrio": 3, "minutos_por_ronda": 150, "prioridad": []}
     base.update(leer(os.path.join("config", "fabrica.json"), {}) or {})
+    for ruta, valor in cambios_elite()["fabrica"].items():
+        nodo = base
+        partes = str(ruta).split(".")
+        for parte in partes[:-1]:
+            if not isinstance(nodo.get(parte), dict):
+                nodo[parte] = {}
+            else:
+                nodo[parte] = dict(nodo[parte])
+            nodo = nodo[parte]
+        nodo[partes[-1]] = valor
     return base
 
 
@@ -59,6 +80,7 @@ def canal(clave):
     else:
         raise SystemExit(f"No conozco «{clave}». Canales: {', '.join(cfg.get('canales', {}))}; "
                          f"barrios: {', '.join(cfg.get('barrios', {}))}")
+    datos.update(cambios_elite()["canales"].get(clave) or {})      # lo que la Élite ha cambiado en esta cuenta
     datos["clave"] = clave
     return datos
 

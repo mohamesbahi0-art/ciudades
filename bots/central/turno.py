@@ -601,6 +601,7 @@ def main(argv=None):
 
     resumen = {"canal": clave, "nombre": canal["nombre"], "destino": canal["destino"], "prueba": a.prueba,
                "empezado": privado.ahora()}
+    ia.SOLO_CLAUDE = canal.get("guionista") == "claude"      # la Élite puede pedir que esta cuenta solo la escriba Claude
     try:
         clip = None if canal.get("estudio") == "animacion" else clips.listo_para(clave)
         if clip:                    # el dueño ha grabado un clip para este canal: va antes que nada
@@ -738,6 +739,7 @@ def main(argv=None):
         resumen["traza"] = detalle[-2000:]
         print(privado.limpiar("\n".join(detalle.strip().splitlines()[-12:])), flush=True)
     finally:
+        ia.SOLO_CLAUDE = False
         resumen["terminado"] = privado.ahora()
         if not a.prueba:                       # «Ahora en la fábrica»: cómo ha acabado
             fin = resumen.get("destino_resultado") or resumen.get("resultado")

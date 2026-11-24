@@ -12,6 +12,8 @@ from bots.comun import claude, gemini
 
 SinIA = gemini.SinIA
 ULTIMO = {}
+SOLO_CLAUDE = False        # el turno lo enciende en las cuentas donde la Élite ha visto que el guion gratis no llega
+ESCRIBEN = ("guionista", "arreglo")
 
 
 def quien():
@@ -43,8 +45,12 @@ def preguntar(texto, papel=None, **kw):
         try:
             return _con_claude(texto, papel, kw)
         except claude.NoPuede as e:
+            if SOLO_CLAUDE and papel in ESCRIBEN:
+                raise gemini.SinIA(f"esta cuenta solo escribe con Claude y ahora no puede ({e})") from e
             print(f"cerebro: Claude no ha podido ({e}); piensa Gemini", flush=True)
         return _con_gemini(texto, papel, kw)
+    if SOLO_CLAUDE and papel in ESCRIBEN:
+        raise gemini.SinIA("esta cuenta solo escribe con Claude y ahora no tiene presupuesto: espera a su hora")
     try:
         return _con_gemini(texto, papel, kw)
     except gemini.SinIA as e:

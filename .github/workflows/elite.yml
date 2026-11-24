@@ -1,10 +1,10 @@
-# La Élite: los tres mandamases (Espía, Estratega y Arquitecto). Cada 2 horas miran todo desde arriba y solo se meten
-# cuando algo falla una y otra vez: enseñan una lección al robot culpable, mandan a reforma a la cuenta que no llega o
-# dejan la obra para Claude. Trabajan en GitHub: no dependen del plan del dueño.
+# La Élite: los tres mandamases (Espía, Estratega y Arquitecto). Cada HORA miran todo desde arriba y se meten
+# cuando algo falla una y otra vez: lección al robot culpable, palanca (un ajuste dentro de sus límites), reforma u
+# obra para Claude. Miden cada cambio y deshacen el que empeora. Trabajan en GitHub: no dependen del plan del dueño.
 name: Élite
 on:
   schedule:
-    - cron: "27 */2 * * *"
+    - cron: "27 * * * *"
   push:
     paths:
       - "peticiones/elite.json"
