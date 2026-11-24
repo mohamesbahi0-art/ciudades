@@ -28,6 +28,14 @@ VISTOS = []
 def falso(texto, imagenes=(), **kw):
     if MODO["falla"]:
         raise gemini.SinIA("sin cupo")
+    if "Los doce:" in texto and not MODO.get("junta_rara"):       # los doce en una sola pregunta
+        JUNTAS.append(1)
+        assert "voto de" not in texto, "en la pregunta conjunta tampoco van votos de nadie"
+        nombres = [x.strip() for x in re.findall(r"^- ([^(\n]+) \(", texto, flags=re.M)]
+        return {"votos": [{"jurado": x, "voto": "culpable" if i < MODO["culpables"] else "inocente", "nota": 80,
+                           "porque": f"desde mi piel ({x})"} for i, x in enumerate(nombres)]}
+    if "Los doce:" in texto:
+        return {"voto": "inocente", "nota": 80, "porque": "respuesta rara"}
     nombre = re.search(r"Eres ([^,]+), miembro del jurado", texto).group(1)
     VISTOS.append((nombre, "inocente" in texto and "culpable" in texto, "jurado popular" in texto))
     assert "voto de" not in texto.split("Vota tú solo")[0], "un jurado no debe ver los votos de los demás"
@@ -35,6 +43,7 @@ def falso(texto, imagenes=(), **kw):
     return {"voto": "culpable" if n <= MODO["culpables"] else "inocente", "nota": 80, "porque": f"desde mi piel ({nombre})"}
 
 
+JUNTAS = []
 gemini.preguntar = falso
 
 
@@ -51,7 +60,11 @@ comun = {"donde": "un canal de YouTube Shorts", "idioma": "español", "gancho": 
 
 r = jurado.deliberar(guion, canal, alegatos, comun)
 comprobar(len(r["votos"]) == 12 and len({v["piel"] for v in r["votos"]}) == 12, "12 jurados, cada uno con su piel")
-comprobar(len(VISTOS) == 12, "votan por separado: una pregunta por jurado")
+comprobar(len(JUNTAS) == 1 and not VISTOS, "los doce en una sola pregunta (12 veces menos gasto de IA)")
+MODO["junta_rara"] = True
+r2 = jurado.deliberar(guion, canal, alegatos, comun)
+comprobar(len(r2["votos"]) == 12 and len(VISTOS) == 12, "si la respuesta conjunta no vale, votan uno a uno")
+MODO["junta_rara"] = False
 comprobar(any(n.endswith("-jurado.json") for n in os.listdir(os.path.join(TMP, "privado", "estado", "juzgado", "juicios"))),
           "cada reunión queda como un juicio del guion para la app")
 comprobar(r["inocente"] == 12 and not r["rechaza"], "todos inocentes: no lo rechaza")
@@ -68,10 +81,10 @@ comprobar(jurado.deliberar(guion, canal, alegatos, comun) is None, "sin IA no ha
 MODO["falla"] = False
 ruta = os.path.join(TMP, "privado", "config", "fabrica.json")
 f = json.load(open(ruta, encoding="utf-8"))
-f["juzgado"] = {"jurado": {"por_dia": 3}}             # ya se han reunido 3 veces
+f["juzgado"] = {"jurado": {"por_dia": 4}}             # ya se han reunido 4 veces
 json.dump(f, open(ruta, "w", encoding="utf-8"))
 comprobar(jurado.deliberar(guion, canal, alegatos, comun) is None, "tope del día: deciden los jueces")
-comprobar(privado.leer("estado/juzgado/jurado.json")["hoy"]["jurados"] == 3, "se cuentan los jurados del día")
+comprobar(privado.leer("estado/juzgado/jurado.json")["hoy"]["jurados"] == 4, "se cuentan los jurados del día")
 # En el turno: si el jurado rechaza el guion, se reescribe (hasta 2 veces) antes de gastar en voz y dibujos
 f["juzgado"] = {"jurado": {"por_dia": 50}}
 json.dump(f, open(ruta, "w", encoding="utf-8"))

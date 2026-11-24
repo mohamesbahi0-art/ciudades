@@ -83,6 +83,53 @@ def directo(titulo, mensaje, etiqueta="eyes"):
         return False
 
 
+ADJUNTO_MAXIMO = 14_500_000         # ntfy.sh admite adjuntos de hasta 15 MB (los guarda 3 horas)
+
+
+def entregar_video(ruta, titulo, textos, apodo="una de tus cuentas", esperan=1, prueba=False):
+    """Manda al móvil el vídeo ya aprobado (adjunto) con su texto para pegar, directo desde GitHub: así le llega al
+    dueño aunque su plan de Claude esté agotado y la app no se haya puesto al día. Sin nombres de cuentas (solo el
+    apodo de config). Si el vídeo pesa demasiado o el envío falla, manda el aviso normal. Devuelve True si ha salido."""
+    import subprocess
+    import tempfile
+    t = tema()
+    if not t:
+        return False
+    partes = [f"Vídeo nuevo para {apodo}: «{titulo}». Tócalo para guardarlo (dura 3 horas aquí; también está en la app, "
+              "en «Para subir»)."]
+    for red, texto in (textos or {}).items():
+        if texto:
+            partes.append(f"— Texto para {red.capitalize()} —\n{texto.strip()}")
+    mensaje = "\n\n".join(partes)[:2800]
+    envio = ruta
+    try:
+        if os.path.getsize(ruta) > ADJUNTO_MAXIMO:          # una copia más ligera solo para el aviso
+            envio = os.path.join(tempfile.mkdtemp(prefix="cartero-"), "video.mp4")
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta, "-c:v", "libx264", "-preset", "veryfast",
+                            "-crf", "27", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", envio], check=True)
+        if os.path.getsize(envio) > ADJUNTO_MAXIMO:
+            raise ValueError("pesa demasiado para adjuntarlo")
+        noche = dt.datetime.now(ZoneInfo("Europe/Madrid")).hour < 8
+        opciones = {"title": "🎬 Vídeo listo para subir", "message": mensaje, "filename": "video-para-subir.mp4",
+                    "priority": "2" if noche else "4", "tags": "clapper"}
+        if ajustes().get("enlace_app"):
+            opciones["click"] = ajustes()["enlace_app"]
+        ENVIADOS.append({"titulo": opciones["title"], "mensaje": mensaje, "opciones": opciones, "adjunto": envio})
+        if prueba or os.environ.get("CARTERO_PRUEBA"):
+            print(f"cartero (prueba): vídeo adjunto ({os.path.getsize(envio) // 1000} kB) · {mensaje[:120]}", flush=True)
+            return True
+        url = f"https://ntfy.sh/{urllib.parse.quote(t)}?" + urllib.parse.urlencode(opciones)
+        with open(envio, "rb") as f:
+            req = urllib.request.Request(url, data=f.read(), method="PUT", headers={"Content-Type": "video/mp4"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            if r.status == 200:
+                return True
+        raise OSError("ntfy no lo ha aceptado")
+    except Exception as e:
+        print(f"cartero: el vídeo no ha podido ir adjunto ({type(e).__name__}); va el aviso normal", flush=True)
+        return video_para_subir(esperan)
+
+
 def video_para_subir(cuantos_esperan):
     """Un vídeo nuevo en «Para subir» (sin nombres de cuentas)."""
     return avisar("🎬 Vídeo nuevo para subir",

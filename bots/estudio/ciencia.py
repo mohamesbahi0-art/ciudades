@@ -124,6 +124,15 @@ REGLAS
   castigan lo «muy visto».
 - Que nada se pise: en cada escena, la ilustración, la etiqueta y la cifra van en sitios distintos y caben enteras.
 
+REPASO ANTES DE ENTREGAR (lo que más suspenden los jueces; compruébalo escena a escena):
+1. Cada cifra que sale en pantalla (contador, barras, etiquetas, gráfica) es EXACTAMENTE la que dice la voz en esa escena.
+2. La primera escena enseña ya, entera y en grande, lo más chocante (la cifra final o la paradoja); nada de empezar en 0.
+3. Ningún rótulo o etiqueta pasa de 3 palabras ni repite lo que ya dice el texto grande de esa escena.
+4. El tema no está en la lista de ya hechos ni se parece: si es un clásico del nicho, cámbialo o dale un giro nuevo.
+5. Cada escena cambia lo que se ve (otra pieza, otro plano, otro color): nunca dos escenas seguidas iguales.
+6. Lo que se lee y lo que se oye dicen lo mismo con las mismas palabras (si la voz dice «duizend keer», en pantalla
+   «1000×», no otra cifra); ninguna palabra sale dos veces en la primera escena.
+
 Lo que puedes usar:
 {vocabulario}
 
@@ -287,7 +296,8 @@ def guionizar(canal, lecciones):
     hechos = (privado.leer(os.path.join("estado", "estudio", f"{privado.alias(clave)}.json"), {}) or {}).get("videos", [])
     texto = PLANTILLA.format(nombre=canal.get("nombre", clave), formula=referencias(clave),
                              lecciones=lecciones or "(nada todavía)",
-                             hechos="\n".join(f"- {h.get('titulo')}" for h in hechos[-40:]) or "- (nada)",
+                             hechos="\n".join(f"- {t}" for t in dict.fromkeys([h.get("titulo") for h in hechos[-40:]] +
+                                                                                privado.intentados(clave)) if t) or "- (nada)",
                              sin_miedo=SIN_MIEDO, vocabulario=VOCABULARIO, ejemplo=json.dumps(EJEMPLO, ensure_ascii=False))
     ultimo = None
     for _ in range(3):

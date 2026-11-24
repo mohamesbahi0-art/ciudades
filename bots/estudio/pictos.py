@@ -80,7 +80,12 @@ Así es el estilo del dueño (sacado de su vídeo de ejemplo):
 Lo que ha aprendido la cuenta (lo del dueño manda):
 {lecciones}
 
-Ya hechos (no repitas tema):
+Lo que MEJOR le ha funcionado al dueño en esta cuenta (visitas reales; haz más como los de arriba):
+{exitos}
+En esta cuenta triunfan las comparaciones de mentalidad y las ideas a contracorriente («el que copiaba en los exámenes…»,
+«perfeccionista contra el que actúa»), no las cuentas de interés compuesto: como mucho 1 de cada 4 vídeos va de números.
+
+Ya hechos o ya intentados estos días (no repitas tema ni enfoque):
 {hechos}
 
 REGLAS
@@ -99,6 +104,13 @@ REGLAS
   (malo) o "verde" (lo que hay que hacer).
 - CADA ESCENA ENSEÑA LO QUE DICE: si dice una cantidad, contador o barras; si compara, dos personas o una gráfica; si
   enumera, una lista. Usa "cuando" para que las cosas salgan justo al decir su palabra.
+
+REPASO ANTES DE ENTREGAR (lo que más suspenden los jueces; compruébalo escena a escena):
+1. Cada cifra que sale en pantalla (contador, barras, etiquetas, gráfica) es EXACTAMENTE la que dice la voz en esa escena.
+2. La primera escena enseña ya, entera y en grande, lo más chocante (la cifra final o la paradoja); nada de empezar en 0.
+3. Ningún rótulo o etiqueta pasa de 3 palabras ni repite lo que ya dice el texto grande de esa escena.
+4. El tema no está en la lista de ya hechos ni se parece: si es un clásico del nicho, cámbialo o dale un giro nuevo.
+5. Cada escena cambia lo que se ve (otra pieza, otro plano, otro color): nunca dos escenas seguidas iguales.
 
 Lo que puedes poner:
 {vocabulario}
@@ -285,7 +297,9 @@ def guionizar(canal, lecciones):
         nombre=canal["nombre"], receta=json.dumps({"radar": radar, "receta": {k: v for k, v in receta.items() if k != "fecha"}},
                                                     ensure_ascii=False)[:3500] or "(nada todavía)",
         formula=json.dumps(ref, ensure_ascii=False)[:2500] or "(sin análisis)", lecciones=lecciones or "(nada todavía)",
-        hechos="\n".join(f"- {h.get('titulo')}" for h in hechos[-30:]) or "- (nada)", sin_miedo=estudio.SIN_MIEDO,
+        hechos="\n".join(f"- {t}" for t in dict.fromkeys([h.get("titulo") for h in hechos[-30:]] +
+                                                           privado.intentados(clave)) if t) or "- (nada)",
+        exitos=privado.exitos(clave) or "- (todavía sin datos)", sin_miedo=estudio.SIN_MIEDO,
         vocabulario=VOCABULARIO, ejemplo=json.dumps(EJEMPLO, ensure_ascii=False))
     ultimo = None
     for _ in range(3):

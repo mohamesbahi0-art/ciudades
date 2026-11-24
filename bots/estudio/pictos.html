@@ -409,8 +409,8 @@ function dibujaEscena(e, tl, idx, T) {
   });
   // piezas grandes
   if (e.barras) m += barras(e.barras, tl, e.barras_y || 640);
-  if (e.contador) m += contador(idx === 0 ? { ...e.contador, empieza: 0, dura: Math.min(0.6, e.contador.dura ?? 0.6) } : e.contador,
-                              tl, e.contador_y || 860, d);           // en el gancho, la cifra entera desde el primer segundo
+  if (e.contador) m += contador(idx === 0 ? { ...e.contador, empieza: -1, dura: 0.01 } : e.contador,
+                              tl, e.contador_y || 860, d);           // en el gancho, la cifra final entera desde el fotograma 0
   if (e.grafica) m += grafica(e.grafica, tl);
   if (e.lista) m += lista(e.lista, tl, e);
   if (e.cta) m += cta(e.cta, tl, T);

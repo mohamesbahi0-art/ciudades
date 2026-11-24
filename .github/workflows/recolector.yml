@@ -4,7 +4,7 @@
 name: Recolector de clips
 on:
   schedule:
-    - cron: "11 9 * * *"
+    - cron: "3 8 * * *"
   push:
     paths:
       - "peticiones/recolector.json"

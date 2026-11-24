@@ -185,7 +185,7 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
                                               hashtags=" ".join(original["hashtags"]) or "(ninguno)",
                                               nicho=json.dumps(nicho, ensure_ascii=False)[:1200] or "(todavía nada)",
                                               tema=(canal.get("tema") or "")[:200], reglas=reglas, **comun),
-                             papel="ideas", temperatura=1.0, ligero_primero=True)
+                             papel="titulos", temperatura=1.0, ligero_primero=True)
         except gemini.SinIA as e:
             torneo["gladiadores"].append({"nombre": nombre, "carta": carta, "fuera": f"sin IA ({str(e)[:60]})"})
             continue
@@ -209,7 +209,7 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
             try:
                 c = ia.preguntar(COMBATE.format(ronda=nombre_ronda, a=_texto_salida(x["salida"]),
                                                 b=_texto_salida(y["salida"]), reglas=reglas, **comun),
-                                 papel="ideas", temperatura=0.7, ligero_primero=True)
+                                 papel="titulos", temperatura=0.7, ligero_primero=True)
                 if isinstance(c, dict):
                     combate.update(critica_a_b=c.get("critica_a_b"), critica_b_a=c.get("critica_b_a"))
                     x["salida"] = _limpia(c.get("a"), youtube, original) or x["salida"]
@@ -220,7 +220,7 @@ def luchar(clave, canal, g, juicio, paso=print, prueba=False, forzar=False):
             random.shuffle(orden)                       # que el juez no favorezca siempre a la primera
             try:
                 j = ia.preguntar(JUEZ.format(uno=_texto_salida(orden[0]["salida"]), dos=_texto_salida(orden[1]["salida"]),
-                                             **comun), papel="juez", temperatura=0.2, ligero_primero=True)
+                                             **comun), papel="jurado", temperatura=0.2, ligero_primero=True)
                 gana = orden[1] if isinstance(j, dict) and str(j.get("ganador")).strip() == "2" else orden[0]
                 combate.update(razon=(j or {}).get("razon") if isinstance(j, dict) else None,
                                notas={orden[0]["nombre"]: (j or {}).get("nota_1"), orden[1]["nombre"]: (j or {}).get("nota_2")}

@@ -40,9 +40,15 @@ DEFECTO = {
     "renueva_dia": None,                 # día del mes en que llegan los créditos nuevos (sale en la consola)
     "dia_max_usd": 6.0,                  # nunca más de esto en un día, aunque sobre
     # trabajos que piensa Claude primero, con su esfuerzo (low, medium, high, xhigh, max)
-    "papeles": {"guionista": "high", "ideas": "medium"},
+    # «titulos» son los gladiadores del Coliseo (título, texto y hashtags): con el modelo pequeño cuestan céntimos
+    "papeles": {"guionista": "high", "ideas": "medium", "titulos": "low"},
     # trabajos que piensa Gemini (gratis; el juez, además, es así de otro «jurado» y oye la voz) y Claude si Gemini no puede
-    "reserva": {"juez": "medium"},
+    "reserva": {"juez": "medium", "jurado": "low"},
+    # modelo de cada papel si no es el de siempre: el Jurado popular y el Coliseo van con el pequeño (40 veces más barato)
+    "modelos": {"jurado": "claude-haiku-5-5", "titulos": "claude-haiku-5-5"},
+    # reparto por horas: a cada hora del día (UTC) solo se puede llevar gastada su parte (más este adelanto), para que la
+    # fábrica tenga IA las 24 horas en vez de gastarlo todo de madrugada
+    "ritmo": True, "adelanto": 0.12,
 }
 ESTADO = os.path.join("estado", "claude.json")
 DIAS_DETALLE = 40                        # días que se guarda cada llamada (después, solo el total del día)
@@ -68,7 +74,14 @@ def ajustes():
     propios = (privado.ajustes() or {}).get("claude") or {}
     if isinstance(propios, dict):
         a.update(propios)
+        for k in ("papeles", "reserva", "modelos"):      # lo de la configuración se suma a lo de siempre, no lo borra
+            a[k] = dict(DEFECTO[k], **(propios.get(k) or {}))
     return a
+
+
+def modelo_de(papel, a=None):
+    a = a or ajustes()
+    return (a.get("modelos") or {}).get(papel) or a.get("modelo") or MODELO
 
 
 def esfuerzo(papel, a=None):
@@ -139,8 +152,12 @@ def presupuesto(e=None, a=None):
         tope_hoy = mes / 30
         quedan = None
     tope_hoy = max(0.0, min(tope_hoy, float(a.get("dia_max_usd") or DEFECTO["dia_max_usd"])))
-    return {"hoy_usd": round(gastado_hoy, 4), "tope_hoy_usd": round(tope_hoy, 4), "mes_usd": round(en_el_mes, 4),
-            "tope_mes_usd": mes, "dias_para_creditos_nuevos": quedan}
+    tope_ahora = tope_hoy
+    if a.get("ritmo", True):                 # la parte del día que ya ha pasado (por horas), más un adelanto
+        hora = dt.datetime.now(dt.timezone.utc).hour
+        tope_ahora = tope_hoy * min(1.0, (hora + 1) / 24 + float(a.get("adelanto", 0.12)))
+    return {"hoy_usd": round(gastado_hoy, 4), "tope_hoy_usd": round(tope_hoy, 4), "tope_ahora_usd": round(tope_ahora, 4),
+            "mes_usd": round(en_el_mes, 4), "tope_mes_usd": mes, "dias_para_creditos_nuevos": quedan}
 
 
 def puede(papel):
@@ -163,7 +180,11 @@ def puede(papel):
         except ValueError:
             pass
     p = presupuesto(e, a)
-    return p["hoy_usd"] + MARGEN <= p["tope_hoy_usd"] and p["mes_usd"] + MARGEN <= p["tope_mes_usd"]
+    # El reparto por horas frena solo lo que Claude piensa primero y cuesta (guiones e ideas). Los jueces de reserva
+    # no esperan a su hora (un vídeo ya hecho no se queda sin juicio) y el modelo pequeño cuesta céntimos.
+    con_ritmo = primero(papel, a) and not modelo_de(papel, a).startswith("claude-haiku")
+    tope = p.get("tope_ahora_usd", p["tope_hoy_usd"]) if con_ritmo else p["tope_hoy_usd"]
+    return p["hoy_usd"] + MARGEN <= tope and p["mes_usd"] + MARGEN <= p["tope_mes_usd"]
 
 
 def coste(modelo, entrada, salida, leido=0, escrito=0):
@@ -263,17 +284,23 @@ def preguntar(texto, papel, imagenes=(), json_salida=True, sin_audio=False, dond
     global APAGADO
     import anthropic
     a = ajustes()
-    modelo = a.get("modelo") or MODELO
+    modelo = modelo_de(papel, a)
     if sin_audio:
         texto += ("\n\n(Esta vez no te llega el audio: juzga la voz por la narración escrita y las medidas, y no "
                   "bajes la nota por no poder oírla.)")
     contenido = [_imagen(r) for r in imagenes] + [{"type": "text", "text": texto}]
     try:
-        r = _cliente().beta.messages.create(
-            model=modelo, max_tokens=16000, system=SISTEMA,
-            messages=[{"role": "user", "content": contenido}],
-            output_config={"effort": esfuerzo(papel, a) or "high"},
-            betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        if modelo.startswith("claude-haiku"):          # el modelo pequeño no tiene reserva en el servicio: sin «fallbacks»
+            r = _cliente().messages.create(
+                model=modelo, max_tokens=16000, system=SISTEMA,
+                messages=[{"role": "user", "content": contenido}],
+                output_config={"effort": esfuerzo(papel, a) or "medium"})
+        else:
+            r = _cliente().beta.messages.create(
+                model=modelo, max_tokens=16000, system=SISTEMA,
+                messages=[{"role": "user", "content": contenido}],
+                output_config={"effort": esfuerzo(papel, a) or "high"},
+                betas=["server-side-fallback-2026-07-01"], fallbacks="default")
     except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as e:
         APAGADO = "la llave de Claude no vale o no tiene permiso"
         _guardar(aviso=f"{APAGADO} ({type(e).__name__})")

@@ -94,6 +94,33 @@ def titulos_recientes(clave, cuantos=40):
     return lista[-cuantos:]
 
 
+def intentados(clave, dias=3):
+    """Títulos de los vídeos de este canal que ya pasaron por el Juzgado estos días (también los suspendidos), para no
+    repetir el mismo tema una y otra vez (los jueces lo castigan como «muy visto»)."""
+    import datetime as _dt
+    import glob
+    vistos, hoy = [], _dt.datetime.now(_dt.timezone.utc)
+    for d in range(dias, -1, -1):
+        dia = (hoy - _dt.timedelta(days=d)).strftime("%Y%m%d")
+        for ruta in sorted(glob.glob(os.path.join(carpeta(), "estado", "juzgado", "juicios", f"{dia}-*.json"))):
+            try:
+                j = json.load(open(ruta, encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if j.get("canal") == clave and j.get("titulo") and j["titulo"] not in vistos:
+                vistos.append(j["titulo"])
+    return vistos[-40:]
+
+
+def exitos(clave, cuantos=6):
+    """Los vídeos de la cuenta del dueño que más visitas han tenido (estado/referencias/<alias>-tiktok.json)."""
+    d = leer(os.path.join("estado", "referencias", f"{alias(clave)}-tiktok.json"), {}) or {}
+    videos = sorted((v for v in d.get("videos") or [] if isinstance(v, dict) and v.get("visitas")),
+                    key=lambda v: -v["visitas"])[:cuantos]
+    return "\n".join(f"- {v['visitas']:,} visitas · {v.get('segundos', '?')} s · {str(v.get('titulo'))[:110]}".replace(",", ".")
+                     for v in videos)
+
+
 def apuntar_titulo(clave, titulo):
     ruta = os.path.join(carpeta(), "estado", "titulos", f"{clave}.json")
     lista = titulos_recientes(clave, 10_000)

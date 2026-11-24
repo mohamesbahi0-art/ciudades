@@ -68,7 +68,9 @@ def dejar(clave, canal, video, guion, duracion, juicio=None):
     try:                                   # el Cartero avisa al móvil (sin nombres de cuentas)
         from bots.central import cartero
         esperan = len({(d.get("barrio"), d.get("titulo")) for d in documentos() if d.get("estado") == "pendiente"})
-        cartero.video_para_subir(esperan)
+        textos = {red: guion.get(f"texto_{red}") or guion.get("texto_instagram") or guion.get("descripcion", "")
+                  for red in canal.get("redes", ["instagram"])}
+        cartero.entregar_video(video, guion.get("titulo", ""), textos, canal.get("apodo") or "una de tus cuentas", esperan)
     except Exception as e:
         print(f"cartero: no ha podido avisar ({type(e).__name__})", flush=True)
     return ids

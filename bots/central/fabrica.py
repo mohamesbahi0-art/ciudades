@@ -48,14 +48,21 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
                 if t.get("destino") == "suspendido":
                     fallidos[t.get("canal")] = fallidos.get(t.get("canal"), 0) + 1
     tope = int(ajustes.get("intentos_fallidos_dia", 2))
+    lejos = int(ajustes.get("intentos_si_va_lejos", 2))     # un formato que no pasa de 80 no gasta 6 intentos al día
     try:
         con_clip = clips.canales_con_clips()     # los clips que ha grabado el dueño van antes que nada
     except Exception:
         con_clip = set()
 
     def insiste(clave):
-        if fallidos.get(clave, 0) >= tope:
-            esperan[clave] = f"hoy ya lo ha intentado {fallidos[clave]} veces sin llegar al 90: mañana más"
+        hechos = fallidos.get(clave, 0)
+        if hechos >= tope:
+            esperan[clave] = f"hoy ya lo ha intentado {hechos} veces sin llegar al 90: mañana más"
+            return False
+        mejor = mejor_nota(clave)
+        if hechos >= lejos and mejor is not None and mejor < 80:
+            esperan[clave] = (f"hoy lo ha intentado {hechos} veces y su mejor nota es {mejor}: descansa hasta mañana "
+                              "(su formato necesita un arreglo; no se gasta IA en balde)")
             return False
         return True
     for clave, c in cfg.get("canales", {}).items():
@@ -102,6 +109,47 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None):
             candidatos.append((clave not in con_clip, dias, orden.get(clave, 99), clave, None))
     candidatos.sort()
     return [(clave, hora) for _, _, _, clave, hora in candidatos], esperan
+
+
+def mejor_nota(clave, cuantos=6):
+    """La mejor nota de los últimos juicios de vídeo de un canal (hoy y ayer). None si no hay ninguno."""
+    import glob
+    import json
+    hoy = dt.datetime.now(dt.timezone.utc)
+    notas = []
+    for dia in (hoy - dt.timedelta(days=1), hoy):
+        patron = os.path.join(privado.carpeta(), "estado", "juzgado", "juicios", f"{dia.strftime('%Y%m%d')}-*.json")
+        for ruta in sorted(glob.glob(patron)):
+            if ruta.endswith(("-idea.json", "-jurado.json")):
+                continue
+            try:
+                j = json.load(open(ruta, encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if j.get("canal") == clave and j.get("tipo") == "video" and isinstance(j.get("nota"), (int, float)):
+                notas.append(j["nota"])
+    return max(notas[-cuantos:]) if notas else None
+
+
+def hay_ia():
+    """¿Hay con qué pensar ahora? Claude con presupuesto para esta hora, o Gemini contestando (una pregunta mínima)."""
+    from bots.comun import claude, gemini
+    try:
+        if claude.puede("guionista"):
+            return True
+    except Exception:
+        pass
+    try:
+        gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, ligero_primero=True)
+        return True
+    except Exception:
+        return False
+
+
+def de_fuera(error):
+    """Fallos que no son del código: la IA sin cupo o el servicio gratis de dibujos caído."""
+    e = str(error or "")
+    return e.startswith("SinIA") or ("faltan" in e and "dibujos" in e)
 
 
 def espera_del_dueno(paso=print, cada=60):
@@ -217,6 +265,13 @@ def main():
             print("se acaba el tiempo de la ronda: lo que falta, en la siguiente", flush=True)
             ronda["sin_sitio"] += [k for k, _ in plan[:maximo] if k not in {t["canal"] for t in ronda["turnos"]}]
             break
+        if not a.prueba and not hay_ia():    # sin IA no se empieza un turno (no se gastan voz, dibujos ni intentos)
+            hechos = {t["canal"] for t in ronda["turnos"]}
+            for k, _ in plan[:maximo]:
+                if k not in hechos:
+                    ronda["esperan"][k] = "la IA no tiene cupo a esta hora: lo intenta en la siguiente ronda"
+            print("no queda IA para esta hora: lo que falta, en la siguiente ronda", flush=True)
+            break
         if sin_ia:                   # la IA estaba saturada: un respiro antes del siguiente turno, en vez de perderlo
             respiro = int(ajustes.get("respiro_ia_segundos", 180))
             print(f"la IA no contestaba: espero {respiro // 60} min antes del siguiente turno", flush=True)
@@ -249,9 +304,10 @@ def main():
                                                 rondas=(rondas + [resumen_ronda])[-30:]))
     guardar("fábrica: fin de la ronda")
     fallos = [t for t in ronda["turnos"] if t["codigo"] != 0]
-    if fallos and all(str(t.get("error") or "").startswith("SinIA") for t in fallos):
-        # sin IA (cupo gratis agotado y Claude sin poder): la ronda espera, no es una avería del código
-        print("la IA no contesta ahora: la ronda espera a la siguiente (no es un fallo del código)", flush=True)
+    if fallos and all(de_fuera(t.get("error")) for t in fallos):
+        # sin IA (cupo agotado) o sin el servicio gratis de dibujos: la ronda espera, no es una avería del código
+        print("la IA o el servicio de dibujos no contestan ahora: la ronda espera a la siguiente (no es un fallo del "
+              "código)", flush=True)
         return 0
     return 1 if ronda["turnos"] and len(fallos) == len(ronda["turnos"]) else 0
 

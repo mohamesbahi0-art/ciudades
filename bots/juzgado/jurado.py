@@ -40,6 +40,47 @@ excelentes, que la gente vea enteros y comparta. Un tema duro u oscuro no es mot
 Devuelve SOLO un JSON: {{"voto": "inocente" (que se suba) o "culpable" (que no), "nota": 0-100, "porque": "una frase desde tu piel"}}"""
 
 
+JUNTOS = """Eres el jurado popular del Juzgado de una fábrica de vídeos cortos: doce personas muy distintas. Cada miembro del
+jurado popular vota por separado, desde su piel y con sinceridad: no os ponéis de acuerdo ni os dais la razón por quedar
+bien, y es normal que no coincidáis.
+Los doce:
+{pieles}
+Se juzga este guion de {donde} (en {idioma}), ANTES de grabarlo:
+- Título: {titulo}
+- Lo que se verá y se leerá al empezar: {gancho}
+- Lo que contará: {narracion}
+{alegatos}El dueño solo quiere vídeos excelentes, que la gente vea enteros y comparta. Un tema duro u oscuro no es motivo para
+votar culpable.
+Devuelve SOLO un JSON con los doce, en el mismo orden: {{"votos": [{{"jurado": "su nombre tal cual", "voto": "inocente" (que
+se suba) o "culpable" (que no), "nota": 0-100, "porque": "una frase desde su piel"}}]}}"""
+
+
+def _juntos(guion, comun, narracion, texto_alegatos):
+    """Los doce en una sola pregunta: 12 veces menos gasto de IA (lo pidió la cuenta: el jurado se comía el cupo).
+    Devuelve la lista de votos; [] si la respuesta no vale (entonces votan uno a uno); None si no hay IA."""
+    try:
+        r = ia.preguntar(JUNTOS.format(pieles="\n".join(f"- {n} ({p}): {m}" for n, p, m in PIELES), donde=comun["donde"],
+                                       idioma=comun["idioma"], titulo=guion.get("titulo", ""),
+                                       gancho=comun.get("gancho") or "(sin texto)", narracion=narracion,
+                                       alegatos=texto_alegatos), papel="jurado", temperatura=0.7, ligero_primero=True)
+    except gemini.SinIA:
+        return None
+    por_nombre = {n: (p, m) for n, p, m in PIELES}
+    votos = []
+    for v in (r.get("votos") if isinstance(r, dict) else None) or []:
+        if not isinstance(v, dict) or v.get("jurado") not in por_nombre or any(x["jurado"] == v["jurado"] for x in votos):
+            continue
+        if str(v.get("voto", "")).lower() not in ("inocente", "culpable"):
+            continue
+        try:
+            nota = max(0, min(100, int(v.get("nota", 0))))
+        except (TypeError, ValueError):
+            nota = None
+        votos.append({"jurado": v["jurado"], "piel": por_nombre[v["jurado"]][0], "voto": str(v["voto"]).lower(),
+                      "nota": nota, "porque": str(v.get("porque", ""))[:200]})
+    return votos
+
+
 def ajustes():
     a = dict(DEFECTO)
     a.update(((privado.ajustes() or {}).get("juzgado") or {}).get("jurado") or {})
@@ -69,13 +110,19 @@ def deliberar(guion, canal, alegatos, comun, forzar=False):
     if alegatos.get("defensa") or alegatos.get("fiscalia"):
         texto_alegatos = (f"Alegato de la defensa (dice que va a funcionar): {alegatos.get('defensa', '')}\n"
                           f"Alegato de la fiscalía (dice que va a fracasar): {alegatos.get('fiscalia', '')}\n")
-    votos = []
-    for nombre, piel, mira in PIELES:
+    votos = _juntos(guion, comun, narracion, texto_alegatos)
+    if votos is None:                                    # no hay IA ahora: sin jurado, deciden los jueces
+        return None
+    if len(votos) >= int(a.get("minimo_votos", 7)):
+        uno_a_uno = []
+    else:                                                # la respuesta conjunta no valía: votan uno a uno, como antes
+        votos, uno_a_uno = [], PIELES
+    for nombre, piel, mira in uno_a_uno:
         try:
             v = ia.preguntar(JURADO.format(nombre=nombre, piel=piel, mira=mira, donde=comun["donde"], idioma=comun["idioma"],
                                            titulo=guion.get("titulo", ""), gancho=comun.get("gancho") or "(sin texto)",
                                            narracion=narracion, alegatos=texto_alegatos),
-                             papel="juez", temperatura=0.6, ligero_primero=True)
+                             papel="jurado", temperatura=0.6, ligero_primero=True)
         except gemini.SinIA:
             continue
         if isinstance(v, list) and v:
