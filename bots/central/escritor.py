@@ -14,6 +14,7 @@ ESTILOS = {
     "acertijos": "un acertijo con cuenta atrás y la respuesta tras una pausa",
     "motivacion": "vídeos de motivación: una idea que cambia cómo ves un hábito, contada con una mini historia",
     "supervivencia": "situaciones extremas en las que el espectador tiene que decidir qué haría para salir con vida",
+    "biografias": "la historia real de un empresario o de una persona famosa: su carácter y cómo llegó arriba",
 }
 
 REGLAS_TIPO = {
@@ -31,6 +32,19 @@ REGLAS_TIPO = {
     "supervivencia": "- Habla de tú. Plantea la situación, da opciones y deja que el espectador piense antes de la respuesta.\n"
                      "- Consejos de supervivencia correctos y prudentes; nada peligroso de imitar.",
 }
+
+REGLAS_TIPO["biografias"] = (
+    "- UNA persona real por vídeo, conocida por el público de la cuenta (de su país, o mundial). No repitas persona.\n"
+    "- Empieza por su nombre y TRES adjetivos de su carácter («Nombre: obsesivo, frío e implacable.») y, enseguida, el "
+    "hecho más chocante de su vida. Después, su historia en orden: de dónde viene, qué arriesgó, sus golpes y fracasos, "
+    "cómo llegó arriba y qué dice eso de su carácter. Cierra con una frase que vuelva a los tres adjetivos y una "
+    "pregunta a quien lo ve.\n"
+    "- Solo hechos ciertos y conocidos (fechas, cifras, nombres): si no estás seguro de un dato, no lo pongas. Nada de "
+    "insultos ni de acusar de delitos que no estén probados.\n"
+    "- OJO con «dibujo»: aquí NO es una descripción. Es lo que hay que BUSCAR en Wikimedia Commons para la foto de esa "
+    "escena: de 1 a 4 palabras con el nombre real de la persona, la empresa, el lugar o el objeto (por ejemplo «Freddy "
+    "Heineken», «Heineken brewery Amsterdam», «Wall Street»). La primera escena, siempre la persona.\n"
+    "- Añade al JSON \"persona\": \"nombre y apellidos\".")
 
 IDIOMAS = {"es": "español de España", "nl": "neerlandés (de los Países Bajos)", "en": "inglés"}
 
@@ -75,7 +89,7 @@ def palabras(texto):
 def medidas(canal):
     seg_min, seg_max = canal.get("segundos", [30, 45])
     pal_min, pal_max = int(seg_min * 2.4), int(seg_max * 2.8)
-    esc_min, esc_max = (3, 5) if seg_max <= 25 else (5, 8)
+    esc_min, esc_max = canal.get("escenas") or ((3, 5) if seg_max <= 25 else (5, 8))
     return {"seg_min": seg_min, "seg_max": seg_max, "pal_min": pal_min, "pal_max": pal_max,
             "esc_min": esc_min, "esc_max": esc_max}
 

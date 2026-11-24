@@ -25,9 +25,9 @@ import traceback
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
-from bots.central import clips, dibujante, escritor, huecos, montador, parasubir, reportero, subidor, videoteca  # noqa: E402
+from bots.central import clips, dibujante, escritor, fotografo, huecos, montador, parasubir, reportero, subidor, videoteca  # noqa: E402
 from bots.comun import ia, privado  # noqa: E402
-from bots.juzgado import jurado, sala_ideas, tribunal  # noqa: E402
+from bots.juzgado import juez_guardia, jurado, sala_ideas, tribunal  # noqa: E402
 from bots.coliseo import coliseo  # noqa: E402
 from bots.central import obras  # noqa: E402
 from bots.estudio import estudio as estudio_animacion  # noqa: E402
@@ -661,10 +661,20 @@ def main(argv=None):
             cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
             paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
 
-            paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
             t0 = dt.datetime.now(dt.timezone.utc)
-            imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),
-                                         os.path.join(trabajo, "dibujos"))
+            if canal.get("fotos") == "commons":       # biografías: fotos libres de verdad, con su crédito
+                paso("dibujante", f"buscando {len(g['escenas'])} fotos libres en Wikimedia Commons")
+                imagenes, creditos = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "dibujos"),
+                                                           persona=str(g.get("persona") or ""))
+                if creditos:
+                    pie = "\n📷 Wikimedia Commons: " + "; ".join(creditos)[:600]
+                    for campo in ("descripcion", "texto_instagram", "texto_tiktok"):
+                        if g.get(campo):
+                            g[campo] = g[campo].rstrip() + pie
+            else:
+                paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
+                imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),
+                                             os.path.join(trabajo, "dibujos"))
             faltan = imagenes.count(None)
             minutos = round((dt.datetime.now(dt.timezone.utc) - t0).total_seconds() / 60, 1)
             cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan,
@@ -676,7 +686,8 @@ def main(argv=None):
             paso("montador", "montando el vídeo")
             video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
                                     os.path.join(trabajo, f"{hoy}-{clave}.mp4"),  # nombre único: el registro lo usa
-                                    ambiente=montador.musica.ambiente_de(canal))
+                                    ambiente=None if juez_guardia.sin_musica(canal)     # el dueño pone su música
+                                    else montador.musica.ambiente_de(canal))
             segundos = montador.duracion(video)
             cuadernos["montador"].apuntar("montaje", {"canal": clave, "guion": id_guion, "segundos": round(segundos, 1)})
             paso("montador", f"vídeo de {segundos:.1f} s")
