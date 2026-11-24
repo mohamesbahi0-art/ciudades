@@ -1,0 +1,54 @@
+# La Élite: los tres mandamases (Espía, Estratega y Arquitecto). Cada 2 horas miran todo desde arriba y solo se meten
+# cuando algo falla una y otra vez: enseñan una lección al robot culpable, mandan a reforma a la cuenta que no llega o
+# dejan la obra para Claude. Trabajan en GitHub: no dependen del plan del dueño.
+name: Élite
+on:
+  schedule:
+    - cron: "27 */2 * * *"
+  push:
+    paths:
+      - "peticiones/elite.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: elite
+  cancel-in-progress: false
+jobs:
+  elite:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Vigilar, decidir y ejecutar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GH_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python bots/elite/elite.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('élite: repaso de cada 2 horas') else 1)"

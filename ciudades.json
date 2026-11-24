@@ -41,6 +41,11 @@
    "id": "cine",
    "nombre": "El Cine",
    "numero": 8
+  },
+  {
+   "id": "elite",
+   "nombre": "La Élite",
+   "numero": 9
   }
  ],
  "bots": [
@@ -931,6 +936,42 @@
    "lote": 3,
    "codigo": "nuevo",
    "tipo": "bot"
+  },
+  {
+   "ciudad": "elite",
+   "donde": "ciudad",
+   "grupo": "Los mandamases",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot",
+   "id": "elite_espia",
+   "nombre": "El Espía",
+   "hace": "Cada 2 horas lo mira todo desde arriba: lee los partes de la Policía, los Mecánicos y Derechos Sociales y saca los fallos que se repiten y de qué robot es la culpa."
+  },
+  {
+   "ciudad": "elite",
+   "donde": "ciudad",
+   "grupo": "Los mandamases",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot",
+   "id": "elite_estratega",
+   "nombre": "La Estratega",
+   "hace": "Cada 2 horas repasa la calidad de cada cuenta: las notas del Juzgado, dónde se va el público del Cine y lo que el dueño descarta. Señala los formatos que no llegan."
+  },
+  {
+   "ciudad": "elite",
+   "donde": "ciudad",
+   "grupo": "Los mandamases",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot",
+   "id": "elite_arquitecto",
+   "nombre": "El Arquitecto",
+   "hace": "Decide y ejecuta lo gordo: enseña una lección nueva al robot culpable, manda a reforma a la cuenta que gasta IA sin acercarse a la nota y deja a Claude la obra cuando hay que cambiar un robot o construir un sistema nuevo. Todo con su porqué, sus pruebas y cómo deshacerlo."
   }
  ]
 }

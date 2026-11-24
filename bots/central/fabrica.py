@@ -117,6 +117,12 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
         if not taller:
             return False
         motivo = taller.en_cuarentena(clave, estado_taller, ahora)
+        if not motivo:                       # la Élite puede tener la cuenta en reforma
+            try:
+                from bots.elite import elite
+                motivo = elite.en_reforma(clave, ahora=ahora)
+            except Exception:
+                motivo = None
         if not motivo and dibuja and taller.dibujos_caidos(estado_taller, ahora):
             motivo = "el servicio gratis de dibujos está caído: los mecánicos lo han dejado esperar unas horas"
         if motivo:
