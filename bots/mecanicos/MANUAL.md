@@ -16,6 +16,8 @@ popular → voz → dibujos o clips → montaje → Juzgado (90 o más) → Coli
 - «permiso», «invalid_grant», «unauthorized» en la subida a YouTube: el permiso del canal ha caducado. Solo lo arregla
   el dueño (pulsar «Permitir»): avisar_dueno.
 - «quotaExceeded», «uploadLimitExceeded»: tope de YouTube por hoy. Esperar.
+- «ElevenLabs dice 401» o «403»: la llave de ElevenLabs de GitHub no vale (mal copiada o con permisos
+  restringidos). Los vídeos salen con la voz gratis. Solo lo arregla el dueño: llave nueva sin restricciones. avisar_dueno.
 - «credit», «billing», «saldo»: la cuenta de Claude sin saldo. avisar_dueno.
 - «KeyError», «TypeError», «ValueError», «AttributeError», «IndexError», «JSONDecodeError» repetidos en un canal: fallo
   de código o de formato. descansar_canal y para_claude.

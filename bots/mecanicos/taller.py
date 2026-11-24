@@ -226,6 +226,16 @@ def jefe(e, desconocidos, prueba):
                        "La fábrica sigue con la IA gratis, pero la de pago no puede trabajar (saldo o llave). Cuando puedas, "
                        "míralo en la app, en Misiones.", prueba)
         _apunta(e, "jefe_taller", "avisa al dueño", "la IA de pago está sin saldo o con la llave mal", prueba)
+    voz = str((privado.leer(os.path.join("estado", "voz.json"), {}) or {}).get("aviso") or "")
+    if "401" in voz or "403" in voz:                # la llave de ElevenLabs está puesta pero no vale
+        _avisa_una_vez(e, "eleven", "🔧 Tu voz de ElevenLabs no suena",
+                       "La llave de ElevenLabs que hay en GitHub no vale (ElevenLabs la rechaza), así que los vídeos salen "
+                       "con la voz gratis. Hay que crear una llave nueva sin restricciones y cambiarla. Tienes los pasos en "
+                       "la app, en Misiones.", prueba)
+        if e["avisados"].get("eleven_apuntado") != _ahora().strftime("%Y-%m-%d"):
+            e["avisados"]["eleven_apuntado"] = _ahora().strftime("%Y-%m-%d")
+            _apunta(e, "jefe_taller", "avisa al dueño", "la llave de ElevenLabs no vale: los vídeos salen con la voz gratis",
+                    prueba)
     abiertos = {(p.get("canal"), p.get("error", "")[:60]) for p in e["partes"] if p.get("estado") != "arreglado"}
     for clave, error, veces in desconocidos:
         if (clave, error[:60]) in abiertos:

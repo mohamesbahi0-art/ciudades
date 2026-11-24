@@ -406,6 +406,14 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     avisar("estudio: voz escena a escena")
     voz = voz_por_escenas(g, carpeta, canal)
     g["voz_motor"] = locutor.MOTOR.get("motor", "edge")
+    if str(canal.get("voz_estudio") or "").startswith("eleven:"):      # por qué no ha sonado la voz del dueño (si pasa)
+        aviso = locutor.MOTOR.get("aviso")
+        if aviso:
+            avisar(f"locutor: {aviso}")
+        try:
+            privado.guardar_estado("voz.json", {"aviso": aviso, "motor": g["voz_motor"]})
+        except Exception:
+            pass
     if g["voz_motor"] == "elevenlabs" and canal.get("eleven_gratis", True):
         # el plan gratis de ElevenLabs pide nombrarles al publicar
         for campo in ("texto_tiktok", "texto_instagram", "descripcion"):
