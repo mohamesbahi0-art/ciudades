@@ -73,6 +73,23 @@ function gloedVan(c) {
 const lienzo = document.createElement("canvas").getContext("2d");
 function ancho(texto, peso, tam) { lienzo.font = `${peso} ${tam}px Poppins`; return lienzo.measureText(texto).width; }
 const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+// Ajuste automático: el tamaño de letra más grande (hasta `tam`) con el que el texto cabe en `hueco` píxeles.
+function cabe(txt, peso, tam, hueco, minimo = 26) { const w = ancho(String(txt), peso, tam); return w <= hueco ? tam : Math.max(minimo, Math.floor(tam * hueco / w)); }
+// Parte un texto en renglones que caben en `hueco` (como mucho `maximo`), encogiendo la letra si hace falta.
+function renglones(txt, peso, tam, hueco, maximo = 2, minimo = 26) {
+  const ws = String(txt).split(/\s+/).filter(Boolean);
+  for (let t = tam; ; t -= 2) {
+    const out = [[]];
+    for (const w of ws) { const L = out[out.length - 1]; if (L.length && ancho([...L, w].join(" "), peso, t) > hueco) out.push([w]); else L.push(w); }
+    const lineas = out.map(L => L.join(" "));
+    if (t <= minimo || (lineas.length <= maximo && lineas.every(l => ancho(l, peso, t) <= hueco))) return { tam: Math.min(t, ...lineas.map(l => cabe(l, peso, t, hueco, 18))), lineas };
+  }
+}
+// Palabras y cifras de un texto, para saber si dos rótulos dicen lo mismo («330 miljard» ⊂ «Vandaag vervang je 330 miljard»).
+const fichas = s => (String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/(\d)\.(?=\d{3}(\D|$))/g, "$1").match(/\d+(?:,\d+)?|[a-z]+/g) || []);
+const dentroDe = (larga, corta) => { if (!corta.length) return false; for (let i = 0; i + corta.length <= larga.length; i++) if (corta.every((x, k) => larga[i + k] === x)) return true; return false; };
+// Un texto que se mueve junto con su caja (el Inspector y la red de seguridad lo tratan como una sola cosa).
+const unidad = (svg, extra = "") => `<g data-unidad="1"${extra}>${svg}</g>`;
 
 // =============================== ILUSTRACIONES (centradas en 0,0; unos ±300) ===============================
 const ILU = {};
@@ -435,17 +452,20 @@ ILU.columna = (T, p = {}) => {
   return s;
 };
 function emoji(caracter, c) {
-  return `<circle r="250" fill="${c}" opacity="0.16" filter="url(#b40)"/><text x="0" y="120" text-anchor="middle" font-size="340" font-family="Noto Color Emoji" filter="url(#schaduw)">${esc(caracter)}</text>`;
+  return `<circle r="250" fill="${c}" opacity="0.16" filter="url(#b40)"/><text x="0" y="104" text-anchor="middle" font-size="300" font-family="Noto Color Emoji" filter="url(#schaduw)">${esc(caracter)}</text>`;
 }
 
 // =============================== COMPONENTES ===============================
 function etiquetaLinea(x0, y0, x1, y1, titulo, sub, p, color = "#FFFFFF", centro = false) {
   const q = salida(p), xe = x0 + (x1 - x0) * q, ye = y0 + (y1 - y0) * q, der = x1 >= x0;
   let s = `<circle cx="${f1(x0)}" cy="${f1(y0)}" r="7" fill="${color}" opacity="${f2(lim(p * 3))}"/><line x1="${f1(x0)}" y1="${f1(y0)}" x2="${f1(xe)}" y2="${f1(ye)}" stroke="${color}" stroke-width="2.2" opacity="0.85"/>`;
-  const o = lim((p - 0.55) / 0.45), dx = centro ? 0 : der ? 14 : -14, a = centro ? "middle" : der ? "start" : "end";
-  s += `<g opacity="${f2(o)}"><text x="${f1(x1 + dx)}" y="${f1(y1 + 8)}" text-anchor="${a}" font-weight="700" font-size="38" fill="#FFFFFF">${esc(titulo)}</text>`;
-  if (sub) s += `<text x="${f1(x1 + dx)}" y="${f1(y1 + 44)}" text-anchor="${a}" font-weight="300" font-size="27" fill="#AEB6C7">${esc(sub)}</text>`;
-  return s + `</g>`;
+  const o = lim((p - 0.3) / 0.1), dx = centro ? 0 : der ? 14 : -14, a = centro ? "middle" : der ? "start" : "end";
+  const hueco = centro ? 940 : der ? 1040 - x1 - 14 : x1 - 14 - 40, tt = cabe(titulo, 700, 40, hueco), ts = cabe(sub, 400, 33, hueco);
+  const wt = Math.max(ancho(titulo, 700, tt), sub ? ancho(sub, 400, ts) : 0), xi = centro ? x1 - wt / 2 : der ? x1 + dx : x1 + dx - wt;
+  let t = `<rect x="${f1(xi - 16)}" y="${f1(y1 - 34)}" width="${f1(wt + 32)}" height="${sub ? 98 : 56}" rx="16" fill="rgba(5,7,12,0.82)"/>`;
+  t += `<text x="${f1(x1 + dx)}" y="${f1(y1 + 8)}" text-anchor="${a}" font-weight="700" font-size="${tt}" fill="#FFFFFF">${esc(titulo)}</text>`;
+  if (sub) t += `<text x="${f1(x1 + dx)}" y="${f1(y1 + 48)}" text-anchor="${a}" font-weight="400" font-size="${ts}" fill="#C9D1E0">${esc(sub)}</text>`;
+  return s + `<g opacity="${f2(o)}" data-unidad="1" data-separa="1">${t}</g>`;
 }
 
 function onda(x, y, w, label, c, picos, p) {
@@ -456,45 +476,54 @@ function onda(x, y, w, label, c, picos, p) {
     if (!picos) h = 0.03 * Math.sin(u * 47) * Math.sin(u * 13);   // línea plana, con un temblor mínimo
     pts.push(`${f1(x + u * w)},${f1(y - h * 78)}`);
   }
-  let s = `<text x="${x}" y="${y - 110}" font-weight="700" font-size="28" letter-spacing="4" fill="${c}">${esc(label)}</text>`;
+  let s = `<text x="${x}" y="${y - 110}" font-weight="700" font-size="${cabe(label, 700, 34, w - 80)}" letter-spacing="3" fill="${c}">${esc(label)}</text>`;
   s += `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y}" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2"/>`;
   return s + `<polyline points="${pts.join(" ")}" fill="none" stroke="${c}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="${f2(1 - suave(p))}" filter="url(#gloed)"/>`;
 }
 
 const numNL = (v, d) => Number(v).toFixed(d).replace(".", ",");
 function deslizador(x, y, w, o, p) {
-  const v0 = Number(o.desde ?? 0), v1 = Number(o.hasta ?? 1), fr = lim((v1 - v0) / ((o.max ?? v1) - v0 || 1));
-  const q = suave(lim((p - 0.2) / 0.8)), v = v0 + (v1 - v0) * q, c = kleur(o.color || "geel"), xf = x + w * fr * q;
+  const v0 = Number(o.desde ?? 0), v1 = Number(o.hasta ?? 1), tope = Number(o.max ?? v1), base = Math.min(v0, v1, 0);
+  const pos = v => lim((v - base) / ((Math.max(tope, v0, v1) - base) || 1));
+  const q = suave(lim((p - 0.1) / 0.5)), c = kleur(o.color || "geel"), xf = x + w * (pos(v0) + (pos(v1) - pos(v0)) * q);
   let s = `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y}" stroke="#232A3A" stroke-width="12" stroke-linecap="round"/>`;
   s += `<line x1="${x}" y1="${y}" x2="${f1(xf)}" y2="${y}" stroke="${c}" stroke-width="12" stroke-linecap="round" filter="url(#gloed)"/>`;
   s += `<circle cx="${f1(xf)}" cy="${y}" r="20" fill="#FFFFFF" filter="url(#schaduw)"/>`;
-  s += `<text x="${x}" y="${y + 58}" font-weight="300" font-size="30" fill="#AEB6C7">${esc(o.label || "")}</text>`;
-  return s + `<text x="${x + w}" y="${y + 58}" text-anchor="end" font-weight="700" font-size="34" fill="${c}">${numNL(v, o.decimales ?? 1)} ${esc(o.unidad || "")}</text>`;
+  const valor = `${numNL(v1, o.decimales ?? 1)} ${o.unidad || ""}`.trim(), tv = cabe(valor, 700, 44, w * 0.55), wv = ancho(valor, 700, tv);
+  const tl2 = cabe(o.label || "", 400, 34, w - wv - 30);
+  s += `<text x="${x}" y="${y + 66}" font-weight="400" font-size="${tl2}" fill="#C9D1E0">${esc(o.label || "")}</text>`;
+  return s + `<text x="${x + w}" y="${y + 68}" text-anchor="end" font-weight="700" font-size="${tv}" fill="${c}">${esc(valor)}</text>`;
 }
 
 function medidor(x, y, o, p) {
-  const v = lim(Number(o.valor ?? 0.5)) * muelle(lim((p - 0.15) / 0.85));
-  const c = v < 0.35 ? "#4ADE80" : v < 0.68 ? "#FACC15" : "#FF5A5F";
-  let s = `<g filter="url(#schaduw)"><rect x="${x - 190}" y="${y - 150}" width="380" height="300" rx="34" fill="url(#gKaart)" stroke="#2A3246" stroke-width="2"/></g>`;
+  const v = lim(Number(o.valor ?? 0.5)) * muelle(lim((p - 0.15) / 0.85)), vf = lim(Number(o.valor ?? 0.5));
+  const c = vf < 0.35 ? "#4ADE80" : vf < 0.68 ? "#FACC15" : "#FF5A5F";
+  const ttx = cabe(o.texto || "", 700, 40, 760), tlb = cabe(o.label || "", 600, 32, 760);
+  const w = Math.max(400, ancho(o.texto || "", 700, ttx) + 70, ancho(o.label || "", 600, tlb) + 4 * String(o.label || "").length + 70);
+  let s = `<g filter="url(#schaduw)"><rect x="${f1(x - w / 2)}" y="${y - 150}" width="${f1(w)}" height="310" rx="34" fill="url(#gKaart)" stroke="#2A3246" stroke-width="2"/></g>`;
   s += `<path d="M ${x - 130} ${y + 30} A 130 130 0 0 1 ${x + 130} ${y + 30}" fill="none" stroke="url(#gMeter)" stroke-width="22" stroke-linecap="round"/>`;
   for (let i = 0; i <= 10; i++) { const a = (180 + i * 18) * R; s += `<line x1="${f1(x + Math.cos(a) * 100)}" y1="${f1(y + 30 + Math.sin(a) * 100)}" x2="${f1(x + Math.cos(a) * 88)}" y2="${f1(y + 30 + Math.sin(a) * 88)}" stroke="#FFFFFF" stroke-width="3" opacity="0.5"/>`; }
   const a = (180 + v * 180) * R;
   s += `<line x1="${x}" y1="${y + 30}" x2="${f1(x + Math.cos(a) * 112)}" y2="${f1(y + 30 + Math.sin(a) * 112)}" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/><circle cx="${x}" cy="${y + 30}" r="14" fill="#FFFFFF"/>`;
-  s += `<text x="${x}" y="${y + 86}" text-anchor="middle" font-weight="600" font-size="22" letter-spacing="4" fill="#9AA3B5">${esc(o.label || "")}</text>`;
-  return s + `<text x="${x}" y="${y + 128}" text-anchor="middle" font-weight="700" font-size="36" fill="${c}">${esc(o.texto || "")}</text>`;
+  s += `<text x="${x}" y="${y + 88}" text-anchor="middle" font-weight="600" font-size="${tlb}" letter-spacing="3" fill="#B4BCCB">${esc(o.label || "")}</text>`;
+  return unidad(s + `<text x="${x}" y="${y + 134}" text-anchor="middle" font-weight="700" font-size="${ttx}" fill="${c}">${esc(o.texto || "")}</text>`);
 }
 
 function escala(x, y, w, o, p) {
   const v0 = Number(o.desde ?? 0), v1 = Number(o.hasta ?? 14), pos = v => x + w * lim((v - v0) / ((v1 - v0) || 1));
   let s = `<rect x="${x}" y="${y - 9}" width="${f1(w * salida(p))}" height="18" rx="9" fill="url(#gPh)"/>`;
   for (let i = 0; i <= 14; i++) { const xx = x + (w * i) / 14; s += `<line x1="${f1(xx)}" y1="${y + 18}" x2="${f1(xx)}" y2="${y + (i % 7 ? 30 : 40)}" stroke="#FFFFFF" stroke-width="2" opacity="0.45"/>`; }
-  s += `<text x="${x}" y="${y + 80}" font-size="26" font-weight="400" fill="#9AA3B5">${esc(String(v0))}</text><text x="${x + w}" y="${y + 80}" text-anchor="end" font-size="26" font-weight="400" fill="#9AA3B5">${esc(String(v1))}</text>`;
-  if (o.izquierda) s += `<text x="${x}" y="${y + 124}" font-size="26" font-weight="600" fill="#FF6B6B">← ${esc(o.izquierda)}</text>`;
-  if (o.derecha) s += `<text x="${x + w}" y="${y + 124}" text-anchor="end" font-size="26" font-weight="600" fill="#9AA3B5">${esc(o.derecha)} →</text>`;
-  (o.marcas || []).slice(0, 3).forEach((m, i) => {
-    const q = muelle(lim((p - 0.35 - i * 0.15) / 0.5)), xx = pos(Number(m.valor ?? 0)), up = 70 + (i % 2) * 70;
-    s += `<g opacity="${f2(lim(q * 2))}"><line x1="${f1(xx)}" y1="${y}" x2="${f1(xx)}" y2="${y - up}" stroke="#FFFFFF" stroke-width="2" opacity="0.7"/><circle cx="${f1(xx)}" cy="${y}" r="13" fill="#FFFFFF" stroke="#05070C" stroke-width="4"/>`;
-    s += `<text x="${f1(xx)}" y="${y - up - 50}" text-anchor="middle" font-weight="700" font-size="40" fill="${kleur(m.color || "wit")}">${esc(m.texto || "")}</text><text x="${f1(xx)}" y="${y - up - 12}" text-anchor="middle" font-weight="300" font-size="28" fill="#AEB6C7">${esc(m.sub || "")}</text></g>`;
+  s += `<text x="${x}" y="${y + 80}" font-size="32" font-weight="400" fill="#B4BCCB">${esc(numNL(v0, 0))}</text><text x="${x + w}" y="${y + 80}" text-anchor="end" font-size="32" font-weight="400" fill="#B4BCCB">${esc(numNL(v1, 0))}</text>`;
+  const ti = cabe("← " + (o.izquierda || ""), 600, 32, w / 2 - 20), td = cabe((o.derecha || "") + " →", 600, 32, w / 2 - 20);
+  if (o.izquierda) s += `<text x="${x}" y="${y + 126}" font-size="${ti}" font-weight="600" fill="#FF8A8A">← ${esc(o.izquierda)}</text>`;
+  if (o.derecha) s += `<text x="${x + w}" y="${y + 126}" text-anchor="end" font-size="${td}" font-weight="600" fill="#B4BCCB">${esc(o.derecha)} →</text>`;
+  const marcas = (o.marcas || []).slice(0, 3).map((m, i) => ({ m, i, xx: pos(Number(m.valor ?? 0)) })).sort((a, b) => a.xx - b.xx);
+  marcas.forEach((k, n) => {     // de izquierda a derecha, cada una un piso más arriba: así no se pisan aunque estén juntas
+    const { m, i, xx } = k, q = muelle(lim((p - 0.2 - i * 0.12) / 0.4)), up = 60 + n * 96;
+    const tt = cabe(m.texto || "", 700, 40, 420), ts = cabe(m.sub || "", 400, 32, 420);
+    const medio = Math.max(ancho(m.texto || "", 700, tt), ancho(m.sub || "", 400, ts)) / 2, cx = Math.max(40 + medio, Math.min(1040 - medio, xx));
+    s += `<g opacity="${f2(lim(q * 4))}"><line x1="${f1(xx)}" y1="${y}" x2="${f1(xx)}" y2="${y - up}" stroke="#FFFFFF" stroke-width="2" opacity="0.7"/><circle cx="${f1(xx)}" cy="${y}" r="13" fill="#FFFFFF" stroke="#05070C" stroke-width="4"/>`;
+    s += `<text x="${f1(cx)}" y="${y - up - 46}" text-anchor="middle" font-weight="700" font-size="${tt}" fill="${kleur(m.color || "wit")}">${esc(m.texto || "")}</text><text x="${f1(cx)}" y="${y - up - 10}" text-anchor="middle" font-weight="400" font-size="${ts}" fill="#C9D1E0">${esc(m.sub || "")}</text></g>`;
   });
   return s;
 }
@@ -503,8 +532,8 @@ function barras(x, y, w, o, p) {
   let s = "";
   (o.items || []).slice(0, 4).forEach((it, i) => {
     const yy = y + i * 120, c = kleur(it.color || ["rood", "groen", "blauw", "geel"][i]), v = lim(Number(it.valor ?? 50) / 100);
-    const q = salida(lim((p - i * 0.15) / 0.7));
-    s += `<text x="${x}" y="${yy}" font-weight="700" font-size="34" fill="#FFFFFF">${esc(it.label || "")}</text><text x="${x + w}" y="${yy}" text-anchor="end" font-weight="700" font-size="34" fill="${c}">${Math.round(v * 100 * q)}%</text>`;
+    const q = salida(lim((p - i * 0.15) / 0.7)), tt = cabe(it.label || "", 700, 36, w - 150);
+    s += `<text x="${x}" y="${yy}" font-weight="700" font-size="${tt}" fill="#FFFFFF">${esc(it.label || "")}</text><text x="${x + w}" y="${yy}" text-anchor="end" font-weight="700" font-size="36" fill="${c}" opacity="${f2(lim(q * 5))}">${Math.round(v * 100)}%</text>`;
     s += `<rect x="${x}" y="${yy + 22}" width="${w}" height="22" rx="11" fill="#1C2232"/><rect x="${x}" y="${yy + 22}" width="${f1(w * v * q)}" height="22" rx="11" fill="${c}" filter="url(#gloed)"/>`;
   });
   return s;
@@ -512,32 +541,39 @@ function barras(x, y, w, o, p) {
 
 function numero(x, y, o, p) {
   const q = muelle(lim(p / 0.8));
-  const valor = String(o.valor ?? ""), tw = ancho(valor, 800, 150);
-  let s = `<g opacity="${f2(lim(p * 3))}" transform="translate(${f1(x)} ${f1(y)}) scale(${f2(0.7 + 0.3 * q)})">`;
-  const ancla = o.titulo ? -tw / 2 - 150 : -tw / 2;
-  s += `<text x="${f1(ancla)}" y="0" font-weight="800" font-size="150" fill="#FFFFFF" filter="url(#schaduw)">${esc(valor)}</text>`;
-  if (o.titulo) s += `<text x="${f1(ancla + tw + 34)}" y="-48" font-weight="700" font-size="42" fill="#FFFFFF">${esc(o.titulo)}</text><text x="${f1(ancla + tw + 34)}" y="-6" font-weight="300" font-size="30" fill="#AEB6C7">${esc(o.sub || "")}</text>`;
+  const valor = String(o.valor ?? ""), hay = o.titulo || o.sub;
+  const tam = cabe(valor, 800, 150, hay ? 520 : 940, 60), tw = ancho(valor, 800, tam), hueco = 940 - tw - 34;
+  const tt = cabe(o.titulo || "", 700, 44, hueco), ts = cabe(o.sub || "", 400, 34, hueco);
+  const lado = hay ? Math.max(ancho(o.titulo || "", 700, tt), ancho(o.sub || "", 400, ts)) + 34 : 0, ancla = -(tw + lado) / 2;
+  let s = `<g opacity="${f2(lim(p * 12))}" transform="translate(${f1(x)} ${f1(y)}) scale(${f2(0.88 + 0.12 * q)})" data-unidad="1">`;
+  s += `<text x="${f1(ancla)}" y="0" font-weight="800" font-size="${tam}" fill="#FFFFFF" filter="url(#schaduw)">${esc(valor)}</text>`;
+  if (o.titulo) s += `<text x="${f1(ancla + tw + 34)}" y="${o.sub ? -50 : -20}" font-weight="700" font-size="${tt}" fill="#FFFFFF">${esc(o.titulo)}</text>`;
+  if (o.sub) s += `<text x="${f1(ancla + tw + 34)}" y="-6" font-weight="400" font-size="${ts}" fill="#C9D1E0">${esc(o.sub)}</text>`;
   return s + `</g>`;
 }
 
-function pildora(x, y, texto, p, color = "#8A93A6", relleno = "rgba(8,10,16,0.75)") {
-  const w = ancho(texto, 700, 36) + 76, q = muelle(lim(p / 0.7));
-  return `<g opacity="${f2(lim(p * 3))}" transform="translate(${f1(x)} ${f1(y)}) scale(${f2(0.75 + 0.25 * q)})"><rect x="${f1(-w / 2)}" y="-38" width="${f1(w)}" height="76" rx="38" fill="${relleno}" stroke="${color}" stroke-width="3"/><text x="0" y="12" text-anchor="middle" font-weight="700" font-size="36" fill="#FFFFFF">${esc(texto)}</text></g>`;
+function pildora(x, y, texto, p, color = "#8A93A6", relleno = "rgba(8,10,16,0.75)", hueco = 940) {
+  const tam = cabe(texto, 700, 36, hueco - 76), w = ancho(texto, 700, tam) + 76, q = muelle(lim(p / 0.7));
+  return `<g opacity="${f2(lim(p * 5))}" transform="translate(${f1(x)} ${f1(y)}) scale(${f2(0.75 + 0.25 * q)})" data-unidad="1"><rect x="${f1(-w / 2)}" y="-38" width="${f1(w)}" height="76" rx="38" fill="${relleno}" stroke="${color}" stroke-width="3"/><text x="0" y="${f1(tam * 0.34)}" text-anchor="middle" font-weight="700" font-size="${tam}" fill="#FFFFFF">${esc(texto)}</text></g>`;
 }
 
 function final(tl, botones) {
   const [a, b] = botones && botones.length === 2 ? botones : ["wist ik al", "nieuw voor mij"];
   const toque = tramo(tl, 1.2, 0.45), apriete = toque > 0 && toque < 1 ? 1 - 0.1 * Math.sin(Math.PI * toque) : 1;
-  let s = pildora(340, 1540, a, tramo(tl, 0.25, 0.45));
-  s += `<g transform="translate(740 1540) scale(${f2(apriete)}) translate(-740 -1540)">${pildora(740, 1540, b, tramo(tl, 0.34, 0.45), "#5ED3F3", toque >= 1 ? "rgba(94,211,243,0.25)" : "rgba(8,10,16,0.75)")}</g>`;
-  if (toque > 0 && toque < 1) s += `<circle cx="740" cy="1540" r="${f1(40 + 140 * toque)}" fill="none" stroke="#5ED3F3" stroke-width="4" opacity="${f2(1 - toque)}"/>`;
+  // los dos botones se reparten el ancho según lo largo que sea cada uno, y la letra se encoge hasta caber
+  const wa = ancho(a, 700, 36) + 76, wb = ancho(b, 700, 36) + 76, libre = 940 - 30, k = Math.min(1, libre / (wa + wb));
+  const xa = 540 - (wa * k + wb * k + 30) / 2 + wa * k / 2, xb = 540 + (wa * k + wb * k + 30) / 2 - wb * k / 2;
+  let s = pildora(xa, 1540, a, tramo(tl, 0.25, 0.45), "#8A93A6", "rgba(8,10,16,0.75)", wa * k);
+  s += `<g transform="translate(${f1(xb)} 1540) scale(${f2(apriete)}) translate(${f1(-xb)} -1540)">${pildora(xb, 1540, b, tramo(tl, 0.34, 0.45), "#5ED3F3", toque >= 1 ? "rgba(94,211,243,0.25)" : "rgba(8,10,16,0.75)", wb * k)}</g>`;
+  if (toque > 0 && toque < 1) s += `<circle cx="${f1(xb)}" cy="1540" r="${f1(40 + 140 * toque)}" fill="none" stroke="#5ED3F3" stroke-width="4" opacity="${f2(1 - toque)}"/>`;
   for (let i = 0; i < 6; i++) {   // corazones que suben desde el botón pulsado
     const u = tramo(tl, 1.35 + i * 0.16, 1.4);
-    if (u > 0 && u < 1) s += `<text x="${f1(740 + Math.sin(u * 7 + i) * 40 + (i - 2.5) * 14)}" y="${f1(1500 - 520 * u)}" text-anchor="middle" font-size="${f1(40 + 16 * (i % 3))}" font-family="Noto Color Emoji" opacity="${f2(1 - u)}">❤️</text>`;
+    if (u > 0 && u < 1) s += `<text x="${f1(xb + Math.sin(u * 7 + i) * 40 + (i - 2.5) * 14)}" y="${f1(1500 - 520 * u)}" text-anchor="middle" font-size="${f1(40 + 16 * (i % 3))}" font-family="Noto Color Emoji" opacity="${f2(1 - u)}">❤️</text>`;
   }
-  const p = tramo(tl, 0.8, 0.5), frase = "Schrijf een reactie…", n = Math.floor(frase.length * lim((tl - 1.0) / 1.2));
-  s += `<g opacity="${f2(lim(p * 2))}" transform="translate(0 ${f1((1 - salida(p)) * 30)})"><rect x="130" y="1648" width="820" height="100" rx="50" fill="rgba(8,10,16,0.85)" stroke="#5ED3F3" stroke-width="3" filter="url(#gloed)"/>`;
-  s += `<text x="180" y="1710" font-weight="300" font-size="34" fill="#AEB6C7">${esc(frase.slice(0, n))}${(tl * 2) % 1 < 0.5 ? "|" : ""}</text>`;
+  const p = tramo(tl, 0.8, 0.3), frase = "Schrijf een reactie";     // entera desde que sale (nada de frases a medio teclear)
+  s += `<g opacity="${f2(lim(p * 3))}" transform="translate(0 ${f1((1 - salida(p)) * 30)})"><rect x="130" y="1648" width="820" height="100" rx="50" fill="rgba(8,10,16,0.85)" stroke="#5ED3F3" stroke-width="3" filter="url(#gloed)"/>`;
+  s += `<text x="180" y="1710" font-weight="400" font-size="36" fill="#C9D1E0">${esc(frase)}</text>`;
+  if ((tl * 2) % 1 < 0.5) s += `<rect x="${f1(186 + ancho(frase, 400, 36))}" y="1680" width="3" height="40" fill="#C9D1E0"/>`;
   s += `<circle cx="895" cy="1698" r="34" fill="#5ED3F3"/><path d="M 878 1698 L 910 1698 M 896 1684 L 910 1698 L 896 1712" stroke="#05070C" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`;
   return s;
 }
@@ -551,57 +587,59 @@ function palabrasDe(e) {
   const ws = String(e.voz || e.texto || "").split(/\s+/).filter(Boolean), d = Math.max(0.5, e.fin - e.inicio - 0.4);
   return ws.map((p, i) => ({ p, a: e.inicio + 0.1 + (d * i) / ws.length, b: e.inicio + 0.1 + (d * (i + 1)) / ws.length }));
 }
-function trozos(ws, clave) {
-  const out = []; let cur = [], w = 0;
-  for (const x of ws) {
-    const k = clave.has(norm(x.p)), pw = ancho(x.p, k ? 700 : 300, 74) + (k ? 40 : 0);
-    if (cur.length && (cur.length >= 4 || w + 24 + pw > 930)) { out.push(cur); cur = []; w = 0; }
-    cur.push(x); w += (cur.length > 1 ? 24 : 0) + pw;
-  }
-  if (cur.length) out.push(cur);
-  if (out.length > 1 && out[out.length - 1].length === 1) { const u = out.pop(); out[out.length - 1].push(u[0]); }
-  return out;
+// El titular enseña siempre la frase entera de la escena (nunca un trozo a medias: los jueces lo leen como un titular
+// mutilado), en 1 a 4 renglones y con la letra encogida hasta caber. La voz va encendiendo cada palabra y la palabra
+// clave lleva su recuadro, que es una sola pieza con ella.
+const ZONA_TITULAR = { y0: 222, y1: 486 };
+function gigante(e) {      // lo que ya sale en letras enormes en esta escena
+  if (e.plano === "gancho" && e.golpe) return [e.golpe.texto, e.golpe.sub];
+  if (e.plano === "numero" && e.contador) return [textoContador(e.contador), e.contador.label];
+  return [];
 }
-function texto(e, t, idx = 1) {
+function sinTitular(e) {   // el texto de arriba no repite lo que ya sale en gigante
+  const frase = fichas(e.voz || e.texto);
+  return gigante(e).some(g => { const f = fichas(g); return dentroDe(frase, f) || f.some(x => /^\d{2,}/.test(x) && frase.includes(x)); });
+}
+function titular(e, t) {
+  const ws = palabrasDe(e);
+  if (!ws.length || sinTitular(e)) return { svg: "", abajo: ZONA_TITULAR.y0 };
   const clave = new Set((e.clave || []).flatMap(c => String(c).split(/\s+/)).map(norm).filter(Boolean));
-  const ts = trozos(palabrasDe(e), clave);
-  let i = ts.findIndex((c, k) => k === ts.length - 1 || t < ts[k + 1][0].a - 0.06);
-  if (i < 0) i = ts.length - 1;
-  const c = ts[i], piezas = c.map(x => ({ x, k: clave.has(norm(x.p)) }));
-  piezas.forEach(o => { o.w = ancho(o.x.p, o.k ? 700 : 300, 74) + (o.k ? 40 : 0); });
-  const lineas = [[]]; let lw = 0;
-  piezas.forEach(o => { if (lineas[lineas.length - 1].length && lw + 24 + o.w > 960) { lineas.push([]); lw = 0; } lineas[lineas.length - 1].push(o); lw += (lineas[lineas.length - 1].length > 1 ? 24 : 0) + o.w; });
+  let tam, lineas, lh;
+  for (tam = 74; tam >= 34; tam -= 4) {
+    const hueco = tam * 0.3, relleno = tam * 0.62;
+    lineas = [[]]; let lw = 0;
+    ws.forEach(x => {
+      const k = clave.has(norm(x.p)), w = ancho(x.p, k ? 700 : 400, tam) + (k ? relleno : 0), L = lineas[lineas.length - 1];
+      if (L.length && lw + hueco + w > 960) { lineas.push([]); lw = 0; }
+      lineas[lineas.length - 1].push({ x, k, w }); lw += (lineas[lineas.length - 1].length > 1 ? hueco : 0) + w;
+    });
+    lh = tam * 1.32;
+    const anchoMax = Math.max(...lineas.map(L => L.reduce((a, o) => a + o.w, 0) + hueco * (L.length - 1)));
+    if (anchoMax <= 960 && lineas.length * lh <= ZONA_TITULAR.y1 - ZONA_TITULAR.y0 && lineas.length <= (tam >= 62 ? 3 : 4)) break;
+  }
+  const hueco = tam * 0.3, alto = lineas.length * lh, arriba = Math.max(ZONA_TITULAR.y0, 352 - alto / 2);
   let s = "";
   lineas.forEach((L, li) => {
-    const total = L.reduce((a, o) => a + o.w, 0) + 24 * (L.length - 1);
-    let x = 540 - total / 2; const y = 352 + li * 104 - (lineas.length - 1) * 40;
-    // truco 1: cada palabra sube desde detrás del borde de su línea (una máscara), en vez de encenderse sin más
-    const id = `m${idx}_${li}`;
-    DEFS[id] = `<clipPath id="${id}" clipPathUnits="userSpaceOnUse"><rect x="0" y="${y - 98}" width="1080" height="130"/></clipPath>`;
-    let linea = "";
+    const total = L.reduce((a, o) => a + o.w, 0) + hueco * (L.length - 1), y = arriba + li * lh + tam * 0.98;
+    let x = 540 - total / 2;
     L.forEach(o => {
-      const adelanto = idx === 0 ? 0.12 : 0.06;
-      const q = idx === 0 && i === 0 ? 1 : salida(tramo(t, o.x.a - adelanto, 0.22));   // la primera frase, entera desde el fotograma 0
-      if (q > 0) {
-        const dy = (1 - q) * 124, cx = x + o.w / 2;
-        if (o.k) {
-          const qb = muelle(tramo(t, o.x.a - adelanto + 0.08, 0.4)), sc = 0.9 + 0.1 * atras(tramo(t, o.x.a - adelanto + 0.1, 0.3));
-          linea += `<g transform="translate(${f1(cx)} ${f1(y - 20 + dy)}) scale(${f2(sc)}) translate(${f1(-cx)} ${f1(-(y - 20))})"><rect x="${f1(x + (1 - qb) * o.w / 2)}" y="${y - 66}" width="${f1(o.w * qb)}" height="90" rx="16" fill="rgba(6,9,16,0.8)" stroke="#5ED3F3" stroke-width="3.5"/>`;
-          linea += `<text x="${f1(x + 20)}" y="${y}" font-weight="700" font-size="74" fill="#FFFFFF">${esc(o.x.p)}</text></g>`;
-        } else linea += `<g transform="translate(0 ${f1(dy)})"><text x="${f1(x)}" y="${y}" font-weight="300" font-size="74" fill="#FFFFFF" opacity="0.94">${esc(o.x.p)}</text></g>`;
-      }
-      x += o.w + 24;
+      const dicha = t >= o.x.a - 0.06, q = dicha ? salida(tramo(t, o.x.a - 0.06, 0.18)) : 0, cx = x + o.w / 2;
+      const sc = dicha ? 1 + 0.1 * (1 - q) : 1, giro = `transform="translate(${f1(cx)} ${f1(y - tam * 0.3)}) scale(${f2(sc)}) translate(${f1(-cx)} ${f1(-(y - tam * 0.3))})"`;
+      if (o.k) {
+        s += `<g ${giro} data-unidad="1"><rect x="${f1(x + tam * 0.09)}" y="${f1(y - tam * 0.92)}" width="${f1(o.w - tam * 0.18)}" height="${f1(tam * 1.24)}" rx="${f1(tam * 0.22)}" fill="rgba(6,9,16,0.8)" stroke="${dicha ? "#5ED3F3" : "#3F6F86"}" stroke-width="3.5"/>`;
+        s += `<text x="${f1(cx)}" y="${f1(y)}" text-anchor="middle" font-weight="700" font-size="${tam}" fill="#FFFFFF">${esc(o.x.p)}</text></g>`;
+      } else s += `<g ${giro}><text x="${f1(cx)}" y="${f1(y)}" text-anchor="middle" font-weight="400" font-size="${tam}" fill="${dicha ? "#FFFFFF" : "#A9B4C8"}">${esc(o.x.p)}</text></g>`;
+      x += o.w + hueco;
     });
-    s += `<g clip-path="url(#${id})">${linea}</g>`;
   });
-  return s;
+  return { svg: `<g data-bloque="titular">${s}</g>`, abajo: arriba + alto };
 }
 
 // =============================== ESCENA ===============================
 const PLANOS = {
   grande: { x: 540, y: 1010, k: 1.3 }, primerplano: { x: 570, y: 1080, k: 1.9 }, dato: { x: 540, y: 850, k: 0.95 },
   grafica: { x: 845, y: 640, k: 0.42 }, lado: { x: 300, y: 1000, k: 0.72 }, vs: { x: 270, y: 1010, k: 0.6 },
-  banda: { x: 540, y: 1010, k: 1 }, final: { x: 540, y: 1000, k: 1.05 }, gancho: { x: 540, y: 1330, k: 0.5 },
+  banda: { x: 540, y: 1010, k: 1 }, final: { x: 540, y: 1000, k: 1.05 }, gancho: { x: 540, y: 1480, k: 0.55 },
   pregunta: { x: 540, y: 1420, k: 0.42 }, numero: { x: 540, y: 760, k: 0.62 },
 };
 const ANCLAS = { arriba: [0, -190], abajo: [0, 190], izquierda: [-170, 0], derecha: [170, 0], centro: [0, 0] };
@@ -638,35 +676,41 @@ function momentoDe(e, o) {
 // en el gancho arranca desde muy cerca y se suelta de golpe.
 function camara(e, tl, d, idx) {
   const lado = idx % 2 ? -1 : 1, q = suave(lim(tl / d));
-  let z = 1 + 0.07 * q, x = lado * 28 * q, y = -16 * q;
+  let z = 1 + 0.05 * q, x = lado * 16 * q, y = -10 * q;
   const u = tl - (tiempoClave(e) - e.inicio);
   if (u > -0.1 && u < 0) z -= 0.018 * Math.sin(Math.PI * (u + 0.1) / 0.1);
-  if (u >= 0) z += 0.065 * Math.exp(-u / 0.24) * Math.cos(u * 9);
-  if (idx === 0) z += 0.38 * (1 - expo(lim(tl / 0.42)));
-  if (d > 2.4) {   // reencuadre: la cámara se acerca y se desplaza a mitad de escena (también en el cierre)
-    const r = tl >= 1.5 ? 1 : 0, fuerte = ["gancho", "numero", "pregunta"].includes(e.plano) ? 0.12 : 0.26;   // corte de zoom
-    z += fuerte * r; x += lado * 85 * r; y -= 50 * r;
-    if (d > 3.1) {     // escenas largas: tercer golpe de cámara, hacia el otro lado
-      const r2 = tl >= 2.55 ? 1 : 0;
-      z -= 0.14 * r2; x -= lado * 170 * r2; y += 40 * r2;
-    }
+  if (u >= 0) z += 0.05 * Math.exp(-u / 0.24) * Math.cos(u * 9);
+  if (idx === 0) z += 0.3 * (1 - expo(lim(tl / 0.42)));
+  if (reencuadra(e, d, idx) && tl >= 1.5) {   // corte de zoom a mitad de escena (también en el cierre)
+    const partido = ["vs", "lado", "grafica", "banda"].includes(e.plano), fuerte = partido ? 0.05 : ["gancho", "numero", "pregunta"].includes(e.plano) ? 0.1 : 0.16;
+    z += fuerte; x += partido ? 0 : lado * 30; y -= 24;
+    if (d > 3.1 && tl >= 2.55) { z -= fuerte * 0.6; x -= partido ? 0 : lado * 60; y += 20; }     // escenas largas: tercer golpe de cámara
   }
   return { z, x, y };
 }
+// La primera escena cambia de plano antes de los 2 s aunque su frase sea larga (los jueces miden el primer corte).
+const reencuadra = (e, d, idx) => d > 2.4 || (idx === 0 && d > 1.9);
 const capa = (svg, cam, f, cx = 540, cy = 1000) =>
   `<g transform="translate(${f1(cx + cam.x * f)} ${f1(cy + cam.y * f)}) scale(${(1 + (cam.z - 1) * f).toFixed(4)}) translate(${-cx} ${-cy})">${svg}</g>`;
 
 function golpe(o, tl, c) {
   const p = tramo(tl, 0.02, 0.5), k = p > 0 ? 1 + 0.42 * Math.exp(-7 * p) * Math.cos(10 * p) : 1.42;
   const sx = 16 * Math.exp(-p * 8) * Math.sin(p * 70), sy = 11 * Math.exp(-p * 8) * Math.cos(p * 63);
-  const txt = String(o.texto || ""), tam = Math.min(300, 980 / Math.max(1, ancho(txt, 800, 100) / 100));
-  let s = `<circle cx="540" cy="900" r="${f1(140 + 760 * expo(p))}" fill="none" stroke="${c}" stroke-width="${f1(10 * (1 - p) + 1)}" opacity="${f2(0.7 * (1 - p))}"/>`;
-  const late = 1 + 0.018 * Math.sin(tl * 5.5);
-  s += `<g transform="translate(${f1(540 + sx)} ${f1(900 + sy)}) scale(${(k * late).toFixed(3)})" opacity="${f2(lim(tl / 0.06))}">`;
+  const txt = String(o.texto || ""), tam = Math.min(260, 900 / Math.max(1, ancho(txt, 800, 100) / 100));
+  let s = "";
+  for (let n = 0; n < 3; n++) {      // ondas que salen de la cifra durante todo el primer segundo (que no se quede quieto)
+    const u = tramo(tl, 0.02 + n * 0.42, 0.7);
+    if (u > 0 && u < 1) s += `<circle cx="540" cy="900" r="${f1(140 + 760 * expo(u))}" fill="none" stroke="${c}" stroke-width="${f1(10 * (1 - u) + 1)}" opacity="${f2(0.7 * (1 - u))}"/>`;
+  }
+  const late = 1 + 0.03 * Math.sin(tl * 5.5);
+  s += `<g transform="translate(${f1(540 + sx)} ${f1(900 + sy)}) scale(${(Math.min(k, 1.06) * late).toFixed(3)})" opacity="${f2(lim(tl / 0.06))}">`;
   s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="${c}" opacity="${f2(0.4 + 0.25 * Math.sin(tl * 5.5))}" filter="url(#b18)">${esc(txt)}</text>`;
   s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="#FFFFFF">${esc(txt)}</text></g>`;
-  if (o.sub) { const q = atras(tramo(tl, 0.22, 0.35)); s += `<text x="540" y="${f1(900 + tam * 0.36 + 96)}" text-anchor="middle" font-weight="700" font-size="56" fill="${c}" opacity="${f2(lim(q))}" transform="translate(0 ${f1((1 - q) * 30)})">${esc(o.sub)}</text>`; }
-  return s;
+  if (o.sub) {
+    const r = renglones(o.sub, 700, 58, 940, 2, 40), q = atras(tramo(tl, 0.22, 0.3));
+    r.lineas.forEach((l, i) => { s += `<text x="540" y="${f1(900 + tam * 0.66 + r.tam + i * r.tam * 1.25)}" text-anchor="middle" font-weight="700" font-size="${r.tam}" fill="${c}" opacity="${f2(lim(q * 3))}" transform="translate(0 ${f1((1 - q) * 30)})">${esc(l)}</text>`; });
+  }
+  return `<g data-bloque="golpe">${s}</g>`;
 }
 
 function pregunta(tl, c, T) {
@@ -674,43 +718,57 @@ function pregunta(tl, c, T) {
   let s = `<g transform="translate(540 900) rotate(${f1(T * 40)})"><circle r="${f1(300 * p)}" fill="none" stroke="${c}" stroke-width="5" stroke-dasharray="26 22" opacity="0.6"/></g>`;
   for (let i = 0; i < 10; i++) { const a = i * 36 * R + T * 0.8, r = 430 - 140 * ((T * 0.9 + i * 0.13) % 1); s += `<circle cx="${f1(540 + Math.cos(a) * r)}" cy="${f1(900 + Math.sin(a) * r)}" r="7" fill="${c}" opacity="0.7"/>`; }
   s += `<g transform="translate(540 900) scale(${f2(p * pulso)})"><text x="0" y="190" text-anchor="middle" font-weight="800" font-size="560" fill="${c}" opacity="0.5" filter="url(#b18)">?</text>`;
-  return s + `<text x="0" y="190" text-anchor="middle" font-weight="800" font-size="560" fill="#FFFFFF">?</text></g>`;
+  return s + `<text x="0" y="190" text-anchor="middle" font-weight="800" font-size="560" fill="#FFFFFF" data-adorno="1">?</text></g>`;
 }
 
+function textoContador(o) {      // «tot 40.000», no «tot40.000»
+  const pre = String(o.prefijo || "").trim(), suf = String(o.sufijo || "").trim();
+  return (pre ? pre + (/[\p{L}.]$/u.test(pre) ? " " : "") : "") + numNLGrande(Number(o.hasta ?? 0), o.decimales ?? 0) + (suf ? (/^\p{L}/u.test(suf) ? " " : "") + suf : "");
+}
 function contador(o, tl, c) {
-  const p = expo(tramo(tl, 0.12, 1.15)), v = Number(o.desde ?? 0) + (Number(o.hasta ?? 0) - Number(o.desde ?? 0)) * p;
-  const txt = `${o.prefijo || ""}${numNLGrande(v, o.decimales ?? 0)}${o.sufijo || ""}`;
-  const final = `${o.prefijo || ""}${numNLGrande(Number(o.hasta ?? 0), o.decimales ?? 0)}${o.sufijo || ""}`;
-  const tam = Math.min(250, 960 / Math.max(1, ancho(final, 800, 100) / 100)), fin = tramo(tl, 1.27, 0.35);
-  const k = (0.85 + 0.15 * atras(tramo(tl, 0, 0.3))) * (1 + 0.08 * Math.exp(-fin * 6) * (fin > 0 ? 1 : 0));
+  const txt = textoContador(o), p = lim((tl - 0.15) / 1.1);
+  const tam = Math.min(250, 920 / Math.max(1, ancho(txt, 800, 100) / 100)), fin = tramo(tl, 1.27, 0.35);
+  const entra = tl < 0.3 ? 1.5 - 0.5 * atras(tramo(tl, 0, 0.3)) : 1;
+  const k = entra * (1 + 0.08 * Math.exp(-fin * 6) * (fin > 0 ? 1 : 0)) * (1 + 0.012 * Math.sin(tl * 5));
   let s = fin > 0 && fin < 1 ? `<circle cx="540" cy="1140" r="${f1(160 + 500 * expo(fin))}" fill="none" stroke="${c}" stroke-width="6" opacity="${f2(0.6 * (1 - fin))}"/>` : "";
-  s += `<g transform="translate(540 1140) scale(${f2(k)})"><text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="${c}" opacity="0.5" filter="url(#b18)">${esc(txt)}</text>`;
+  s += `<g transform="translate(540 1140) scale(${f2(Math.min(k, 1.5))})" opacity="${f2(lim(tl / 0.08))}"><text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="${c}" opacity="0.5" filter="url(#b18)">${esc(txt)}</text>`;
   s += `<text x="0" y="${f1(tam * 0.36)}" text-anchor="middle" font-weight="800" font-size="${f1(tam)}" fill="#FFFFFF">${esc(txt)}</text></g>`;
-  if (o.label) { const q = atras(tramo(tl, 0.3, 0.35)); s += `<text x="540" y="${f1(1140 + tam * 0.36 + 90)}" text-anchor="middle" font-weight="700" font-size="52" fill="${c}" opacity="${f2(lim(q))}">${esc(o.label)}</text>`; }
-  return s;
+  const yb = 1140 + tam * 0.36 + 44;       // diez rayas que se van encendiendo con el tic-tic del sonido
+  for (let i = 0; i < 10; i++) { const on = p * 10 > i; s += `<rect x="${f1(540 - 250 + i * 51)}" y="${f1(yb)}" width="41" height="10" rx="5" fill="${on ? c : "#232A3A"}"${on ? ' filter="url(#gloed)"' : ""}/>`; }
+  if (o.label) {
+    const r = renglones(o.label, 700, 52, 940, 2, 36), q = atras(tramo(tl, 0.3, 0.3));
+    r.lineas.forEach((l, i) => { s += `<text x="540" y="${f1(yb + 84 + i * r.tam * 1.25)}" text-anchor="middle" font-weight="700" font-size="${r.tam}" fill="${c}" opacity="${f2(lim(q * 2))}">${esc(l)}</text>`; });
+  }
+  return `<g data-bloque="contador">${s}</g>`;
 }
 
 function versus(e, tl, T, c, c2, dibuja) {
-  const pa = expo(tramo(tl, 0, 0.32)), pb = expo(tramo(tl, 0.09, 0.32)), pv = atras(tramo(tl, 0.18, 0.32));
-  let s = `<g transform="translate(${f1(-200 * (1 - pa))} 0)"><rect x="0" y="0" width="540" height="1920" fill="${c}" opacity="0.07"/><ellipse cx="270" cy="1010" rx="420" ry="620" fill="${gloedVan(c)}"/>${dibuja(e.ilustracion, 270, 1000, 0.6, 0)}`;
-  if (e.izquierda) s += `<text x="270" y="1330" text-anchor="middle" font-weight="700" font-size="48" fill="#FFFFFF">${esc(e.izquierda)}</text>`;
-  if (e.izquierda_sub) s += `<text x="270" y="1380" text-anchor="middle" font-weight="300" font-size="32" fill="#AEB6C7">${esc(e.izquierda_sub)}</text>`;
-  s += `</g><g transform="translate(${f1(200 * (1 - pb))} 0)"><rect x="540" y="0" width="540" height="1920" fill="${c2}" opacity="0.07"/><ellipse cx="810" cy="1010" rx="420" ry="620" fill="${gloedVan(c2)}"/>${dibuja(e.ilustracion2, 810, 1000, 0.6, 2)}`;
-  if (e.derecha) s += `<text x="810" y="1330" text-anchor="middle" font-weight="700" font-size="48" fill="#FFFFFF">${esc(e.derecha)}</text>`;
-  if (e.derecha_sub) s += `<text x="810" y="1380" text-anchor="middle" font-weight="300" font-size="32" fill="#AEB6C7">${esc(e.derecha_sub)}</text>`;
+  const pa = expo(tramo(tl, 0, 0.2)), pb = expo(tramo(tl, 0.06, 0.2)), pv = atras(tramo(tl, 0.18, 0.32));
+  const lado = (cx, titulo, sub) => {       // rótulo de un lado: en su mitad (440 px), hasta 2 renglones, letra encogida
+    let s = "", y = 1330;
+    if (titulo) { const r = renglones(titulo, 700, 48, 440, 2, 30); r.lineas.forEach(l => { s += `<text x="${cx}" y="${f1(y)}" text-anchor="middle" font-weight="700" font-size="${r.tam}" fill="#FFFFFF">${esc(l)}</text>`; y += r.tam * 1.2; }); y += 6; }
+    if (sub) { const r = renglones(sub, 400, 34, 440, 2, 28); r.lineas.forEach(l => { s += `<text x="${cx}" y="${f1(y)}" text-anchor="middle" font-weight="400" font-size="${r.tam}" fill="#C9D1E0">${esc(l)}</text>`; y += r.tam * 1.2; }); }
+    return s ? `<g data-bloque="vs${cx}" data-unidad="1" data-zona="${cx - 250} 1200 ${cx + 250} 1700">${s}</g>` : "";
+  };
+  let s = `<g transform="translate(${f1(-90 * (1 - pa))} 0)"><rect x="0" y="0" width="540" height="1920" fill="${c}" opacity="0.07"/><ellipse cx="270" cy="1010" rx="420" ry="620" fill="${gloedVan(c)}"/>${dibuja(e.ilustracion, 270, 960, 0.6, 0, "40 520 500 1250")}`;
+  s += lado(270, e.izquierda, e.izquierda_sub);
+  s += `</g><g transform="translate(${f1(90 * (1 - pb))} 0)"><rect x="540" y="0" width="540" height="1920" fill="${c2}" opacity="0.07"/><ellipse cx="810" cy="1010" rx="420" ry="620" fill="${gloedVan(c2)}"/>${dibuja(e.ilustracion2, 810, 960, 0.6, 2, "580 520 1040 1250")}`;
+  s += lado(810, e.derecha, e.derecha_sub);
   s += `</g><line x1="540" y1="560" x2="540" y2="1500" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3"/>`;
-  return s + `<g transform="translate(540 1010) scale(${f2(0.6 + 0.4 * pv)})" opacity="${f2(lim(pv * 2))}"><circle r="60" fill="#0A0E18" stroke="#FFFFFF" stroke-width="4"/><text x="0" y="17" text-anchor="middle" font-weight="800" font-size="46" fill="#FFFFFF">VS</text></g>`;
+  return s + `<g transform="translate(540 960) scale(${f2(0.6 + 0.4 * pv)})" opacity="${f2(lim(pv * 2))}"><circle r="60" fill="#0A0E18" stroke="#FFFFFF" stroke-width="4"/><text x="0" y="17" text-anchor="middle" font-weight="800" font-size="46" fill="#FFFFFF">VS</text></g>`;
 }
 
-function aviso(texto, tl) {
-  const q = atras(tramo(tl, 0.06, 0.3)), w = ancho("⚡ " + texto, 700, 34) + 70, b = 0.5 + 0.5 * Math.sin(tl * 9);
-  return `<g transform="translate(540 512) scale(${f2(0.7 + 0.3 * q)})" opacity="${f2(lim(q * 2))}"><rect x="${f1(-w / 2)}" y="-36" width="${f1(w)}" height="72" rx="36" fill="#2A1606" stroke="#FFB020" stroke-width="${f1(2 + 2 * b)}"/><text x="0" y="12" text-anchor="middle" font-weight="700" font-size="34" fill="#FFD27A">⚡ ${esc(texto)}</text></g>`;
+function aviso(texto, tl, y) {
+  const tam = cabe("⚡ " + texto, 700, 36, 860), q = atras(tramo(tl, 0.06, 0.3)), w = ancho("⚡ " + texto, 700, tam) + 70, b = 0.5 + 0.5 * Math.sin(tl * 9);
+  return `<g transform="translate(540 ${f1(y)}) scale(${f2(0.7 + 0.3 * q)})" opacity="${f2(lim(q * 3))}" data-unidad="1"><rect x="${f1(-w / 2)}" y="-36" width="${f1(w)}" height="72" rx="36" fill="#2A1606" stroke="#FFB020" stroke-width="${f1(2 + 2 * b)}"/><text x="0" y="${f1(tam * 0.35)}" text-anchor="middle" font-weight="700" font-size="${tam}" fill="#FFD27A">⚡ ${esc(texto)}</text></g>`;
 }
+const avisoRepetido = e => { const a = fichas(e.aviso), v = fichas(e.voz || e.texto); return dentroDe(v, a) || a.filter(x => v.includes(x)).length >= Math.max(2, a.length * 0.6); };
 
 function escena(e, t, idx) {
   const T = t, tl = t - e.inicio, d = Math.max(0.5, e.fin - e.inicio), c = kleur(e.color), c2 = kleur(e.color2 || "roze");
   const plano = PLANOS[e.plano] ? e.plano : "grande", P = PLANOS[plano], cam = camara(e, tl, d, idx);
-  const tk = tiempoClave(e) - e.inicio;
+  const tk = tiempoClave(e) - e.inicio, tit = titular(e, t), techo = Math.max(tit.abajo + 26, 300);
+  const planoB = reencuadra(e, d, idx) && tl >= 1.5;      // segundo plano de la escena: un corte de verdad, no un fundido
   // truco 2: los componentes van encadenados (cada uno entra cuando aterriza el anterior, o cuando la voz lo nombra)
   const comps = (e.componentes || []).slice(0, 3);
   const arranque = plano === "dato" || plano === "grafica" ? 0.15 : Math.max(0.12, Math.min(0.55, tk - 0.12));
@@ -719,7 +777,13 @@ function escena(e, t, idx) {
     const previo = i ? t0s[i - 1] + 0.24 : arranque, dicho = momentoDe(e, o);
     t0s.push(dicho !== null ? Math.max(previo, dicho - 0.08) : previo);
   });
-  const ybs = comps.map((o, i) => plano === "dato" ? 1330 + i * 40 : plano === "grafica" ? 900 + i * 300 : 1480);
+  const ALTO = o => ({ medidor: [-115, 205], pildora: [0, 82], deslizador: [-30, 84], numero: [-90, 70], onda: [-150, 24], escala: [-300, 200],
+    barras: [-80, Math.min(4, (o.items || []).length) * 120 - 50] }[o.tipo] || [0, 0]);
+  const gordos = comps.filter(o => o.tipo !== "etiqueta");
+  let suelo = plano === "grafica" ? 800 : plano === "dato" || gordos.length > 1 ? 1210 : 1400;
+  if (gordos.length) { const todo = gordos.reduce((a, o) => a + ALTO(o)[1] - ALTO(o)[0] + 34, -34); suelo = Math.max(plano === "grafica" ? 800 : 1000, Math.min(suelo, 1850 - todo)); }
+  const ybs = comps.map(o => { if (o.tipo === "etiqueta") return 1480; const yb = suelo - ALTO(o)[0]; suelo = yb + ALTO(o)[1] + 34; return yb; });
+  const tope = gordos.length ? Math.min(...comps.map((o, i) => o.tipo === "etiqueta" ? 9999 : ybs[i] + ALTO(o)[0])) - 110 : 1600;
   // truco 3: la cámara sigue lo importante: primero el dibujo y luego cada componente cuando entra
   let fx = P.x, fy = P.y;
   comps.forEach((o, i) => { const q = suave(tramo(tl, t0s[i] + 0.05, 0.45)); fx += (540 - fx) * q; fy += (ybs[i] - fy) * q; });
@@ -737,30 +801,37 @@ function escena(e, t, idx) {
   // capa 2: la ilustración, con muelle al entrar (anticipación y rebote)
   const entra = 0.8 + 0.2 * muelle(tramo(tl, 0, 0.5)), alfa = lim(tl / 0.12);
   const flota = i => Math.sin(T * 1.3 + i) * 9 + empujon;
-  const dibuja = (nombre, x, y, k, i = 0) => {
+  // cada dibujo lleva su zona («x0 y0 x1 y1»): la red de seguridad lo encoge y lo mete dentro si se sale o sube al titular
+  const dibuja = (nombre, x, y, k, i = 0, zona = `30 ${f1(techo)} 1050 1890`) => {
     if (!nombre) return "";
-    const datos = Object.assign({}, e, { __tl: tl }), kk = f2(k * entra);
-    if (String(nombre).startsWith("emoji:")) return `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${kk})">${emoji(nombre.slice(6), c)}</g>`;
-    return ILU[nombre] ? `<g transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${kk})">${ILU[nombre](T, datos)}</g>` : "";
+    const datos = Object.assign({}, e, { __tl: tl }), kk = f2(k * entra), es = String(nombre).startsWith("emoji:");
+    if (!es && !ILU[nombre]) return "";
+    const marca = nombre === "tejido" ? ' data-sangra="1"' : ` data-zona="${zona}"`;
+    return `<g data-pieza="${es ? "emoji" : nombre}"${marca} transform="translate(${f1(x)} ${f1(y + flota(i))}) scale(${kk})">${es ? emoji(nombre.slice(6), c) : ILU[nombre](T, datos)}</g>`;
   };
   let m = "", letras = "";      // letras: cifras y «?» enormes, en su propia capa (la cámara casi no las agranda)
   if (plano === "vs") m += versus(e, tl, T, c, c2, dibuja);
-  else if (plano === "lado") m += dibuja(e.ilustracion, 300, 1000, 0.72, 0) + dibuja(e.ilustracion2, 790, 1000, 0.72, 2);
+  else if (plano === "lado") m += dibuja(e.ilustracion, 290, 1000, 0.72, 0, `30 ${f1(techo)} 530 1500`) + dibuja(e.ilustracion2, 790, 1000, 0.72, 2, `550 ${f1(techo)} 1050 1500`);
   else if (plano === "banda") m += dibuja(e.ilustracion || "tejido", 540, 1010, 1);
   else if (plano === "gancho" || plano === "numero") {
-    const b = d > 2.4 && e.ilustracion ? expo(tramo(tl, 1.55, 0.4)) : 0;     // composición B
+    const b = planoB && e.ilustracion ? 1 : 0;     // composición B: la cifra sube y se encoge, el dibujo crece
     const cyL = plano === "gancho" ? 900 : 1140, dy = (640 - cyL) * b, kl = 1 - 0.38 * b;
     const base = plano === "gancho" ? golpe(e.golpe || {}, tl, c) : contador(e.contador || {}, tl, c);
     letras = `<g transform="translate(540 ${f1(cyL + dy)}) scale(${f2(kl)}) translate(-540 ${-cyL})">${base}</g>`;
     if (e.ilustracion) {
       const yi = P.y + (1180 - P.y) * b, ki = P.k * (1 + (plano === "gancho" ? 1.5 : 0.9) * b);
-      m += dibuja(e.ilustracion, P.x, yi, ki);
+      const zona = b ? "60 880 1020 1860" : plano === "gancho" ? "60 1230 1020 1860" : `60 ${f1(techo)} 1020 990`;
+      const salto = plano === "gancho" && !b ? atras(tramo(tl, 0.55, 0.3)) : 1;
+      if (salto > 0) m += dibuja(e.ilustracion, P.x, b ? 1370 : yi, ki * (0.3 + 0.7 * salto), 0, zona);
     }
   }
-  else if (plano === "pregunta") { letras = pregunta(tl, c, T); m += e.ilustracion ? dibuja(e.ilustracion, P.x, P.y, P.k) : ""; }
+  else if (plano === "pregunta") { letras = pregunta(tl, c, T); m += e.ilustracion ? dibuja(e.ilustracion, P.x, P.y, P.k, 0, "60 1270 1020 1860") : ""; }
 
   else {
-    m += dibuja(e.ilustracion, P.x, P.y, P.k);
+    const hayAbajo = comps.some(o => o.tipo !== "etiqueta") || plano === "final";
+    const zona = plano === "grafica" ? `560 ${f1(techo)} 1050 780` : plano === "dato" ? `60 ${f1(techo)} 1020 ${gordos.length ? tope + 90 : 1180}`
+      : `30 ${f1(techo)} 1050 ${plano === "final" ? 1420 : gordos.length ? tope + 60 : 1800}`;
+    m += dibuja(e.ilustracion, P.x, P.y, P.k, 0, zona);
     if (e.ilustracion2 && (ILU[e.ilustracion2] || String(e.ilustracion2).startsWith("emoji:"))) {
       const k2 = e.ilustracion2 === "pluma" ? P.k * 0.85 : P.k * 0.42;
       const off = e.ilustracion2 === "pluma" ? [-175, -70] : plano === "grafica" ? [-860, 0] : [235, -235];
@@ -790,9 +861,9 @@ function escena(e, t, idx) {
       let der = (o.lado || (ax <= 0 ? "izquierda" : "derecha")) === "derecha";
       if (der && x0 + 170 + tw > 1040) der = false;
       if (!der && x0 - 170 - tw < 40) der = true;
-      let x1 = der ? Math.min(1040 - tw, x0 + 170) : Math.max(40 + tw, x0 - 170), y1 = Math.min(1600, y0 + (ay < 0 ? -60 : 150));
+      let x1 = der ? Math.min(1040 - tw, x0 + 170) : Math.max(40 + tw, x0 - 170), y1 = Math.max(techo + 60, Math.min(tope, y0 + (ay < 0 ? -60 : 150)));
       const medio = 300 * k, tapa = der ? x1 < P.x + medio : x1 > P.x - medio;
-      if (tapa) { x1 = 540; y1 = Math.min(1630, P.y + medio + 70); }
+      if (tapa) { x1 = 540; y1 = Math.min(tope, P.y + medio + 70); }
       x = etiquetaLinea(x0, y0, x1, y1, o.texto || "", o.sub || "", p, "#FFFFFF", tapa);
     }
     const cy = yb;
@@ -800,9 +871,10 @@ function escena(e, t, idx) {
   });
   s += capa(fr, { z: 1, x: cam.x, y: cam.y }, 1.2);
   if (plano === "final") s += final(tl, e.botones);
-  if (e.aviso) s += aviso(e.aviso, tl);
+  if (e.aviso && !avisoRepetido(e)) s += aviso(e.aviso, tl, tit.abajo + 60);
   s += `<rect width="1080" height="1920" fill="url(#gVignet)"/>`;
-  return s + texto(e, t, idx);
+  if (planoB && tl < 1.62) s += `<rect width="1080" height="1920" fill="#FFFFFF" opacity="${f2(0.22 * (1 - (tl - 1.5) / 0.12))}"/>`;   // destello del corte
+  return s + tit.svg;
 }
 
 function rayas(p) {   // estelas del barrido
@@ -817,49 +889,68 @@ window.pintar = function (t) {
   let i = E.findIndex(e => t < e.fin);
   if (i < 0) i = E.length - 1;
   let s = escena(E[i], t, i);
-  const tl = t - E[i].inicio, TR = 0.24, TRT = 0.42, transforma = i > 0 && i % 3 === 0;
-  if (i > 0 && tl < (transforma ? TRT : TR)) {     // corte con zoom, barrido lateral o transformación; nunca un fundido plano
-    const p = tl / TR, prev = E[i - 1], viejo = escena(prev, prev.fin - 0.001, i - 1);
-    if (transforma) {   // truco 4: la tarjeta del dibujo crece y se convierte en la escena siguiente
-      const q = expo(tl / TRT), P0 = PLANOS[prev.plano] || PLANOS.grande, w0 = 360, h0 = 360;
-      const x = (P0.x - w0 / 2) * (1 - q), y = (P0.y - h0 / 2) * (1 - q), w = w0 + (1080 - w0) * q, h = h0 + (1920 - h0) * q;
-      const rx = 56 * (1 - q);
-      DEFS["tr" + i] = `<clipPath id="tr${i}" clipPathUnits="userSpaceOnUse"><rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}" rx="${f1(rx)}"/></clipPath>`;
-      s = `<g opacity="${f2(1 - 0.65 * q)}">${viejo}</g><g clip-path="url(#tr${i})">${s}</g>` +
-          `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}" rx="${f1(rx)}" fill="none" stroke="${kleur(E[i].color)}" stroke-width="${f1(10 * (1 - q))}" opacity="${f2(1 - q)}"/>`;
-    } else if (i % 2) {
-      s = `<g transform="translate(540 960) scale(${(0.88 + 0.12 * expo(p)).toFixed(4)}) translate(-540 -960)">${s}</g>` +
-          `<g opacity="${f2(1 - p)}" transform="translate(540 960) scale(${(1 + 0.32 * p * p).toFixed(4)}) translate(-540 -960)">${viejo}</g>`;
-    } else {
-      s = `<g transform="translate(${f1(1080 * (1 - expo(p)))} 0)">${s}</g><g transform="translate(${f1(-1080 * p * p)} 0)">${viejo}</g>` + rayas(p);
-    }
-    if (!transforma) s += `<rect width="1080" height="1920" fill="#FFFFFF" opacity="${f2(0.14 * (1 - p))}"/>`;
+  const tl = t - E[i].inicio, TR = 0.2;
+  if (i > 0 && tl < TR) {     // corte seco con golpe de zoom y destello: nunca dos escenas a la vez (sus textos se pisarían)
+    const p = tl / TR;
+    s = `<g transform="translate(540 960) scale(${(0.93 + 0.07 * expo(p)).toFixed(4)}) translate(-540 -960)">${s}</g>` +
+        `<rect width="1080" height="1920" fill="#FFFFFF" opacity="${f2(0.24 * (1 - p))}"/>`;
   }
   const pr = lim(t / (g.duracion || 1));
-  s += `<text x="540" y="168" text-anchor="middle" font-weight="600" font-size="24" letter-spacing="10" fill="#8B93A3">${esc(g.cabecera || "WIST JE DAT")}</text>`;
+  s += `<text x="540" y="168" text-anchor="middle" font-weight="600" font-size="28" letter-spacing="9" fill="#9BA3B3">${esc(g.cabecera || "WIST JE DAT")}</text>`;
   s += `<rect x="440" y="192" width="200" height="4" rx="2" fill="#FFFFFF" opacity="0.12"/><rect x="440" y="192" width="${f1(200 * pr)}" height="4" rx="2" fill="#5ED3F3"/>`;
-  if (t > g.duracion - 0.35) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.35)) / 0.35))}"/>`;
+  // el fundido final dura muy poco: el último fotograma que miran los jueces (0,2 s antes del final) se ve entero
+  if (t > g.duracion - 0.1) s += `<rect width="1080" height="1920" fill="#000" opacity="${f2(lim((t - (g.duracion - 0.1)) / 0.1))}"/>`;
   const raiz = document.getElementById("scene");
   raiz.innerHTML = `<defs>${Object.values(DEFS).join("")}</defs>` + s;
-  if (i === 0 || tl >= 0.45) enMarco(raiz);         // durante el corte entre escenas los dibujos salen de lado a propósito
+  enMarco(raiz);
 };
-// Red de seguridad: ningún texto se sale de la pantalla (los jueces castigan las palabras cortadas en el borde).
-// Si un texto es más ancho que la pantalla, se hace más pequeño; si se sale por un lado, se mete hacia dentro.
+// Red de seguridad: nada se sale de la pantalla ni de su zona (los jueces castigan lo cortado en el borde y lo que tapa).
+// Cada «unidad» (un texto con su caja, un rótulo de varias líneas) y cada dibujo se mueve y se encoge entero, nunca una
+// letra por un lado y su recuadro por otro; los textos sueltos, igual. Los rótulos que se pisan se separan.
+function cajaDe(el) {      // caja en pantalla de lo que se ve de verdad (sin los halos desenfocados)
+  if (!el.hasAttribute("data-pieza")) return el.getBoundingClientRect();
+  let u = null;
+  for (const x of el.querySelectorAll("rect,circle,ellipse,path,polygon,polyline,line,text")) {
+    let borroso = false;
+    for (let y = x; y && y !== el.parentNode; y = y.parentNode) if (/url\(#b\d+\)/.test(y.getAttribute("filter") || "") || Number(y.getAttribute("opacity") ?? 1) < 0.3) { borroso = true; break; }
+    if (borroso || x.closest("clipPath")) continue;
+    const r = x.getBoundingClientRect();
+    if (!r.width && !r.height) continue;
+    u = u ? { left: Math.min(u.left, r.left), top: Math.min(u.top, r.top), right: Math.max(u.right, r.right), bottom: Math.max(u.bottom, r.bottom) } : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  }
+  if (!u) return el.getBoundingClientRect();
+  u.width = u.right - u.left; u.height = u.bottom - u.top;
+  return u;
+}
+function mueve(el, k, dx, dy, r) {     // encoge (k) alrededor de su centro y desplaza, en píxeles de pantalla
+  const P = el.parentNode.getScreenCTM(), cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  const C = new DOMMatrix().translate(cx + dx, cy + dy).scale(k).translate(-cx, -cy);
+  const M = DOMMatrix.fromMatrix(P).inverse().multiply(C).multiply(DOMMatrix.fromMatrix(P));
+  el.setAttribute("transform", `matrix(${M.a} ${M.b} ${M.c} ${M.d} ${M.e} ${M.f}) ${el.getAttribute("transform") || ""}`);
+}
 function enMarco(raiz, margen = 30) {
-  for (const el of raiz.querySelectorAll("text")) {
-    let r = el.getBoundingClientRect();
-    if (!r.width) continue;
-    let bb; try { bb = el.getBBox(); } catch (e) { continue; }
-    const k = bb.width ? r.width / bb.width : 1, libre = 1080 - 2 * margen;
-    if (r.width > libre) {
-      const fs = parseFloat(el.getAttribute("font-size") || "0");
-      if (fs) { el.setAttribute("font-size", (fs * libre / r.width * 0.97).toFixed(1)); r = el.getBoundingClientRect(); }
+  const cosas = [...raiz.querySelectorAll("[data-pieza],[data-unidad],text")].filter(el =>
+    !el.closest("defs") && !el.hasAttribute("data-sangra") && !(el.parentNode.closest && el.parentNode.closest("[data-pieza],[data-unidad]")));
+  for (const el of cosas) {
+    const r = cajaDe(el);
+    if (!r.width || !r.height) continue;
+    const z = (el.getAttribute("data-zona") || "").split(" ").map(Number);
+    const [x0, y0, x1, y1] = z.length === 4 ? z : [margen, margen, 1080 - margen, 1920 - margen];
+    const k = Math.min(1, (x1 - x0) / r.width, (y1 - y0) / r.height), w = r.width * k, h = r.height * k;
+    const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const nx = Math.min(Math.max(cx, x0 + w / 2), x1 - w / 2), ny = Math.min(Math.max(cy, y0 + h / 2), y1 - h / 2);
+    if (k < 0.999 || Math.abs(nx - cx) > 0.5 || Math.abs(ny - cy) > 0.5) mueve(el, k, nx - cx, ny - cy, r);
+  }
+  const rotulos = [...raiz.querySelectorAll("[data-separa]")].filter(el => Number(el.getAttribute("opacity") ?? 1) > 0.05);
+  for (let i = 1; i < rotulos.length; i++) for (let j = 0; j < i; j++) {
+    const a = rotulos[j].getBoundingClientRect(), b = rotulos[i].getBoundingClientRect();
+    if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0) {
+      const abajo = a.bottom + 10 - b.top, arriba = a.top - 10 - b.bottom;
+      mueve(rotulos[i], 1, 0, b.bottom + abajo < 1880 ? abajo : arriba, b);
     }
-    const dx = r.left < margen ? margen - r.left : r.right > 1080 - margen ? 1080 - margen - r.right : 0;
-    if (Math.abs(dx) > 0.5) el.setAttribute("transform", `translate(${(dx / (k || 1)).toFixed(1)} 0) ${el.getAttribute("transform") || ""}`);
   }
 }
 
-window.listo = Promise.all([300, 600, 700, 800].map(w => document.fonts.load(`${w} 60px Poppins`))).then(() => document.fonts.ready);
+window.listo = Promise.all([300, 400, 600, 700, 800].map(w => document.fonts.load(`${w} 60px Poppins`))).then(() => document.fonts.ready);
 </script>
 </body></html>
