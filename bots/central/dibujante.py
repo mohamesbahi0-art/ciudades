@@ -125,6 +125,16 @@ def dibujar(escenas, modelo, carpeta, espera_maxima=1800, sin_avance=420, repeti
             if estado.get("done"):
                 try:
                     gen = _peticion("GET", f"/generate/status/{p['id']}")["generations"][0]
+                    if gen.get("censored"):              # el servicio ha tapado la imagen con su cartel de «bloqueada»
+                        # (obra de la Élite: un fotograma de error suspendía solo el vídeo). Se repite más suave y, si
+                        # tampoco, esa escena se queda sin dibujo y el Montador usa la de al lado: nunca sale el cartel.
+                        if p["repetida"] < repeticiones:
+                            p.update(id=pedir(escenas[i]["dibujo"] + ", safe for work, no blood, no weapons pointed at camera",
+                                              modelo), repetida=p["repetida"] + 1)
+                            print(f"  escena {i + 1}: imagen bloqueada por el servicio; se repite más suave")
+                        else:
+                            pendientes.pop(i)
+                        continue
                     ruta = os.path.join(carpeta, f"escena{i + 1:02d}.webp")
                     req = urllib.request.Request(gen["img"], headers={"User-Agent": AGENTE})
                     with urllib.request.urlopen(req, timeout=120) as r, open(ruta, "wb") as f:
