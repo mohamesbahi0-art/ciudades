@@ -40,9 +40,9 @@ excelentes, que la gente vea enteros y comparta. Un tema duro u oscuro no es mot
 Devuelve SOLO un JSON: {{"voto": "inocente" (que se suba) o "culpable" (que no), "nota": 0-100, "porque": "una frase desde tu piel"}}"""
 
 
-JUNTOS = """Eres el jurado popular del Juzgado de una fábrica de vídeos cortos: doce personas muy distintas. Cada miembro del
-jurado popular vota por separado, desde su piel y con sinceridad: no os ponéis de acuerdo ni os dais la razón por quedar
-bien, y es normal que no coincidáis.
+JUNTOS = """Eres el jurado popular del Juzgado de una fábrica de vídeos cortos: doce personas muy distintas.
+Cada miembro del jurado popular vota por separado, desde su piel y con sinceridad: no os ponéis de acuerdo ni os dais la
+razón por quedar bien, y es normal que no coincidáis.
 Los doce:
 {pieles}
 Se juzga este guion de {donde} (en {idioma}), ANTES de grabarlo:
