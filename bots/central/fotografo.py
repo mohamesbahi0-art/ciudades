@@ -1,6 +1,6 @@
 """El Fotógrafo: busca en Wikimedia Commons una foto LIBRE para cada escena (biografías de gente real) y la deja lista
-en vertical. Solo licencias que dejan usarla en un vídeo sin más condición que nombrar al autor: dominio público, CC0 y
-CC BY. Fuera las demás (SA, NC, ND). Cada foto lleva su crédito (autor y licencia), que va en la descripción del vídeo.
+en vertical. Solo fotos que se pueden usar sin nombrar a nadie (dominio público y CC0), porque el dueño no quiere
+créditos en sus vídeos. Fuera todas las demás (CC BY, SA, NC, ND). De dónde sale cada una queda apuntado en privado.
 No copia fotos de vídeos de otros creadores. Si una escena no tiene foto, usa la de la escena de al lado."""
 import html
 import json
@@ -13,7 +13,9 @@ import urllib.request
 
 API = "https://commons.wikimedia.org/w/api.php"
 AGENTE = "ciudades-bot/1.0 (fotos libres con su credito para videos cortos)"
-LIBRES = ("public domain", "pd", "cc0", "cc by 1.0", "cc by 2.0", "cc by 2.5", "cc by 3.0", "cc by 4.0", "no restrictions")
+# El dueño no quiere créditos en sus vídeos: por eso solo valen las fotos que NO piden nombrar a nadie (dominio público
+# y CC0). Las CC BY obligan a nombrar al autor, así que quedan fuera.
+LIBRES = ("public domain", "pd", "cc0", "no restrictions")
 
 
 def _libre(licencia):

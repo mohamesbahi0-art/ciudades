@@ -369,6 +369,16 @@ def _lecciones_escritor(clave, cuadernos):
     if receta:
         lecciones += "\n- (Receta de los Influencers, de lo que funciona ahora) " + json.dumps(
             {k: v for k, v in receta.items() if k not in ("fecha", "basada_en")}, ensure_ascii=False)
+    try:                       # lo que el dueño ha descartado manda más que la nota del Juzgado
+        tirados = privado.descartes(clave)
+        if tirados:
+            lecciones += ("\n- (EL DUEÑO HA DESCARTADO estos vídeos de esta cuenta aunque tuvieran buena nota; no hagas "
+                          "más con ese tema, ese enfoque ni ese estilo, y busca algo claramente distinto)\n" + tirados)
+        funciona = privado.exitos(clave)
+        if funciona:
+            lecciones += "\n- (Lo que más visitas le ha dado de verdad a esta cuenta; haz más como lo de arriba)\n" + funciona
+    except Exception:
+        pass
     return lecciones
 
 
@@ -666,11 +676,7 @@ def main(argv=None):
                 paso("dibujante", f"buscando {len(g['escenas'])} fotos libres en Wikimedia Commons")
                 imagenes, creditos = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "dibujos"),
                                                            persona=str(g.get("persona") or ""))
-                if creditos:
-                    pie = "\n📷 Wikimedia Commons: " + "; ".join(creditos)[:600]
-                    for campo in ("descripcion", "texto_instagram", "texto_tiktok"):
-                        if g.get(campo):
-                            g[campo] = g[campo].rstrip() + pie
+                g["fotos_de"] = creditos           # se guarda de dónde sale cada foto, pero no se pone en el vídeo
             else:
                 paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
                 imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),

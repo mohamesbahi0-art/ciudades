@@ -113,12 +113,33 @@ def intentados(clave, dias=3):
 
 
 def exitos(clave, cuantos=6):
-    """Los vídeos de la cuenta del dueño que más visitas han tenido (estado/referencias/<alias>-tiktok.json)."""
-    d = leer(os.path.join("estado", "referencias", f"{alias(clave)}-tiktok.json"), {}) or {}
-    videos = sorted((v for v in d.get("videos") or [] if isinstance(v, dict) and v.get("visitas")),
-                    key=lambda v: -v["visitas"])[:cuantos]
-    return "\n".join(f"- {v['visitas']:,} visitas · {v.get('segundos', '?')} s · {str(v.get('titulo'))[:110]}".replace(",", ".")
-                     for v in videos)
+    """Los vídeos de la cuenta del dueño que más visitas han tenido: lo que el Contador de redes lee cada 3 horas de su
+    TikTok (estado/redes/contador.json) y, si aún no hay, la foto fija de estado/referencias/<alias>-tiktok.json. Así los
+    guionistas ven siempre lo que está funcionando de verdad, y también lo que menos (para no repetirlo)."""
+    videos = ((leer(os.path.join("estado", "redes", "contador.json"), {}) or {}).get("videos") or {}).get(clave) or \
+        (leer(os.path.join("estado", "referencias", f"{alias(clave)}-tiktok.json"), {}) or {}).get("videos") or []
+    videos = sorted((v for v in videos if isinstance(v, dict) and v.get("visitas")), key=lambda v: -v["visitas"])
+    def linea(v):
+        return f"- {v['visitas']:,} visitas · {v.get('segundos', '?')} s · {str(v.get('titulo'))[:110]}".replace(",", ".")
+    texto = "\n".join(linea(v) for v in videos[:cuantos])
+    if len(videos) >= cuantos + 3:
+        texto += "\nLos que MENOS (no hagas más como estos):\n" + "\n".join(linea(v) for v in videos[-3:])
+    return texto
+
+
+def descartes(clave, cuantos=8):
+    """Lo que el dueño ha descartado en «Para subir» de esta cuenta, con su motivo: lo suyo manda más que cualquier nota."""
+    import glob
+    vistos = {}
+    for ruta in sorted(glob.glob(os.path.join(carpeta(), "parasubir", "*.json"))):
+        try:
+            with open(ruta, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if d.get("barrio") == clave and d.get("estado") == "descartado" and d.get("titulo"):
+            vistos[d["titulo"]] = f"- «{str(d['titulo'])[:80]}» (nota {d.get('nota', '-')}): {str(d.get('motivo') or 'sin motivo')[:120]}"
+    return "\n".join(list(vistos.values())[-cuantos:])
 
 
 def apuntar_titulo(clave, titulo):
