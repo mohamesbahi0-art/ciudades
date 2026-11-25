@@ -34,7 +34,9 @@ Para CADA espectador decide, metiéndote en su piel (su edad, dónde está, su p
 - hasta qué segundo lo ve antes de pasar al siguiente (0 = ni para el dedo; {duracion} = lo ve entero);
 - por qué se va o por qué se queda, en 6 palabras como mucho;
 - si lo compartiría o comentaría (1) o no (0).
-La gente real es impaciente: en un vídeo normal más de la mitad se va antes del segundo 3. No regales nada.
+La gente real es impaciente y no regala nada: quien no ve nada que le interese en el primer segundo, pasa. Pero no
+castigues al vídeo por el tema: al que suele ver vídeos de este tema, el tema ya le interesa; se irá si el arranque es
+lento, confuso o aburrido, no «porque no es lo suyo».
 
 Espectadores:
 {espectadores}
@@ -42,10 +44,21 @@ Espectadores:
 Devuelve SOLO un JSON: {{"publico": [[número de espectador, segundo en que se va, "por qué", 0 o 1], ...]}} con los {n}."""
 
 
-def espectadores(n=100, semilla=None):
+DEL_NICHO = 0.7      # las redes enseñan cada vídeo sobre todo a quien ya ve cosas de ese tema: 7 de cada 10 son de esos
+
+
+def espectadores(n=100, semilla=None, nicho=None):
+    """El público al que la red le enseñaría ESTE vídeo: la mayoría, gente a la que le gusta el tema de la cuenta (así
+    reparte el algoritmo); el resto, gente cualquiera. Antes eran todos al azar y casi nadie era del tema, así que la
+    mitad se iba «porque no es lo mío» hiciera lo que hiciera el vídeo, y eso no dice nada de si el vídeo es bueno."""
     r = random.Random(semilla)
-    return [f"{i}. {r.choice(EDADES)} años, {r.choice(MOMENTOS)}; {r.choice(PACIENCIAS)}; le gusta {r.choice(GUSTOS)} y "
-            f"{r.choice(GUSTOS)}" for i in range(1, n + 1)]
+    sala = []
+    for i in range(1, n + 1):
+        suyo = bool(nicho) and r.random() < DEL_NICHO
+        gustos = (f"suele ver vídeos de {nicho} (por eso le sale este) y también le gusta {r.choice(GUSTOS)}" if suyo
+                  else f"le gusta {r.choice(GUSTOS)} y {r.choice(GUSTOS)}")
+        sala.append(f"{i}. {r.choice(EDADES)} años, {r.choice(MOMENTOS)}; {r.choice(PACIENCIAS)}; {gustos}")
+    return sala
 
 
 def mirar(guion, canal, imagenes, duracion, prueba=False):
@@ -59,7 +72,9 @@ def mirar(guion, canal, imagenes, duracion, prueba=False):
     texto = PREGUNTA.format(donde="YouTube Shorts" if canal.get("destino", "youtube") == "youtube" else "TikTok e Instagram",
                             n=n, idioma=idioma, duracion=round(float(duracion)), titulo=guion.get("titulo", ""),
                             gancho=guion.get("texto_pantalla", ""), narracion=str(guion.get("narracion", ""))[:6000],
-                            espectadores="\n".join(espectadores(n, semilla=guion.get("titulo"))))
+                            espectadores="\n".join(espectadores(
+                                n, semilla=guion.get("titulo"),
+                                nicho=str(canal.get("tema") or canal.get("nicho") or canal.get("apodo") or "")[:80] or None)))
     try:
         # los modelos buenos (pocas preguntas al día) se guardan para los jueces: el público mira con los ligeros
         r = ia.preguntar(texto, papel="jurado", imagenes=imagenes, ligero_primero=True, temperatura=0.8)
@@ -115,7 +130,8 @@ def en_palabras(p):
         return ""
     return (f"Público de {p['personas']} espectadores distintos: paran el dedo el {p['paran']} %, pasan del segundo 3 el "
             f"{p['pasan_3s']} %, llegan a la mitad el {p['mitad']} % y lo ven entero el {p['final']} %; lo compartirían el "
-            f"{p['comparten']} %."
+            f"{p['comparten']} %. (Vara de medir: en un vídeo corto normal pasa del segundo 3 un 45-55 %; un 65 % es "
+            f"bueno y un 75 % o más, excelente. Lo verían entero un 20-30 % en uno normal; 40 % o más es muy bueno.)"
             + (f" Los que se van lo hacen hacia el segundo {p['se_van_en']}" if p.get("se_van_en") is not None else "")
             + (f" y dicen: {'; '.join(p['motivos_irse'])}." if p.get("motivos_irse") else ".")
             + (f" Los que se quedan: {'; '.join(p['motivos_quedarse'])}." if p.get("motivos_quedarse") else ""))
