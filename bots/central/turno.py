@@ -535,6 +535,11 @@ def _lecciones_escritor(clave, cuadernos):
             lecciones += "\n- (Lo que más visitas le ha dado de verdad a esta cuenta; haz más como lo de arriba)\n" + funciona
     except Exception:
         pass
+    try:                       # el plan del Cerebro para el próximo vídeo de esta cuenta (va lo último: es lo más fresco)
+        from bots.cerebro import cerebro
+        lecciones += cerebro.receta(clave)
+    except Exception:
+        pass
     return lecciones
 
 

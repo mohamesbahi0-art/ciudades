@@ -47,7 +47,11 @@ def cambios_elite():
     """Lo que la Élite ha cambiado por encima de la configuración: {"canales": {clave: {campo: valor}}, "fabrica":
     {"ruta.con.puntos": valor}}. Se aplica al leer y no toca los ficheros de config/: quitarlo de aquí lo deshace."""
     d = leer(CAMBIOS_ELITE, {}) or {}
-    return {"canales": d.get("canales") or {}, "fabrica": d.get("fabrica") or {}}
+    canales = {k: dict(v) for k, v in (d.get("canales") or {}).items()}
+    # y lo que ha cambiado el Cerebro (estado/cerebro/ajustes.json), que manda sobre la Élite
+    for clave, cambios in ((leer(os.path.join("estado", "cerebro", "ajustes.json"), {}) or {}).get("canales") or {}).items():
+        canales.setdefault(clave, {}).update({k: v for k, v in (cambios or {}).items() if not k.startswith("_")})
+    return {"canales": canales, "fabrica": d.get("fabrica") or {}}
 
 
 def ajustes():

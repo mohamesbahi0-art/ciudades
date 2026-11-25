@@ -161,7 +161,9 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
         if c.get("pausado"):
             esperan[clave] = "en pausa"
             continue
-        if descansa(clave, dibuja=c.get("estudio") != "animacion" and not c.get("solo_clips")):
+        animado = int((privado.cambios_elite()["canales"].get(clave) or {}).get("hipnotico_cada")
+                      or c.get("hipnotico_cada") or 0) == 1          # el Cerebro la ha pasado al formato sin dibujos
+        if descansa(clave, dibuja=c.get("estudio") != "animacion" and not c.get("solo_clips") and not animado):
             continue
         if (c.get("tipo") in SOLO_CON_CLIP or clave in SOLO_CON_CLIP) and clave not in con_clip:
             esperan[clave] = "esperando a que grabes un clip (la lista está en la app)"
