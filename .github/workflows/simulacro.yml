@@ -60,6 +60,8 @@ jobs:
         run: python pruebas/simulacro_directos.py
       - name: Canal de mapas (Archivero, Cartógrafo y un vídeo de bolas-país dibujado de verdad)
         run: python pruebas/simulacro_bolas.py
+      - name: Formato hipnótico (historia de terror con bolas de neón; gancho en el primer fotograma y plano nuevo cada 3 s)
+        run: python pruebas/simulacro_hipnotico.py
       - name: Taller de los Mecánicos (arrancar, repetir, descansar, limpiar y dejar el parte)
         run: python pruebas/simulacro_mecanicos.py
       - name: Arreglos (un vídeo suspendido por poco se rehace con sus fallos; sin juez, espera; la pausa de la app)

@@ -490,6 +490,8 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     avisar("estudio: voz escena a escena")
     voz = voz_por_escenas(g, carpeta, canal)
     g["voz_motor"] = locutor.MOTOR.get("motor", "edge")
+    if hasattr(m, "preparar"):                 # lo que el formato calcula con la voz ya grabada (p. ej. sus cambios de plano)
+        m.preparar(g)
     if str(canal.get("voz_estudio") or "").startswith("eleven:"):      # por qué no ha sonado la voz del dueño (si pasa)
         aviso = locutor.MOTOR.get("aviso")
         if aviso:
