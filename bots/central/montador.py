@@ -73,7 +73,13 @@ MOVIMIENTOS = [   # cada toma empieza con un encuadre distinto de cómo acabó l
 ]
 
 
+PRIMER_CORTE = 1.2        # segundos del primer plano
+PLANO_MAXIMO = 2.4        # segundos que dura un plano como mucho
+
+
 def _gancho(texto, ancho_max=15):
+    # sin emojis ni símbolos raros: la letra del rótulo no los tiene y salían como un recuadro roto
+    texto = "".join(c for c in str(texto) if ord(c) < 0x2190 and c not in "#").strip() or str(texto)
     lineas, actual = [], ""
     for p in texto.upper().split():
         if actual and len(actual) + 1 + len(p) > ancho_max:
@@ -92,7 +98,20 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
         imagenes = rellenar(imagenes)
         durs = duraciones_escenas(guion["escenas"], [{"inicio": w["i"]} for w in palabras_voz], total)
         clips = []
+        # Ningún plano quieto de más: el primero se corta a 1,2 s (en el segundo 1 es cuando se va la gente) y los
+        # demás, cada 2,4 s como mucho. El corte es la misma imagen con otro encuadre y otro movimiento.
+        piezas = []
         for n, (img, d) in enumerate(trozos(imagenes, durs)):
+            tope = PRIMER_CORTE if n == 0 else PLANO_MAXIMO
+            if d > tope + 0.5:
+                partes = [PRIMER_CORTE] if n == 0 else []
+                resto = d - sum(partes)
+                cuantas = max(1, int(-(-resto // PLANO_MAXIMO)))
+                partes += [resto / cuantas] * cuantas
+                piezas += [(img, x) for x in partes]
+            else:
+                piezas.append((img, d))
+        for n, (img, d) in enumerate(piezas):
             cuadros = max(1, round(d * FPS))
             zoom, x, y = (m.format(c=cuadros) for m in MOVIMIENTOS[n % len(MOVIMIENTOS)])
             clip = os.path.join(tmp, f"c{n:02d}.mp4")
