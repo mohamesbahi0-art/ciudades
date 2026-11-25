@@ -14,6 +14,7 @@ representen lo que queramos decir es mucho mejor»).
 Si no hay tomas suficientes, el canal sigue como siempre.
 """
 import json
+import math
 import os
 import random
 import re
@@ -34,7 +35,9 @@ JUEGOS = {"gta5": "GTA 5", "gta6": "GTA 6"}
 MIN_TOMAS = 6            # tomas para hacer con clips un vídeo de un canal de un solo juego...
 MIN_FUENTES = 2          # ...sacadas de al menos 2 vídeos distintos (si no, todos los vídeos enseñarían lo mismo)
 MIN_PAREJAS = 2          # cosas con toma de GTA 5 y de GTA 6 para hacer un versus
-PRIMER_CORTE, PLANO_MAX = 2.0, 2.8
+PRIMER_CORTE, PLANO_MAX = 1.6, 2.0      # el Cerebro: primer cambio antes del segundo 2 y un plano nuevo cada 1,5-2 s
+VERSUS = {"seg_min": 25, "seg_max": 30, "pal_min": 55, "pal_max": 80, "esc_min": 7, "esc_max": 9}   # 3 rondas de ~8 s
+PALABRAS_ESCENA = {True: 10, False: 14}  # voz por escena como mucho (versus / un solo juego)
 COLORES = {"gta5": "0xE8412F", "gta6": "0x2F7BE8"}
 
 GUION = """Eres el Escritor del canal de YouTube Shorts «{nombre}» ({tema}). Esta vez el vídeo NO lleva dibujos: se monta
@@ -44,7 +47,12 @@ Vídeo vertical de {seg_min} a {seg_max} segundos, en {idioma}.
 {formato}
 Reglas que enganchan:
 - Los 2 primeros segundos son el gancho: una frase que abre una pregunta o empieza en mitad de la acción (nada de saludos).
-- Frases cortas, una idea por frase. Algo nuevo cada 2 o 3 segundos (el Montador cambia de plano así).
+- Frases cortas, una idea por frase. Algo nuevo cada 2 segundos (el Montador cambia de plano así). Como mucho
+  {pal_escena} palabras de voz por escena.
+- De un juego que todavía no ha salido (GTA 6) solo vale lo que SE VE en la toma o lo que traen las fuentes, y dicho así
+  («en esta toma se ve…», «en el tráiler se ve…»). Nada de mecánicas, sistemas, secretos ni fechas sin confirmar contados
+  como hechos; si no se ve ni está en las fuentes, no lo digas.
+- No prometas nada que el vídeo no enseñe o no diga después, y no dejes la última frase a medias.
 - El final remata con una pregunta que invite a comentar y, si puede ser, enlaza con la primera frase.
 - Escribe los números como se dicen. Entre {pal_min} y {pal_max} palabras en total.
 - No nombres a los creadores de las tomas: su crédito va en la descripción.
@@ -59,24 +67,35 @@ TOMAS DISPONIBLES (usa solo estas, por su código):
 {idea}
 Devuelve SOLO un JSON:
 {{"idea": "una línea", "titulo": "título de 70 caracteres como mucho, con gancho, 1 o 2 emojis y acabado en #shorts",
-  "texto_pantalla": "de 2 a 5 palabras para los 2 primeros segundos", "narracion": "todo lo que dice la voz, entero",
+  "texto_pantalla": "{pantalla}", "narracion": "todo lo que dice la voz, entero",
   "escenas": [{escena}],
   "descripcion": "una o dos frases", "hashtags": ["#3 a 5 hashtags del tema"]{fuentes_usadas}}}
 Entre {esc_min} y {esc_max} escenas, en orden, que juntas cubran toda la narración."""
 
 FORMATO_UNO = """- Cada escena enseña UNA toma. Varía: no pongas la misma toma en dos escenas seguidas.
+- La toma de la PRIMERA escena tiene que enseñar ya la cosa de la que habla el título (nada de planos de ambiente antes),
+  y «texto_pantalla» la nombra con 3 a 5 palabras («EL PERRO EN MOTO»). Si ninguna toma enseña eso, cambia de tema.
 - «rotulo» (si quieres): de 1 a 3 palabras grandes que refuerzan lo que se dice («¡MIRA EL AGUA!»)."""
 ESCENA_UNO = '{"texto": "las frases exactas de la narración de esta escena", "toma": "código", "rotulo": "opcional"}'
 
-FORMATO_VERSUS = """- Es un GTA 5 contra GTA 6 en pantalla partida: arriba GTA 5 y abajo GTA 6, a la vez.
-- Organízalo en 3 o 4 RONDAS. Cada ronda compara UNA cosa que tengan los dos juegos ({parejas}), con una toma de GTA 5
-  y otra de GTA 6 de esa misma cosa. La primera escena es el gancho y ya lleva su pareja de tomas.
-- En cada ronda di qué se ve en cada juego y quién gana («gana»: "gta5", "gta6" o "empate"). Sé justo: si GTA 5 gana
-  en algo, dilo (eso engancha y trae comentarios).
-- «rotulo»: el nombre de la ronda, de 1 a 3 palabras («RONDA 1: AGUA»).
-- Termina con el marcador y una pregunta: «¿Con cuál te quedas?»."""
-ESCENA_VERSUS = ('{"texto": "las frases exactas de esta escena", "gta5": "código de una toma de GTA 5", '
-                 '"gta6": "código de una toma de GTA 6", "rotulo": "RONDA 1: AGUA", "gana": "gta6"}')
+FORMATO_VERSUS = """- Es un GTA 5 contra GTA 6 en pantalla partida: arriba GTA 5 y abajo GTA 6, a la vez. El Montador pone solo
+  la etiqueta de cada juego, el rótulo «GANA GTA 5/6» al acabar cada ronda, el MARCADOR (1-0, 1-1, 2-1) y el veredicto
+  final escrito: tú solo marca bien «gana» y di lo mismo con la voz.
+- «texto_pantalla»: 3 o 4 palabras que nombran la cosa exacta que se compara («FÍSICAS DE COCHES»). La primera palabra de
+  la voz es ese tema, no «En GTA cinco».
+- Escena 1: el gancho (sin «gana»), con una pareja de tomas que ya enseña lo que se compara.
+- Después, 3 RONDAS de 2 escenas cada una. Cada ronda compara UN detalle concreto que tengan los dos juegos ({parejas}),
+  con una toma de GTA 5 y otra de GTA 6 de ese mismo detalle, y que a simple vista se vean distintas. La primera escena
+  de la ronda dice qué se ve; la segunda dice quién gana y lleva «gana»: "gta5", "gta6" o "empate". Solo la escena que
+  cierra la ronda lleva «gana».
+- Sé justo: no puede ganar siempre el mismo si las tomas no lo enseñan. Si GTA 5 gana en algo concreto, dilo (eso trae
+  comentarios).
+- «rotulo»: el nombre de la ronda, de 1 a 3 palabras («RONDA 1: AGUA»), igual en las dos escenas de la ronda.
+- Última escena (sin «gana»): el veredicto con el marcador que sale de tus rondas («GTA seis gana dos a uno») y una
+  pregunta corta para comentar («¿Qué ronda le darías a GTA cinco?»)."""
+ESCENA_VERSUS = ('{"texto": "las frases exactas de esta escena (10 palabras como mucho)", '
+                 '"gta5": "código de una toma de GTA 5", "gta6": "código de una toma de GTA 6", '
+                 '"rotulo": "RONDA 1: AGUA", "gana": "gta6 (solo en la escena que cierra la ronda)"}')
 
 
 # ---------- el índice de la videoteca ----------
@@ -271,6 +290,57 @@ def _parecida(lista, juego, texto, evitar=()):
     return max(candidatas, key=puntos)
 
 
+def _palabras(texto):
+    return re.findall(r"\w+", str(texto or ""))
+
+
+def marcador(escenas):
+    """El marcador (GTA 5, GTA 6) después de cada escena (sube cuando una ronda termina con ganador)."""
+    cuenta, pasos = [0, 0], []
+    for e in escenas:
+        if e.get("gana") in ("gta5", "gta6"):
+            cuenta[0 if e["gana"] == "gta5" else 1] += 1
+        pasos.append(tuple(cuenta))
+    return pasos
+
+
+def veredicto(escenas):
+    """El rótulo del final: «GTA 6 GANA 2-1» o «EMPATE 1-1» (None si el guion no trae rondas con ganador)."""
+    if not any(e.get("gana") for e in escenas):
+        return None
+    a, b = marcador(escenas)[-1]
+    return f"EMPATE {a}-{b}" if a == b else f"{JUEGOS['gta5' if a > b else 'gta6']} GANA {max(a, b)}-{min(a, b)}"
+
+
+def _medidas(canal, versus):
+    from bots.central import escritor
+    return dict(VERSUS) if versus and not canal.get("segundos") else escritor.medidas(canal)
+
+
+def _fallos(g, canal, versus):
+    """Lo que pide el Cerebro y se puede contar: si falla, el Escritor lo repite (con números) antes de darlo por bueno."""
+    m, escenas, fallos = _medidas(canal, versus), g["escenas"], []
+    tope = PALABRAS_ESCENA[versus]
+    largas = [n + 1 for n, e in enumerate(escenas) if len(_palabras(e["texto"])) > tope + 1]
+    if largas:
+        fallos.append(f"las escenas {largas} pasan de {tope} palabras de voz: pártelas o recórtalas")
+    total = len(_palabras(g.get("narracion")))
+    if total > int(m["pal_max"] * 1.15):
+        fallos.append(f"la narración tiene {total} palabras y el tope es {m['pal_max']}")
+    pantalla = len(_palabras(g.get("texto_pantalla")))
+    if not 2 <= pantalla <= (4 if versus else 5):
+        fallos.append(f"«texto_pantalla» tiene {pantalla} palabras: de 3 a {4 if versus else 5} que nombren la cosa")
+    if versus:
+        rondas = [n for n, e in enumerate(escenas) if e.get("gana")]
+        if len(rondas) != 3:
+            fallos.append(f"hay {len(rondas)} rondas con «gana» y tienen que ser 3")
+        if rondas and (rondas[0] == 0 or rondas[-1] == len(escenas) - 1):
+            fallos.append("la primera escena (gancho) y la última (veredicto y pregunta) no llevan «gana»")
+        if re.match(r"\s*en gta\b", _normal(escenas[0]["texto"])):
+            fallos.append("la voz empieza por «En GTA…»: tiene que empezar por la cosa que se compara")
+    return fallos
+
+
 def _arreglar(g, lista, versus):
     """Comprueba que cada escena usa tomas que existen (y del juego que toca); si no, pone la que mejor pega."""
     por_id = {t["id"]: t for t in lista}
@@ -307,19 +377,26 @@ def guionizar(canal, lista, lecciones="", titulos=(), fuentes=None, idea=None):
         idea=(f"\nLa Sala de Ideas ha elegido ESTA idea: escribe su guion con las tomas.\nIdea: {idea.get('idea')}\n"
               f"Título propuesto: {idea.get('titulo')}\nGancho: {idea.get('gancho')}\n") if idea else "",
         fuentes_usadas=',\n  "fuentes_usadas": ["los números de las fuentes usadas"]' if fuentes else "",
-        **escritor.medidas(canal))
-    ultimo = ""
-    for _ in range(2):
+        pal_escena=PALABRAS_ESCENA[versus],
+        pantalla=("3 o 4 palabras: la cosa exacta que se compara" if versus
+                  else "de 3 a 5 palabras que nombran la cosa que se ve en la primera toma"),
+        **_medidas(canal, versus))
+    ultimo, intentos = "", 3
+    for n in range(intentos):
         g = ia.preguntar(texto + ultimo, papel="guionista")
         if isinstance(g, list) and g:
             g = g[0]
         try:
             g = _arreglar(g if isinstance(g, dict) else {}, lista, versus)
+            fallos = _fallos(g, canal, versus)
+            if fallos and n < intentos - 1:      # el último intento vale con la forma buena: mejor un vídeo que ninguno
+                raise ValueError("; ".join(fallos))
             break
         except ValueError as e:
-            ultimo = f"\n\nEl intento anterior no valía ({e}). Corrígelo."
+            ultimo = f"\n\nEl intento anterior no valía ({e}). Corrígelo y devuelve el JSON entero."
     else:
         raise gemini.SinIA("el guion con tomas no ha salido con la forma pedida")
+    g["texto_pantalla"] = " ".join(str(g.get("texto_pantalla") or "").split()[:4 if versus else 5])
     g["titulo"] = str(g["titulo"]).strip()[:100]
     if "#shorts" not in g["titulo"].lower():
         g["titulo"] = f"{g['titulo'][:90]} #shorts"
@@ -346,17 +423,15 @@ def bajar(ids, carpeta):
 
 
 def _planos(escenas, duraciones):
-    """Cada escena en planos de 2-3 s; el primer cambio llega a los 2 s."""
+    """Cada escena en planos iguales de 2 s como mucho (el Cerebro: un cambio cada 1,5-2 s); el primero, antes del 2."""
     planos = []
     for n, (e, d) in enumerate(zip(escenas, duraciones)):
-        partes, resto = [], d
-        if n == 0 and d > PRIMER_CORTE + 0.8:
+        partes = []
+        if n == 0 and d > PRIMER_CORTE + 1.0:
             partes.append(PRIMER_CORTE)
-            resto -= PRIMER_CORTE
-        while resto > PLANO_MAX + 0.8:
-            partes.append(PLANO_MAX)
-            resto -= PLANO_MAX
-        partes.append(resto)
+        resto = d - sum(partes)
+        trozos = max(1, math.ceil((resto - 0.3) / PLANO_MAX))
+        partes += [resto / trozos] * trozos
         planos += [(n, e, p, k == len(partes) - 1) for k, p in enumerate(partes)]
     return planos
 
@@ -367,12 +442,14 @@ def _texto(carpeta, nombre, texto):
     return nombre
 
 
-def _rotulo(carpeta, k, texto, y):
+def _rotulo(carpeta, k, texto, y, color="0xFFD43B"):
     if not texto:
         return ""
     fuente = f":fontfile={clips.FUENTE}" if os.path.exists(clips.FUENTE) else ""
-    archivo = _texto(carpeta, f"rotulo{k}.txt", str(texto).upper()[:28])
-    return (f",drawtext=textfile={archivo}{fuente}:fontsize=74:fontcolor=0xFFD43B:borderw=7:bordercolor=black"
+    texto = str(texto).upper()[:28]
+    archivo = _texto(carpeta, f"rotulo{k}.txt", texto)
+    tamano = min(74, int(1000 / (0.66 * max(1, len(texto)))))       # que quepa entero a lo ancho
+    return (f",drawtext=textfile={archivo}{fuente}:fontsize={tamano}:fontcolor={color}:borderw=7:bordercolor=black"
             f":x=(w-text_w)/2:y={y}")
 
 
@@ -388,25 +465,49 @@ def _plano_uno(carpeta, k, ruta, inicio, d, rotulo):
     return salida
 
 
-def _plano_versus(carpeta, k, r5, i5, r6, i6, d, rotulo, gana):
+def _marcador(carpeta, k, antes, despues, desde, fuente):
+    """El marcador entre el rótulo y la mitad de GTA 5: «GTA 5  1 - 0  GTA 6», que cambia al salir el ganador."""
+    l5, l6 = _texto(carpeta, "m5.txt", "GTA 5"), _texto(carpeta, "m6.txt", "GTA 6")
+    filtro = (f",drawbox=x=196:y=150:w=200:h=84:color={COLORES['gta5']}@0.95:t=fill"
+              f",drawtext=textfile={l5}{fuente}:fontsize=50:fontcolor=white:x=196+(200-text_w)/2:y=168"
+              f",drawbox=x=684:y=150:w=200:h=84:color={COLORES['gta6']}@0.95:t=fill"
+              f",drawtext=textfile={l6}{fuente}:fontsize=50:fontcolor=white:x=684+(200-text_w)/2:y=168")
+    for n, (cuenta, cuando) in enumerate(((antes, f"lt(t,{desde})"), (despues, f"gte(t,{desde})"))):
+        if antes == despues and n:
+            break
+        archivo = _texto(carpeta, f"marca{k}_{n}.txt", f"{cuenta[0]} - {cuenta[1]}")
+        filtro += (f",drawtext=textfile={archivo}{fuente}:fontsize=84:fontcolor=white:borderw=6:bordercolor=black"
+                   f":x=(w-text_w)/2:y=152" + ("" if antes == despues else f":enable='{cuando}'"))
+    return filtro
+
+
+def _plano_versus(carpeta, k, r5, i5, r6, i6, d, rotulo, gana, cuenta=None, antes=None, grande=False, final=None):
+    """Un plano de la pantalla partida. «grande»: las etiquetas de cada juego en grande (el gancho). «cuenta»/«antes»: el
+    marcador después y antes de este plano. «final»: el veredicto escrito («GTA 6 GANA 2-1»)."""
     fuente = f":fontfile={clips.FUENTE}" if os.path.exists(clips.FUENTE) else ""
     l5, l6 = _texto(carpeta, "l5.txt", "GTA 5"), _texto(carpeta, "l6.txt", "GTA 6")
+    ancho, alto, letra = (380, 128, 96) if grande else (210, 74, 52)
     filtro = ("[0:v]fps=30,scale=1080:608:force_original_aspect_ratio=increase,crop=1080:608[a];"
               "[1:v]fps=30,scale=1080:608:force_original_aspect_ratio=increase,crop=1080:608[b];"
               "[2:v][a]overlay=0:250:shortest=1[t];[t][b]overlay=0:1062:shortest=1"
-              f",drawbox=x=24:y=270:w=210:h=74:color={COLORES['gta5']}@0.95:t=fill"
-              f",drawtext=textfile={l5}{fuente}:fontsize=52:fontcolor=white:x=46:y=281"
-              f",drawbox=x=24:y=1082:w=210:h=74:color={COLORES['gta6']}@0.95:t=fill"
-              f",drawtext=textfile={l6}{fuente}:fontsize=52:fontcolor=white:x=46:y=1093"
-              + _rotulo(carpeta, k, rotulo, 140))
-    if gana in ("gta5", "gta6", "empate"):          # al final de la ronda, el ganador
-        desde = round(d * 0.45, 2)
+              f",drawbox=x=24:y=270:w={ancho}:h={alto}:color={COLORES['gta5']}@0.95:t=fill"
+              f",drawtext=textfile={l5}{fuente}:fontsize={letra}:fontcolor=white"
+              f":x=24+({ancho}-text_w)/2:y=270+({alto}-{letra})/2+{letra // 8}"
+              f",drawbox=x=24:y=1082:w={ancho}:h={alto}:color={COLORES['gta6']}@0.95:t=fill"
+              f",drawtext=textfile={l6}{fuente}:fontsize={letra}:fontcolor=white"
+              f":x=24+({ancho}-text_w)/2:y=1082+({alto}-{letra})/2+{letra // 8}"
+              + _rotulo(carpeta, k, final or rotulo, 44, "0x3BD16F" if final else "0xFFD43B"))
+    desde = round(d * 0.4, 2)
+    if cuenta is not None:
+        filtro += _marcador(carpeta, k, antes if antes is not None else cuenta, cuenta, desde, fuente)
+    if gana in ("gta5", "gta6", "empate"):          # al final de la ronda, el ganador (en grande, sobre su mitad)
         texto = _texto(carpeta, f"gana{k}.txt", "EMPATE" if gana == "empate" else f"GANA {JUEGOS[gana]}")
+        y = {"gta5": 700, "gta6": 1512, "empate": 1700}[gana]
         if gana != "empate":
-            filtro += (f",drawbox=x=0:y={250 if gana == 'gta5' else 1062}:w=1080:h=608:color=0x3BD16F:t=12"
+            filtro += (f",drawbox=x=0:y={250 if gana == 'gta5' else 1062}:w=1080:h=608:color=0x3BD16F:t=14"
                        f":enable='gte(t,{desde})'")
-        filtro += (f",drawtext=textfile={texto}{fuente}:fontsize=80:fontcolor=0x3BD16F:borderw=7:bordercolor=black"
-                   f":x=(w-text_w)/2:y=1730:enable='gte(t,{desde})'")
+        filtro += (f",drawtext=textfile={texto}{fuente}:fontsize=104:fontcolor=0x3BD16F:borderw=9:bordercolor=black"
+                   f":box=1:boxcolor=black@0.55:boxborderw=18:x=(w-text_w)/2:y={y}:enable='gte(t,{desde})'")
     filtro += ",format=yuv420p[v]"
     salida = os.path.join(carpeta, f"p{k:03d}.mp4")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-ss", f"{i5:.2f}", "-i", r5,
@@ -445,13 +546,22 @@ def montar(g, rutas, voz, palabras_json, salida, ambiente=None):
             ultimos.setdefault(i, []).append(x)
             return x
         planos = []
+        cuentas = [(0, 0)] + marcador(g["escenas"]) if versus else []      # el marcador antes de cada escena
+        cierre = veredicto(g["escenas"]) if versus else None
+        ultima = len(g["escenas"]) - 1
         for k, (n, e, d, final) in enumerate(_planos(g["escenas"], durs)):
-            rotulo = e.get("rotulo") if k > 0 else None           # en el primer plano manda el gancho
             if versus:
-                planos.append(_plano_versus(tmp, k, rutas[e["gta5"]], inicio(e["gta5"], d), rutas[e["gta6"]],
-                                            inicio(e["gta6"], d), d, rotulo, e.get("gana") if final else None))
-            else:
-                planos.append(_plano_uno(tmp, k, rutas[e["toma"]], inicio(e["toma"], d), d, rotulo))
+                sube = bool(final and e.get("gana"))              # el marcador cambia cuando sale el ganador
+                planos.append(_plano_versus(
+                    tmp, k, rutas[e["gta5"]], inicio(e["gta5"], d), rutas[e["gta6"]], inicio(e["gta6"], d), d,
+                    e.get("rotulo") if n > 0 else None,           # en la primera escena manda el gancho
+                    e.get("gana") if final else None, grande=n == 0,
+                    cuenta=(cuentas[n + 1] if sube or not e.get("gana") else cuentas[n]) if n > 0 and cierre else None,
+                    antes=cuentas[n] if sube else None,
+                    final=cierre if n == ultima and n > 0 and not e.get("gana") else None))
+                continue
+            planos.append(_plano_uno(tmp, k, rutas[e["toma"]], inicio(e["toma"], d), d,
+                                     e.get("rotulo") if n > 0 else None))
         with open(os.path.join(tmp, "lista.txt"), "w") as f:
             f.writelines(f"file '{p}'\n" for p in planos)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy",
@@ -462,10 +572,12 @@ def montar(g, rutas, voz, palabras_json, salida, ambiente=None):
             subtitulos.escribir_ass(palabras, os.path.join(tmp, "s.ass"), mayus=True, altura=300)
         fuente = f":fontfile={clips.FUENTE}" if os.path.exists(clips.FUENTE) else ""
         filtro = "[0:v]ass=s.ass"
-        for n, linea in enumerate(montador._gancho(g.get("texto_pantalla") or g["titulo"]).split("\n")):
+        # el gancho nombra la cosa desde el fotograma 0; en versus dura lo que la primera escena (después va el marcador)
+        hasta = min(4.0 if versus else 2.6, max(1.5, durs[0]))     # nunca encima del rótulo de la escena siguiente
+        for n, linea in enumerate(montador._gancho(g.get("texto_pantalla") or g["titulo"]).split("\n")[:2]):
             archivo = _texto(tmp, f"gancho{n}.txt", linea)
             filtro += (f",drawtext=textfile={archivo}{fuente}:fontsize=80:fontcolor=white:borderw=8:bordercolor=black"
-                       f":x=(w-text_w)/2:y={40 + n * 96 if versus else 120 + n * 100}:enable='lt(t,2.6)'")
+                       f":x=(w-text_w)/2:y={40 + n * 96 if versus else 120 + n * 100}:enable='lt(t,{hasta:.2f})'")
         filtro += ",format=yuv420p[v]"
         entradas, audio = ["-i", "imagen.mp4", "-i", os.path.abspath(voz)], "1:a"
         pista = musica.crear(ambiente, total, os.path.join(tmp, "musica.m4a")) if ambiente else None
