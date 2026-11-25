@@ -84,6 +84,45 @@ Devuelve SOLO un JSON:
 Escribe en español sencillo. No inventes datos de la cuenta. No pidas nada que rompa las normas de las redes."""
 
 
+BUZON = os.path.join(CARPETA, "buzon.json")       # lo que el dueño le escribe desde la app (lo deja ahí la Comisaria)
+CHAT = os.path.join(CARPETA, "chat.json")         # la conversación entera, con las respuestas (la copia a la app)
+ORDENES_GUARDA = 30                               # órdenes del dueño que el Cerebro tiene presentes a la vez
+
+HABLAR = """Eres EL CEREBRO de la fábrica de vídeos del dueño: el que manda sobre todas las ciudades y su única meta es que
+los vídeos lleguen a 100/100. El dueño te escribe desde su app. Contéstale como un compañero de confianza: en español de
+España, sencillo, sin tecnicismos, corto (de 2 a 6 frases) y con la verdad (si algo va mal, dilo; si no lo sabes, dilo).
+
+LO QUE TE ESCRIBE AHORA:
+«{mensaje}»
+
+LO QUE HABLASTEIS ANTES (lo más nuevo al final):
+{historial}
+
+CÓMO VA CADA CUENTA (media y mejor de sus últimos vídeos juzgados; nota mínima de hoy para publicar: {minimo}):
+{cuentas}
+
+TUS PLANES AHORA:
+{planes}
+
+LO ÚLTIMO QUE HAS HECHO:
+{pasos}
+
+LAS CUENTAS QUE EXISTEN (usa la clave exacta en «cuenta»): {claves}
+
+Lo que puedes hacer TÚ ahora mismo con lo que te pide (va en «acciones»):
+- "orden": algo que el dueño quiere que hagan los guionistas a partir de ahora (un tema, un estilo, algo que no quiere
+  ver). Va como orden del dueño en todos los guiones de esa cuenta (o de todas, con "cuenta": "todas") hasta que él diga
+  otra cosa. Escríbela como una orden clara y concreta.
+- "repensar": hacer ya un plan nuevo para esa cuenta.
+- "quitar_orden": dejar de aplicar una orden suya anterior (pon en "texto" cuál).
+- "para_claude": lo que tú no puedes hacer y hace falta tocar el programa, o lo que está fuera de tus límites (cambiar
+  la nota mínima, gastar dinero, llaves o permisos, borrar o crear canales). Se lo pasas a Claude; díselo al dueño así.
+Si solo pregunta algo, contesta y no hagas nada ("acciones": []).
+
+Devuelve SOLO un JSON: {{"respuesta": "lo que le contestas", "acciones": [{{"tipo": "orden"|"repensar"|"quitar_orden"|
+"para_claude", "cuenta": "clave o todas", "texto": "..."}}]}}"""
+
+
 def _ahora():
     return dt.datetime.now(dt.timezone.utc)
 
@@ -276,6 +315,8 @@ class Cerebro:
     def _necesita(self, clave):
         """¿Hay que pensarle un plan nuevo? Sí si tiene vídeos juzgados después del último plan (o nunca tuvo plan)."""
         f = self.ficha(clave)
+        if f.get("repensar") and f["videos"]:
+            return 1000                                    # lo ha pedido el dueño: el primero
         if not f["videos"]:
             return None
         ultimo_plan = (f.get("planes") or [{}])[-1].get("fecha") or ""
@@ -318,6 +359,10 @@ class Cerebro:
             manual = saber(formato, c.get("tipo"), foco=_foco(ultimos))
             manual = ("TU MANUAL (lo que funciona en vídeos cortos; saca de aquí cifras y plantillas para tus órdenes):\n"
                       + manual + "\n") if manual else ""
+            ordenes = [o["texto"] for o in self.m.get("ordenes_del_dueno") or [] if o.get("cuenta") in (clave, "todas")]
+            if ordenes:                       # lo que ha pedido el dueño manda: el plan no puede ir contra ello
+                saber_txt = (saber_txt + "\nLO QUE HA PEDIDO EL DUEÑO PARA ESTA CUENTA (manda sobre todo; tu plan lo "
+                             "respeta y lo lleva a la práctica):\n" + "\n".join(f"- {o}" for o in ordenes[-8:]))
             texto = PENSAR.format(meta=META, minimo=int(c.get("nota_minima") or privado.nota_minima()),
                                   que=c.get("apodo") or c.get("tema") or formato, formato=formato,
                                   idioma={"es": "español", "nl": "neerlandés", "en": "inglés"}.get(str(c.get("idioma", "es"))[:2], "español"),
@@ -340,10 +385,98 @@ class Cerebro:
                     "repite": str(r.get("repite") or "")[:300], "prueba": str(r.get("prueba") or "")[:300],
                     "cerebro": ia.quien().get("motor", "gemini")}
             f["planes"] = (f.get("planes") or [])[-30:] + [plan]
+            f.pop("repensar", None)
             self.recetas["cuentas"][clave] = {k: plan[k] for k in ("fecha", "diagnostico", "reglas", "no_hagas", "repite",
                                                                    "prueba", "media_antes", "mejor_antes")}
             self.digo("plan nuevo", f"Media {plan['media_antes']}, mejor {plan['mejor_antes']}. {plan['diagnostico']} "
                       f"Para el próximo vídeo: {plan['reglas'][0]}", clave)
+
+    # ---------------- hablar con el dueño ----------------
+    def hablar(self):
+        """Contesta lo que el dueño le ha escrito desde la app y hace lo que le pide (dentro de sus límites). Lo que no
+        se puede contestar ahora (sin IA) se queda para la siguiente pasada: nunca se pierde un mensaje suyo."""
+        buzon = privado.leer(BUZON, {}) or {}
+        chat = privado.leer(CHAT, {}) or {}
+        chat.setdefault("conversacion", [])
+        contestados = {m.get("responde_a") for m in chat["conversacion"] if m.get("de") == "cerebro"}
+        vistos = {m.get("id") for m in chat["conversacion"]}
+        pendientes = [m for m in buzon.get("mensajes") or [] if isinstance(m, dict) and m.get("id") and
+                      str(m.get("texto") or "").strip() and m["id"] not in contestados]
+        if not pendientes:
+            return
+        cuentas = dict(self.cuentas())
+        # a la IA solo le llegan los alias (barrio-N), nunca el nombre de una cuenta; se traducen al volver
+        alias = {privado.alias(k): k for k in cuentas}
+        for m in sorted(pendientes, key=lambda x: str(x.get("fecha") or ""))[:5]:
+            if m["id"] not in vistos:
+                chat["conversacion"].append({"id": m["id"], "de": "dueño", "fecha": m.get("fecha") or _iso(),
+                                             "texto": str(m["texto"])[:2000]})
+                vistos.add(m["id"])
+            historial = "\n".join(f"- {x['de']}: {str(x.get('texto'))[:300]}" for x in chat["conversacion"][-11:-1]) or "- (nada)"
+            resumen = []
+            for k, c in cuentas.items():
+                notas = [v["nota"] for v in (self.ficha(k).get("videos") or [])[-MIRA:]]
+                resumen.append(f"- {privado.alias(k)} ({c.get('apodo') or c.get('tipo') or ''}): " + (
+                    f"media {round(statistics.mean(notas))}, mejor {max(notas)}, {len(self.ficha(k)['videos'])} vídeos"
+                    if notas else "todavía sin vídeos juzgados"))
+            planes = "\n".join(f"- {privado.alias(k)}: {r.get('diagnostico', '')[:200]}" for k, r in (self.recetas.get("cuentas") or {}).items()) or "- (ninguno)"
+            pasos = "\n".join(f"- {p['fecha'][5:16]} {p['que']} {privado.alias(p['cuenta']) if p.get('cuenta') else ''}: {p['detalle'][:150]}"
+                               for p in self.directo[-12:]) or "- (nada)"
+            try:
+                r = ia.preguntar(HABLAR.format(mensaje=str(m["texto"])[:2000], historial=historial, minimo=privado.nota_minima(),
+                                               cuentas="\n".join(resumen), planes=planes, pasos=pasos,
+                                               claves=", ".join(alias)), papel="elite", temperatura=0.5)
+                if isinstance(r, list) and r:
+                    r = r[0]
+                respuesta = str(r.get("respuesta") or "").strip()
+                if not respuesta:
+                    raise ValueError("respuesta vacía")
+            except Exception as e:
+                self.averia("hablar", None, e)
+                break                          # el resto, en la siguiente pasada (en orden)
+            hecho = []
+            for a in (r.get("acciones") or [])[:6]:
+                if isinstance(a, dict):
+                    a = dict(a, cuenta=alias.get(a.get("cuenta"), a.get("cuenta")))
+                    hecho.append(self._accion(a, cuentas, m))
+            chat["conversacion"].append({"id": f"{m['id']}-r", "de": "cerebro", "fecha": _iso(), "responde_a": m["id"],
+                                         "texto": respuesta[:2000], "acciones": [h for h in hecho if h]})
+            self.digo("hablo con el dueño", "Me ha escrito desde la app y le he contestado"
+                      + (f" ({'; '.join(h for h in hecho if h)})" if any(hecho) else "") + ".")
+        chat["conversacion"] = chat["conversacion"][-200:]
+        chat["actualizado"] = _iso()
+        if not self.prueba:
+            privado.escribir(CHAT, chat)
+
+    def _accion(self, a, cuentas, mensaje):
+        tipo, texto = a.get("tipo"), str(a.get("texto") or "").strip()[:400]
+        cuenta = a.get("cuenta") if a.get("cuenta") in cuentas else ("todas" if a.get("cuenta") == "todas" else None)
+        ordenes = self.m.setdefault("ordenes_del_dueno", [])
+        if tipo == "orden" and texto and cuenta:
+            ordenes.append({"fecha": _iso(), "cuenta": cuenta, "texto": texto, "mensaje": mensaje["id"]})
+            self.m["ordenes_del_dueno"] = ordenes[-ORDENES_GUARDA:]
+            try:                               # y queda en el cuaderno del guionista como lección del dueño (manda)
+                c = privado.cuaderno("guionista")
+                c.aprender(f"El dueño ({_iso()[:10]}, a través del Cerebro){' en ' + cuenta if cuenta != 'todas' else ''}: {texto}",
+                           del_dueno=True)
+                c.guardar()
+            except Exception:
+                pass
+            return f"orden apuntada para {'todas las cuentas' if cuenta == 'todas' else cuenta}"
+        if tipo == "quitar_orden" and texto:
+            antes = len(ordenes)
+            palabras = {w for w in texto.lower().split() if len(w) > 3}
+            self.m["ordenes_del_dueno"] = [o for o in ordenes if not (palabras and len(palabras & set(o["texto"].lower().split())) >= max(1, len(palabras) // 2))]
+            return "orden anterior quitada" if len(self.m["ordenes_del_dueno"]) < antes else ""
+        if tipo == "repensar" and cuenta and cuenta != "todas":
+            self.ficha(cuenta)["repensar"] = True          # le toca un plan nuevo en esta misma pasada
+            return f"plan nuevo para {cuenta}"
+        if tipo == "para_claude" and texto:
+            self.m.setdefault("para_claude", []).append({"fecha": _iso(), "texto": texto, "mensaje": mensaje["id"],
+                                                          "estado": "para_claude"})
+            self.m["para_claude"] = self.m["para_claude"][-40:]
+            return "se lo paso a Claude"
+        return ""
 
     # ---------------- arreglarse solo ----------------
     def averia(self, paso, cuenta, error):
@@ -381,6 +514,8 @@ class Cerebro:
         privado.escribir(AJUSTES, self.ajustes)
         privado.escribir(DIRECTO, {"actualizado": _iso(), "meta": META, "pasos": self.directo[-DIRECTO_GUARDA:],
                                    "cuentas": resumen, "saber": self.m["saber"][:12],
+                                   "ordenes_del_dueno": self.m.get("ordenes_del_dueno", [])[-ORDENES_GUARDA:],
+                                   "para_claude": [x for x in self.m.get("para_claude", []) if x.get("estado") == "para_claude"][-10:],
                                    "averias_hoy": sum(1 for a in self.m["averias"] if str(a.get("fecha"))[:10] == _iso()[:10]
                                                       and not a.get("de_fuera"))})
         try:
@@ -394,6 +529,7 @@ class Cerebro:
 
     def pasada(self):
         self.digo("empiezo", "Miro cómo va cada cuenta, arreglo lo que la frena y preparo su plan para el próximo vídeo.")
+        self.paso("hablar", self.hablar)       # lo del dueño, lo primero
         self.paso("reparar", self.reparar)
         self.paso("aprender", self.aprender)
         self.paso("medir", self.medir)
@@ -454,9 +590,12 @@ def ensayo(guion, canal, clave=None):
 def receta(clave):
     """Lo que el Cerebro le dice al guionista de esta cuenta antes de escribir (texto listo para sus lecciones)."""
     r = ((privado.leer(RECETAS, {}) or {}).get("cuentas") or {}).get(clave)
+    ordenes = [o["texto"] for o in ((privado.leer(MEMORIA, {}) or {}).get("ordenes_del_dueno") or [])
+               if o.get("cuenta") in (clave, "todas")]
+    del_dueno = ("\n- (LO QUE HA PEDIDO EL DUEÑO, que manda sobre todo lo demás) " + " | ".join(ordenes[-8:])) if ordenes else ""
     if not r or not r.get("reglas"):
-        return ""
-    return ("\n- (EL CEREBRO, tras estudiar los últimos vídeos juzgados de esta cuenta. La meta es 100/100, no el aprobado. "
+        return del_dueno
+    return del_dueno + ("\n- (EL CEREBRO, tras estudiar los últimos vídeos juzgados de esta cuenta. La meta es 100/100, no el aprobado. "
             "Cumple estas órdenes una por una)\n  Por qué no llega: " + str(r.get("diagnostico") or "")
             + "\n  HAZ: " + " | ".join(r["reglas"])
             + ("\n  NO HAGAS: " + " | ".join(r["no_hagas"]) if r.get("no_hagas") else "")

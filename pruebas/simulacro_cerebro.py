@@ -45,10 +45,15 @@ def juicio(clave, nota, minutos=-60, razon="el gancho tarda en llegar y el arran
 PREGUNTAS, PLAN, ROTA = [], {}, [None]
 
 
+HABLA = {}
+
+
 def cerebro_de_mentira(texto, **kw):
     PREGUNTAS.append(texto)
     if ROTA[0]:
         raise ROTA[0]
+    if "LO QUE TE ESCRIBE AHORA" in texto:
+        return dict(HABLA)
     return dict(PLAN)
 
 
@@ -199,6 +204,41 @@ comprobar("si se le rompen dos pasos (aprender y medir), los apunta y hace igual
 cerebro.Cerebro().pasada()
 comprobar("y en la pasada siguiente recupera lo que se saltó (aprende el vídeo que faltaba)",
           lee(cerebro.MEMORIA)["cuentas"][CANAL]["videos"][-1]["nota"] == 83)
+
+# 5b. El dueño habla con el Cerebro desde la app (la Comisaria deja sus mensajes en el buzón)
+ROTA[0] = None
+privado.escribir(cerebro.BUZON, {"mensajes": [{"id": "m1", "fecha": "2026-11-25T20:00:00Z",
+                                               "texto": "Quiero más historias de miedo en el bosque"}]})
+HABLA.update({"respuesta": "Hecho: a partir de ahora, más historias en el bosque.",
+              "acciones": [{"tipo": "orden", "cuenta": CANAL, "texto": "Historias que pasen en un bosque."},
+                           {"tipo": "repensar", "cuenta": CANAL},
+                           {"tipo": "para_claude", "cuenta": "todas", "texto": "bajar la nota a 70"},
+                           {"tipo": "orden", "cuenta": "inventada", "texto": "esto no vale"}]})
+cerebro.Cerebro().pasada()
+chat = lee(cerebro.CHAT).get("conversacion") or []
+comprobar("contesta al dueño y la conversación queda guardada (su mensaje y la respuesta)",
+          [c["de"] for c in chat] == ["dueño", "cerebro"] and chat[1]["responde_a"] == "m1" and "bosque" in chat[1]["texto"])
+comprobar("su orden queda apuntada y llega al guionista de ESA cuenta, delante de todo",
+          "bosque" in cerebro.receta(CANAL) and "LO QUE HA PEDIDO EL DUEÑO" in cerebro.receta(CANAL)
+          and "bosque" not in cerebro.receta(OTRO))
+comprobar("una cuenta que no existe no se apunta", not any(o["cuenta"] == "inventada" for o in lee(cerebro.MEMORIA)["ordenes_del_dueno"]))
+comprobar("lo que está fuera de sus límites (la nota mínima) se lo pasa a Claude, no lo hace",
+          any("70" in x["texto"] for x in lee(cerebro.DIRECTO).get("para_claude") or []) and privado.nota_minima() != 70)
+antes = len(PREGUNTAS)
+cerebro.Cerebro().pasada()
+comprobar("no contesta dos veces lo mismo", len(lee(cerebro.CHAT)["conversacion"]) == 2
+          and not any("LO QUE TE ESCRIBE AHORA" in p for p in PREGUNTAS[antes:]))
+privado.escribir(cerebro.BUZON, {"mensajes": [{"id": "m1", "texto": "Quiero más historias de miedo en el bosque"},
+                                              {"id": "m2", "fecha": "2026-11-25T21:00:00Z", "texto": "¿Cómo va el canal de terror?"}]})
+ROTA[0] = ia.SinIA("sin cupo")
+cerebro.Cerebro().pasada()
+comprobar("sin IA no se pierde su mensaje: se queda sin contestar para la siguiente pasada",
+          [c.get("id") for c in lee(cerebro.CHAT)["conversacion"]][-1] == "m2"
+          and not any(c.get("responde_a") == "m2" for c in lee(cerebro.CHAT)["conversacion"]))
+ROTA[0] = None
+HABLA.update({"respuesta": "Va subiendo.", "acciones": []})
+cerebro.Cerebro().pasada()
+comprobar("y en cuanto vuelve la IA, lo contesta", any(c.get("responde_a") == "m2" for c in lee(cerebro.CHAT)["conversacion"]))
 
 # 6. Nada privado en las preguntas a la IA
 comprobar("en ninguna pregunta a la IA sale el nombre de la cuenta", PREGUNTAS and not any(CUENTA in p for p in PREGUNTAS))
