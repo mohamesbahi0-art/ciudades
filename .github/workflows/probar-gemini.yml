@@ -52,11 +52,27 @@ jobs:
               if c == 200:
                   break
           print("MODELOS:", ", ".join(modelos))
+          import time
+          # una imagen diminuta (un cuadrado rojo) para saber quién ve imágenes
+          FOTO = ("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19i"
+                  "Z2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2Nj"
+                  "Y2NjY2NjY2P/wAARCABAAEADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUF"
+                  "BAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVW"
+                  "V1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi"
+                  "4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAEC"
+                  "AxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVm"
+                  "Z2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq"
+                  "8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDHooorzz68KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAo"
+                  "oooAKKKKACiiigAooooA/9k=")
           for m in modelos:
-              if not any(x in m for x in ("flash", "pro", "gemma")) or any(x in m for x in ("robotics", "computer", "transcribe", "customtools")):
+              if not any(x in m for x in ("flash", "pro", "gemma", "gemini-4")) or any(x in m for x in ("robotics", "computer", "transcribe", "customtools", "banana", "lyria", "research", "antigravity")):
                   continue
               c, b = pedir(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
                            {"contents": [{"parts": [{"text": "Di solo: hola"}]}]})
+              if c == 503:                       # saturado: un respiro y otra vez
+                  time.sleep(20)
+                  c, b = pedir(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                               {"contents": [{"parts": [{"text": "Di solo: hola"}]}]})
               msg = ""
               if c != 200:
                   try:
@@ -64,4 +80,13 @@ jobs:
                   except Exception:
                       msg = str(b[:90])
               print(f"MODELO {m}: {c} {msg}")
+              if c == 200 and any(x in m for x in ("gemma", "gemini-4")):
+                  c2, b2 = pedir(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                                 {"contents": [{"parts": [{"text": 'Mira la imagen. Contesta solo con JSON: {"color": "..."}'},
+                                                          {"inline_data": {"mime_type": "image/jpeg", "data": FOTO}}]}]})
+                  try:
+                      t2 = json.loads(b2)["candidates"][0]["content"]["parts"][-1]["text"][:60].replace("\n", " ") if c2 == 200 else json.loads(b2)["error"]["message"][:90]
+                  except Exception:
+                      t2 = str(b2[:90])
+                  print(f"  VE {m}: {c2} {t2}")
           PY
