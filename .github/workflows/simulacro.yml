@@ -68,6 +68,8 @@ jobs:
         run: python pruebas/simulacro_arreglos.py
       - name: La Élite (parte general, palancas con límites, reforma, obra, deshacer lo que empeora y respeto al dueño)
         run: python pruebas/simulacro_elite.py
+      - name: El Cerebro (su manual por formato, aprender, pensar, medir, reparar dibujos y seguir si un paso falla)
+        run: python pruebas/simulacro_cerebro.py
       - name: Cadena de IA gratis y Sala de espera (jueces suplentes; nada se aprueba sin un juez de primera)
         run: |
           python pruebas/simulacro_cadena.py

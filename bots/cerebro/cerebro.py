@@ -10,7 +10,9 @@ Qué hace en cada pasada (cerebro.yml):
 2. APRENDE de cada vídeo juzgado nuevo: guarda en su memoria qué le vieron los jueces y el público del Cine.
 3. MIDE sus planes anteriores: si con un plan la cuenta sube, sus reglas ganan peso; si baja, lo pierden y no se repiten.
 4. PIENSA un plan nuevo para cada cuenta con vídeos nuevos (con el cerebro bueno si tiene su parte; si no, con la IA
-   gratis en cadena) y lo deja en estado/cerebro/recetas.json. El Escritor lo lee antes de escribir.
+   gratis en cadena) y lo deja en estado/cerebro/recetas.json. El Escritor lo lee antes de escribir. Piensa con su
+   MANUAL (bots/cerebro/saber/*.md: gancho, retención, final, títulos, su formato, experimentos y diagnóstico), que es
+   lo mejor de las skills de Claude destilado para que valga también con la IA gratis (ver `saber`).
 5. Lo cuenta EN DIRECTO en estado/cerebro/directo.json (lo enseña la app).
 
 Sus límites (no se los salta): no gasta dinero, no baja la nota mínima del dueño, no contradice lo que dijo el dueño,
@@ -21,6 +23,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import statistics
 import sys
 import traceback
@@ -45,6 +48,13 @@ SUBE, BAJA = 2, -2            # puntos de media que cuentan como «mejor» o «p
 DIBUJOS_FALLOS = 3            # turnos seguidos sin dibujos para pasar la cuenta al formato animado
 DIBUJOS_HORAS = 24            # cuánto dura ese cambio antes de volver a probar los dibujos
 DIRECTO_GUARDA = 250
+SABER = os.path.join(RAIZ, "bots", "cerebro", "saber")    # su manual: ficheros .md cortos, lo más importante arriba
+SABER_TOPE = 6000             # caracteres del manual que entran en cada pregunta (la IA gratis tiene el sitio justo)
+SABER_FORMATOS = "5-"         # el fichero que va por apartados («## Nombre [formato, formato]»)
+FOCOS = {"1-": ("gancho", "arranque", "primer segundo", "primeros segundos", "inicio", "empieza"),   # de qué se quejan
+         "2-": ("ritmo", "lento", "lenta", "retenci", "relleno", "aburr", "largo", "se van", "parte muerta"),  # → qué leer
+         "3-": ("final", "cierre", "acaba", "termina", "remate", "desenlace"),
+         "4-": ("título", "titulo", "texto", "subtítulo", "subtitulo", "legib", "no se lee")}
 
 PENSAR = """Eres EL CEREBRO de una fábrica de vídeos cortos verticales. Tu único trabajo: que el PRÓXIMO vídeo de esta
 cuenta saque más nota que los anteriores. La meta es {meta}/100; con menos de {minimo} no se publica. No te conformes.
@@ -58,8 +68,11 @@ lo que dijo el público simulado):
 CÓMO VA: media {media}, mejor {mejor}, último {ultimo}. El juez que más baja la nota: {juez_duro}.
 {planes}
 {saber}
+{manual}
 Piensa como el mejor director de contenido del mundo: busca la CAUSA que se repite, no la lista de síntomas. Lo que
-funcionó (los vídeos de más nota) se repite; lo que se repite en los suspensos se corta de raíz.
+funcionó (los vídeos de más nota) se repite; lo que se repite en los suspensos se corta de raíz. Apóyate en el manual
+(sus cifras y plantillas), pero manda lo que enseñan los vídeos de ESTA cuenta. El guionista solo controla el texto,
+el orden, el tema, la duración y el título: lo que sea de imagen o montaje, dilo en el diagnóstico, no como orden.
 
 Devuelve SOLO un JSON:
 {{"diagnostico": "en 1 o 2 frases sencillas, por qué no llega (o por qué llega)",
@@ -84,6 +97,58 @@ def _fecha(texto):
         return dt.datetime.strptime(str(texto), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
     except (TypeError, ValueError):
         return None
+
+
+def _recorta(texto, tope):
+    """Las primeras líneas enteras que caben (los ficheros llevan lo más importante arriba)."""
+    fuera = []
+    for linea in texto.strip().splitlines():
+        if sum(len(x) + 1 for x in fuera) + len(linea) > tope:
+            break
+        fuera.append(linea)
+    while len(fuera) > 1 and (not fuera[-1].strip() or fuera[-1].startswith("#") or fuera[-1].rstrip().endswith(":")):
+        fuera.pop()                       # no deja colgando un título de apartado sin nada debajo
+    return "\n".join(fuera).rstrip()
+
+
+def saber(formato, *otros, foco=(), tope=SABER_TOPE):
+    """El manual del Cerebro para una cuenta de este formato: lo general recortado (lo de arriba de cada fichero) y el
+    apartado de SU formato entero. `otros` son más nombres por los que buscar el apartado (el tipo del canal); `foco`,
+    los ficheros de los que más se quejan los jueces («1-», «2-»…), que entran con el doble de sitio. Nunca pasa del
+    tope, y si la carpeta no está devuelve cadena vacía (el Cerebro piensa igual, solo que sin manual)."""
+    nombres = {str(n).strip().lower() for n in (formato,) + otros if n}
+    generales, apartado = [], ""
+    try:
+        ficheros = sorted(f for f in os.listdir(SABER) if f.endswith(".md"))
+    except OSError:
+        return ""
+    for nombre in ficheros:
+        try:
+            with open(os.path.join(SABER, nombre), encoding="utf-8") as f:
+                texto = f.read().strip()
+        except OSError:
+            continue
+        if not nombre.startswith(SABER_FORMATOS):
+            generales.append((nombre, texto))
+            continue
+        for trozo in re.split(r"\n(?=## )", texto)[1:]:
+            claves = re.search(r"\[([^\]]*)\]", trozo.splitlines()[0])
+            if claves and nombres & {c.strip().lower() for c in claves.group(1).split(",")}:
+                apartado = "# Su formato: " + re.sub(r"\s*\[[^\]]*\]", "", trozo[3:], count=1).strip()
+                break
+    apartado = _recorta(apartado, tope // 3)
+    pesos = [2 if any(nombre.startswith(f) for f in foco) else 1 for nombre, _ in generales]
+    sitio = tope - len(apartado) - 2 * (len(generales) + 1)
+    trozos = [_recorta(texto, sitio * peso // max(1, sum(pesos))) for (_, texto), peso in zip(generales, pesos)]
+    return "\n\n".join(t for t in trozos + [apartado] if t)[:tope]
+
+
+def _foco(videos):
+    """De qué se quejan más los jueces y el público en estos vídeos → qué ficheros del manual entran con más sitio."""
+    texto = " ".join(" ".join(v.get("pegas") or []) + " " + str(v.get("fiscalia") or "") + " " + str(v.get("consejo") or "")
+                     + " " + str(v.get("publico") or "") for v in videos).lower()
+    veces = {f: sum(texto.count(p) for p in palabras) for f, palabras in FOCOS.items()}
+    return tuple(f for f in sorted(veces, key=lambda f: -veces[f]) if veces[f])[:2]
 
 
 class Cerebro:
@@ -246,15 +311,19 @@ class Cerebro:
                           f"({'+' if p['resultado']['cambio'] >= 0 else ''}{p['resultado']['cambio']} de media)"
                           for p in medidos)) if medidos else ""
             formato = c.get("formato_estudio") or c.get("tipo") or "vídeo corto"
-            saber = [s for s in self.m["saber"] if s.get("formato") == formato or s.get("idioma") == c.get("idioma", "es")][:6]
+            sabido = [s for s in self.m["saber"] if s.get("formato") == formato      # «es» y «es-ES» son el mismo idioma
+                      or str(s.get("idioma") or "es")[:2] == str(c.get("idioma") or "es")[:2]][:6]
             saber_txt = ("LO QUE YA TE HA FUNCIONADO EN OTRAS CUENTAS PARECIDAS:\n" + "\n".join(
-                f"- {s['regla']} (+{s['cambio']})" for s in saber)) if saber else ""
+                f"- {s['regla']} (+{s['cambio']})" for s in sabido)) if sabido else ""
+            manual = saber(formato, c.get("tipo"), foco=_foco(ultimos))
+            manual = ("TU MANUAL (lo que funciona en vídeos cortos; saca de aquí cifras y plantillas para tus órdenes):\n"
+                      + manual + "\n") if manual else ""
             texto = PENSAR.format(meta=META, minimo=int(c.get("nota_minima") or 90),
                                   que=c.get("apodo") or c.get("tema") or formato, formato=formato,
                                   idioma={"es": "español", "nl": "neerlandés", "en": "inglés"}.get(str(c.get("idioma", "es"))[:2], "español"),
                                   donde="YouTube Shorts" if c["destino"] == "youtube" else "TikTok e Instagram",
                                   videos=videos, media=round(statistics.mean(notas)), mejor=max(notas), ultimo=notas[-1],
-                                  juez_duro=juez_duro, planes=planes, saber=saber_txt)
+                                  juez_duro=juez_duro, planes=planes, saber=saber_txt, manual=manual)
             try:
                 r = ia.preguntar(texto, papel="elite", temperatura=0.6)
                 if isinstance(r, list) and r:
