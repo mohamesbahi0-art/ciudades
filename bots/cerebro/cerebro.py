@@ -123,6 +123,18 @@ Devuelve SOLO un JSON: {{"respuesta": "lo que le contestas", "acciones": [{{"tip
 "para_claude", "cuenta": "clave o todas", "texto": "..."}}]}}"""
 
 
+NIVEL_MAXIMO = 1_000_000
+
+
+def nivel_de(xp):
+    """El nivel del Cerebro según su experiencia: rápido al principio y cada vez más caro (nivel = raíz de la
+    experiencia), hasta 1.000.000. Devuelve (nivel, experiencia que hace falta para el siguiente)."""
+    xp = max(0, int(xp))
+    nivel = min(NIVEL_MAXIMO, 1 + int(xp ** 0.5))
+    siguiente = nivel ** 2            # con esta experiencia se llega al nivel siguiente
+    return nivel, max(0, siguiente - xp)
+
+
 def _ahora():
     return dt.datetime.now(dt.timezone.utc)
 
@@ -516,6 +528,8 @@ class Cerebro:
                                    "pasos": self.directo[-DIRECTO_GUARDA:],
                                    "cuentas": resumen, "saber": self.m["saber"][:12],
                                    "ordenes_del_dueno": self.m.get("ordenes_del_dueno", [])[-ORDENES_GUARDA:],
+                                   "nivel": {k: v for k, v in (self.m.get("nivel") or {}).items() if k != "historial"},
+                                   "progreso": ((self.m.get("nivel") or {}).get("historial") or [])[-48:],
                                    "para_claude": [x for x in self.m.get("para_claude", []) if x.get("estado") == "para_claude"][-10:],
                                    "averias_hoy": sum(1 for a in self.m["averias"] if str(a.get("fecha"))[:10] == _iso()[:10]
                                                       and not a.get("de_fuera"))})
@@ -528,13 +542,92 @@ class Cerebro:
             pass
         return resumen
 
+    def _medias(self):
+        salida = {}
+        for clave, _ in self.cuentas():
+            notas = [v["nota"] for v in (self.ficha(clave).get("videos") or [])[-MIRA:]]
+            if notas:
+                salida[clave] = round(statistics.mean(notas), 1)
+        return salida
+
+    def subir_nivel(self, desde, medias_antes, videos_antes):
+        """Lo que ha mejorado en esta pasada, en sencillo, y la experiencia que le da. Solo cuenta lo que ha pasado de
+        verdad (notas, vídeos que aprueban, planes que funcionan, arreglos): si no ha mejorado nada, lo dice."""
+        hechos = self.directo[desde:]
+        mejoras, xp = [], 0
+        minimo = privado.nota_minima()
+        a = privado.alias                                 # en el informe, alias: la app los cambia por el nombre
+        nuevos = []                                       # los vídeos juzgados nuevos de esta pasada
+        for clave, f in self.m["cuentas"].items():
+            nuevos += [(clave, v) for v in (f.get("videos") or [])[videos_antes.get(clave, 0):]]
+        if nuevos:
+            xp += len(nuevos)
+            mejoras.append(f"He estudiado {len(nuevos)} vídeo(s) juzgado(s) nuevo(s)")
+        for clave, v in nuevos:
+            if v["nota"] >= 100:
+                xp += 500
+                mejoras.append(f"¡Un 100/100 en {a(clave)}!: «{v['titulo'][:60]}»")
+            elif v["nota"] >= 90:
+                xp += 100
+                mejoras.append(f"Un {v['nota']}/100 en {a(clave)}: «{v['titulo'][:60]}»")
+            elif v["nota"] >= minimo:
+                xp += 50
+                mejoras.append(f"Un vídeo de {a(clave)} ya llega al mínimo ({v['nota']}/100) y sale a publicarse")
+        record = {}
+        for clave, v in nuevos:                          # un récord de la cuenta
+            antes = [x["nota"] for x in self.ficha(clave)["videos"] if x is not v and str(x.get("fecha")) < str(v.get("fecha"))]
+            if antes and v["nota"] > max(antes) and v["nota"] > record.get(clave, 0):
+                record[clave] = v["nota"]
+        for clave, nota in record.items():
+            xp += 20
+            mejoras.append(f"Récord en {a(clave)}: {nota}/100, su mejor nota hasta ahora")
+        medias = self._medias()
+        for clave, media in medias.items():
+            antes = medias_antes.get(clave)
+            if antes is not None and media - antes >= 1:
+                xp += int(round((media - antes) * 5))
+                mejoras.append(f"La media de {a(clave)} sube de {antes} a {media}")
+        for p in hechos:
+            if p["que"] == "mido mi plan" and "funciona" in p["detalle"]:
+                xp += 25
+                mejoras.append(f"Un plan mío ha funcionado en {a(p.get('cuenta') or '')}: me lo quedo y lo enseño a las demás")
+            elif p["que"] == "mido mi plan":
+                xp += 3                                   # saber qué NO funciona también es aprender
+            elif p["que"].startswith("arreglo"):
+                xp += 10
+                mejoras.append(f"He arreglado algo en {a(p.get('cuenta') or '')}: {p['detalle'][:90]}")
+            elif p["que"] == "plan nuevo":
+                xp += 3
+            elif p["que"] == "hablo con el dueño":
+                xp += 5
+        planes = sum(1 for p in hechos if p["que"] == "plan nuevo")
+        if planes:
+            mejoras.append(f"He preparado {planes} plan(es) nuevo(s) para los próximos vídeos")
+        n = self.m.setdefault("nivel", {"xp": 0, "historial": []})
+        nivel_antes = nivel_de(n["xp"])[0]
+        n["xp"] = int(n["xp"]) + xp
+        nivel, falta = nivel_de(n["xp"])
+        if nivel > nivel_antes:
+            mejoras.insert(0, f"¡Subo al nivel {nivel:,}!".replace(",", "."))
+        informe = {"fecha": _iso(), "xp": xp, "nivel": nivel,
+                   "mejoras": mejoras or ["En esta pasada no ha mejorado nada medible: no han llegado vídeos juzgados "
+                                          "nuevos. Sigo con los planes que tenía."]}
+        n["historial"] = (n.get("historial") or [])[-95:] + [informe]
+        n.update(nivel=nivel, falta=falta, maximo=NIVEL_MAXIMO)
+        self.digo("subo de nivel" if nivel > nivel_antes else "mi progreso",
+                  f"Nivel {nivel:,}".replace(",", ".") + f" (+{xp} de experiencia). " + "; ".join(informe["mejoras"][:3]) + ".")
+
     def pasada(self):
+        desde = len(self.directo)
+        medias_antes = self._medias()
+        videos_antes = {k: len(f.get("videos") or []) for k, f in self.m["cuentas"].items()}
         self.digo("empiezo", "Miro cómo va cada cuenta, arreglo lo que la frena y preparo su plan para el próximo vídeo.")
         self.paso("hablar", self.hablar)       # lo del dueño, lo primero
         self.paso("reparar", self.reparar)
         self.paso("aprender", self.aprender)
         self.paso("medir", self.medir)
         self.paso("pensar", self.pensar)
+        self.paso("subir de nivel", lambda: self.subir_nivel(desde, medias_antes, videos_antes))
         return self.guardar()
 
 

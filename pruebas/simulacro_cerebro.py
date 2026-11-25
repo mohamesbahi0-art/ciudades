@@ -181,7 +181,7 @@ cerebro.Cerebro().pasada()
 m = lee(cerebro.MEMORIA)
 comprobar("sin IA no inventa un plan: espera, guarda lo aprendido y la cuenta sigue con su plan de antes",
           len(m["cuentas"][CUENTA]["planes"]) == planes_antes and m["cuentas"][CUENTA]["videos"][-1]["nota"] == 91
-          and m["averias"][-1]["de_fuera"] and lee(cerebro.DIRECTO)["pasos"][-1]["que"] == "espero a la IA"
+          and m["averias"][-1]["de_fuera"] and "espero a la IA" in [x["que"] for x in lee(cerebro.DIRECTO)["pasos"][-4:]]
           and lee(cerebro.RECETAS)["cuentas"][CUENTA]["reglas"] == ["Regla del segundo plan."])
 ROTA[0] = None
 PLAN["reglas"] = []
@@ -239,6 +239,23 @@ ROTA[0] = None
 HABLA.update({"respuesta": "Va subiendo.", "acciones": []})
 cerebro.Cerebro().pasada()
 comprobar("y en cuanto vuelve la IA, lo contesta", any(c.get("responde_a") == "m2" for c in lee(cerebro.CHAT)["conversacion"]))
+
+# 5c. Sube de nivel con lo que mejora de verdad, y lo cuenta
+d = lee(cerebro.DIRECTO)
+niv, prog = d.get("nivel") or {}, d.get("progreso") or []
+comprobar("lleva su nivel y su experiencia, y cada pasada deja un informe de lo que ha mejorado",
+          niv.get("nivel", 0) >= 1 and niv.get("maximo") == 1_000_000 and prog and all(i.get("mejoras") for i in prog))
+xp_antes = niv.get("xp", 0)
+juicio(CANAL, 95, minutos=30)
+cerebro.Cerebro().pasada()
+ultimo = (lee(cerebro.DIRECTO).get("progreso") or [{}])[-1]
+comprobar("un vídeo de 95 da mucha experiencia y sale en el informe",
+          lee(cerebro.DIRECTO)["nivel"]["xp"] >= xp_antes + 100 and any("95/100" in m for m in ultimo.get("mejoras", [])))
+c = cerebro.Cerebro()                # una pasada en la que no ha pasado nada (sin vídeos nuevos ni planes)
+c.subir_nivel(len(c.directo), c._medias(), {k: len(f.get("videos") or []) for k, f in c.m["cuentas"].items()})
+inf = c.m["nivel"]["historial"][-1]
+comprobar("si no mejora nada, lo dice y no se inventa experiencia",
+          inf["xp"] == 0 and "no ha mejorado nada" in " ".join(inf["mejoras"]))
 
 # 6. Nada privado en las preguntas a la IA
 comprobar("en ninguna pregunta a la IA sale el nombre de la cuenta", PREGUNTAS and not any(CUENTA in p for p in PREGUNTAS))
