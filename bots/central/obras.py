@@ -28,7 +28,8 @@ def retomar(canal):
     en esa misma ficha en vez de abrir otra (así la app no se llena de intentos a medias). None si no hay."""
     try:
         esperando = [(str(o.get("actualizado") or ""), k) for k, o in (_leer().get("obras") or {}).items()
-                     if o.get("canal") == canal and o.get("estado") in ("esperando", "atasco")]
+                     if o.get("canal") == canal and o.get("estado") in ("esperando", "atasco")
+                     and not o.get("en_sala")]             # el que está en la Sala de espera sigue en su ficha, aparte
         return max(esperando)[1] if esperando else None
     except Exception:
         return None
@@ -61,7 +62,7 @@ def reanudar():
         print(f"obras: no se ha podido quitar la pausa ({type(e).__name__})", flush=True)
 
 
-def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_marcha", paso=None):
+def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_marcha", paso=None, en_sala=False):
     """Pone al día un vídeo en marcha. Devuelve el documento (o None si algo falla)."""
     try:
         d = _leer()
@@ -78,13 +79,17 @@ def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_ma
         if titulo:
             o["titulo"] = str(titulo)[:120]
         o["estado"], o["actualizado"] = estado, ahora
+        if en_sala:
+            o["en_sala"] = True          # espera en la Sala de espera del Juzgado (ver bots/juzgado/espera.py)
+        else:
+            o.pop("en_sala", None)
         limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=GUARDA_HORAS)
         espera = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=ESPERA_HORAS)
         for k in [k for k, v in obras.items() if k != id_obra and (
                 (v.get("estado") in ("terminado", "descartado", "atasco")
                  and str(v.get("actualizado", "")) < limite.strftime("%Y-%m-%dT%H:%M:%SZ")) or
                 (v.get("estado") == "esperando"                  # una espera vieja ya no dice nada: fuera
-                 and str(v.get("actualizado", "")) < espera.strftime("%Y-%m-%dT%H:%M:%SZ")))]:
+                 and str(v.get("actualizado", "")) < (limite if v.get("en_sala") else espera).strftime("%Y-%m-%dT%H:%M:%SZ")))]:
             obras.pop(k)
         d["actualizado"] = ahora
         privado.escribir(ARCHIVO, d)

@@ -1,0 +1,32 @@
+# Prueba de la cadena de IA gratis: qué servicios de reserva tienen llave, qué modelos del catálogo existen hoy y si
+# contestan (también con una imagen). Solo enseña nombres de servicio y de modelo y el código de respuesta.
+# Se pone en marcha con peticiones/cadena.json (por ejemplo, cuando el dueño añade una llave nueva).
+name: Probar la cadena
+on:
+  push:
+    paths:
+      - "peticiones/cadena.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Herramientas
+        run: pip install -q pillow
+      - name: Probar
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PRIVADO: /tmp/privado-prueba
+        run: |
+          cp -r pruebas/privado_ejemplo /tmp/privado-prueba
+          python -m bots.comun.cadena probar

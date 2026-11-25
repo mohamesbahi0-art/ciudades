@@ -298,7 +298,11 @@ def estratega(parte):
             salida.append({"id": f"formato-{alias}", "tipo": "formato", "canal": alias, "clave": clave,
                            "juicios": c["juicios"], "mejor": c["mejor"], "media": c["media"],
                            "pruebas": _consejos(clave) + ([f"cine: {json.dumps(c['cine'], ensure_ascii=False)}"] if c.get("cine") else [])})
-        pago, gratis = (c["por_guionista"].get("claude") or {}), (c["por_guionista"].get("gemini") or {})
+        pago = c["por_guionista"].get("claude") or {}
+        de_gratis = [x for k, x in c["por_guionista"].items() if k not in ("claude", "?", "a mano") and x.get("n")]
+        gratis = ({"n": sum(x["n"] for x in de_gratis),
+                   "media": round(sum(x["media"] * x["n"] for x in de_gratis) / sum(x["n"] for x in de_gratis), 1)}
+                  if de_gratis else {})
         if pago.get("n", 0) >= 2 and gratis.get("n", 0) >= 2 and pago["media"] - gratis["media"] >= 8 \
                 and (c.get("cambios_elite") or {}).get("guionista") != "claude" and clave not in activos:
             salida.append({"id": f"cerebro-{alias}", "tipo": "cerebro", "canal": alias, "clave": clave,

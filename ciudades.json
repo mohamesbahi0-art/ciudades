@@ -314,6 +314,18 @@
    "tipo": "bot"
   },
   {
+   "id": "relevista",
+   "nombre": "Relevista de la IA",
+   "ciudad": "central",
+   "donde": "ciudad",
+   "grupo": "Servicios de la ciudad",
+   "hace": "Cuando la IA gratis de siempre se queda sin cupo, pasa la pregunta a la siguiente IA gratis, y de esa a la otra, para que la fábrica piense las 24 horas. Apunta cuál se ha quedado sin cupo para no llamarla hasta que le toque.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
    "id": "torre_visualizaciones",
    "nombre": "Torre de las Visualizaciones",
    "ciudad": "central",
@@ -395,6 +407,18 @@
    "origen": "antes",
    "lote": 1,
    "codigo": "salvado",
+   "tipo": "bot"
+  },
+  {
+   "id": "juez_suplente",
+   "nombre": "Juez suplente",
+   "ciudad": "juzgado",
+   "donde": "ciudad",
+   "grupo": "Quién trabaja aquí",
+   "hace": "Juzga cuando a los jueces de primera no les queda cupo, para que la fábrica no pare. Puede suspender un vídeo y decir qué arreglar, pero si lo da por bueno no lo publica: lo deja en la Sala de espera hasta que lo confirma un juez de primera. Después se apunta la nota buena para aprender.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
    "tipo": "bot"
   },
   {

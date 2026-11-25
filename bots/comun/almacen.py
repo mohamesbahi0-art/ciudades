@@ -7,7 +7,8 @@ import json
 import os
 import subprocess
 
-TITULOS = {"cola": "Cola de subidas a YouTube", "para-subir": "Para subir (TikTok e Instagram)"}
+TITULOS = {"cola": "Cola de subidas a YouTube", "para-subir": "Para subir (TikTok e Instagram)",
+           "espera": "Sala de espera del Juzgado (vídeos que esperan a un juez de primera)"}
 
 
 def repo():

@@ -115,7 +115,74 @@ def exigencia(canal):
             "la gente vería entero y compartiría. Si es «correcto» o «está bien», no llega: ponle menos de 80 y di qué falta.")
 
 
-def juzgar(video, guion, canal, lecciones, carpeta, audio=None, prueba=False):
+def _sentenciar(sala, alegatos, fallos, canal, guion, medidas, gente):
+    """De los votos de la sala a la sentencia. None si los jueces no han contestado bien."""
+    votos = []
+    for voto in sala.get("votos", []) or []:
+        k = voto.get("juez") if isinstance(voto, dict) else None
+        if k in JUECES:
+            try:
+                nota = max(0, min(100, int(voto.get("nota", 0))))
+            except (TypeError, ValueError):
+                continue
+            votos.append({"juez": JUECES[k]["nombre"], "clave": k, "voto": "sube" if voto.get("voto") == "sube" else "no",
+                          "nota": nota, "razon": voto.get("razon", "")})
+    if not votos:
+        return None
+    jefe = _jefe()
+    a_favor = sum(1 for v in votos if v["voto"] == "sube")
+    voto_jefe = next((v["voto"] for v in votos if v["clave"] == jefe), "sube")
+    total = round(statistics.mean(v["nota"] for v in votos))
+    sube = (a_favor * 2 > len(votos)) or (a_favor * 2 == len(votos) and voto_jefe == "sube")
+    if fallos or total < minima(canal):
+        sube = False
+    # El Jurado popular ya votó el guion antes de grabarlo (turno.py): su veredicto va con el juicio para la app y la Liga
+    return {"veredicto": "aprobado" if sube else "suspendido", "total": total, "fallos_graves": fallos,
+            "consejo": sala.get("consejo", "") or "", "jurado": guion.get("jurado"),
+            "defensa": alegatos.get("defensa", ""), "fiscalia": alegatos.get("fiscalia", ""), "votos": votos,
+            "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo",
+            "cerebro": ia.quien().get("motor", "gemini"), "publico": gente}
+
+
+def _apunta_suplente(clave, guion, resultado):
+    """El Juez suplente apunta su juicio en su cuaderno (para compararlo después con el del juez de primera)."""
+    try:
+        c = privado.cuaderno("juez_suplente")
+        i = c.apuntar("juicio", {"canal": clave, "titulo": str(guion.get("titulo", ""))[:120],
+                                 "veredicto": resultado.get("veredicto"), "total": resultado.get("total"),
+                                 "cerebro": resultado.get("cerebro")})
+        c.guardar()
+        return i
+    except Exception:
+        return None
+
+
+def nota_suplente(id_apunte, de_primera):
+    """Cuando un juez de primera juzga lo mismo que juzgó el suplente, el suplente se apunta la nota buena: aprende
+    si va largo o corto."""
+    if not id_apunte:
+        return
+    try:
+        c = privado.cuaderno("juez_suplente")
+        c.nota(id_apunte, de_primera.get("total"), "nota del juez de primera sobre el mismo vídeo",
+               str(de_primera.get("consejo") or "")[:300])
+        c.guardar()
+    except Exception:
+        pass
+
+
+def _espera(resultado, motivo):
+    """Un aprobado que todavía no vale: lo ha dado un juez suplente y falta que lo confirme uno de primera."""
+    resultado.update(veredicto="sin_juicio", preaprobado=True, nota_suplente=resultado.get("total"),
+                     suplente=resultado.get("cerebro"), motivo=motivo)
+    return resultado
+
+
+def juzgar(video, guion, canal, lecciones, carpeta, audio=None, prueba=False, confirmar=False, publico_previo=None):
+    """El juicio completo. Los jueces suplentes (la IA gratis de reserva) pueden suspender y decir qué arreglar, pero un
+    aprobado suyo no vale hasta que lo confirme un juez de primera: si ahora no hay ninguno, devuelve «sin_juicio» con
+    preaprobado=True y el vídeo espera en la Sala de espera. confirmar=True: es ese segundo juicio, solo con jueces de
+    primera (si siguen sin estar, vuelve a devolver «sin_juicio»)."""
     clave = canal["clave"]
     subprocess.run([sys.executable, os.path.join(RAIZ, "herramientas", "fotogramas.py"), video, "--salida", carpeta],
                    check=True, capture_output=True)
@@ -136,64 +203,76 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None, prueba=False):
              "medidas": json.dumps(medidas, ensure_ascii=False),
              "exigencia": exigencia(canal) + juez_guardia.nota_formato(canal)}
     try:                  # el Público mira el vídeo montado antes que nadie: su retención es una prueba más
-        gente = publico.mirar(guion, canal, imagenes, datos.get("duracion"), prueba=prueba)
+        gente = publico_previo or publico.mirar(guion, canal, imagenes, datos.get("duracion"), prueba=prueba)
     except Exception:
         gente = None
     del_publico = ("\n- " + publico.en_palabras(gente) + " (es un público simulado: tenlo en cuenta como una prueba "
                    "fuerte de si engancha, sobre todo dónde y por qué se va la gente)") if gente else ""
     comun["exigencia"] += del_publico
+    jueces_txt = "\n".join(f"- {k}: {j['nombre']} ({j['sala']}): {j['especialidad']}" for k, j in JUECES.items())
+
+    def la_sala(alegatos, solo_primera):
+        return ia.preguntar(SALAS.format(defensa=alegatos.get("defensa", ""), fiscalia=alegatos.get("fiscalia", ""),
+                                         jueces=jueces_txt, **comun), papel="juez", imagenes=imagenes, solo_bueno=True,
+                            temperatura=0.3, audio=audio, solo_primera=solo_primera)
     try:
         alegatos = ia.preguntar(ABOGADOS.format(narracion=guion["narracion"], pruebas=_pruebas(clave, canal) + del_publico,
                                                 lecciones=lecciones, **comun), papel="juez", imagenes=imagenes,
-                                solo_bueno=True, temperatura=0.5, audio=audio)
-        jueces_txt = "\n".join(f"- {k}: {j['nombre']} ({j['sala']}): {j['especialidad']}" for k, j in JUECES.items())
-        sala = ia.preguntar(SALAS.format(defensa=alegatos.get("defensa", ""), fiscalia=alegatos.get("fiscalia", ""),
-                                         jueces=jueces_txt, **comun), papel="juez", imagenes=imagenes, solo_bueno=True,
-                            temperatura=0.3, audio=audio)
+                                solo_bueno=True, temperatura=0.5, audio=audio, solo_primera=confirmar)
+        sala = la_sala(alegatos, confirmar)
         if not isinstance(alegatos, dict) or not isinstance(sala, dict):
             raise gemini.SinIA("la IA no contestó con la forma pedida")
-    except Exception:                      # sin IA o con respuesta rara: juicio rápido del Juez de guardia
+        resultado = _sentenciar(sala, alegatos, fallos + [str(x) for x in alegatos.get("fallos_graves", []) or [] if x],
+                                canal, guion, medidas, gente)
+    except Exception as e:                 # sin IA o con respuesta rara
+        if confirmar:                      # la confirmación solo vale de un juez de primera: si no está, sigue esperando
+            return {"veredicto": "sin_juicio", "preaprobado": True, "medidas": medidas, "publico": gente,
+                    "motivo": f"no hay juez de primera para confirmar ({str(e)[:120]})"}
+        resultado = None
+    if resultado is None:                  # juicio rápido del Juez de guardia
+        if confirmar:
+            return {"veredicto": "sin_juicio", "preaprobado": True, "medidas": medidas, "publico": gente,
+                    "motivo": "los jueces de primera no contestaron bien"}
         v = juez_guardia.juzgar(video, guion, canal, lecciones, carpeta + "-guardia")
         v["tribunal"] = "juicio rápido (la IA no daba para el juicio completo)"
+        if v.get("veredicto") == "aprobado" and ia.es_suplente(v.get("cerebro")) and not prueba:
+            return _espera(v, "lo ha dado por bueno un juez suplente en un juicio rápido: falta el juez de primera")
         return v
-    fallos += [str(x) for x in alegatos.get("fallos_graves", []) or [] if x]
-    votos = []
-    for voto in sala.get("votos", []) or []:
-        k = voto.get("juez") if isinstance(voto, dict) else None
-        if k in JUECES:
-            try:
-                nota = max(0, min(100, int(voto.get("nota", 0))))
-            except (TypeError, ValueError):
-                continue
-            votos.append({"juez": JUECES[k]["nombre"], "clave": k, "voto": "sube" if voto.get("voto") == "sube" else "no",
-                          "nota": nota, "razon": voto.get("razon", "")})
-    if not votos:
-        v = juez_guardia.juzgar(video, guion, canal, lecciones, carpeta + "-guardia")
-        v["tribunal"] = "juicio rápido (los jueces no contestaron bien)"
-        return v
-    jefe = _jefe()
-    a_favor = sum(1 for v in votos if v["voto"] == "sube")
-    voto_jefe = next((v["voto"] for v in votos if v["clave"] == jefe), "sube")
-    total = round(statistics.mean(v["nota"] for v in votos))
-    sube = (a_favor * 2 > len(votos)) or (a_favor * 2 == len(votos) and voto_jefe == "sube")
-    if fallos or total < minima(canal):
-        sube = False
-    # El Jurado popular ya votó el guion antes de grabarlo (turno.py): su veredicto va con el juicio para la app y la Liga
-    jurado_v, consejo_jurado = guion.get("jurado"), ""
-    veredicto = "aprobado" if sube else "suspendido"
-    resultado = {"veredicto": veredicto, "total": total, "fallos_graves": fallos,
-                 "consejo": " · ".join(x for x in (sala.get("consejo", ""), consejo_jurado) if x), "jurado": jurado_v,
-                 "defensa": alegatos.get("defensa", ""), "fiscalia": alegatos.get("fiscalia", ""), "votos": votos,
-                 "juez_mayor": JUECES[jefe]["nombre"], "medidas": medidas, "tribunal": "juicio completo",
-                 "cerebro": ia.quien().get("motor", "gemini"), "publico": gente}
+    id_suplente = _apunta_suplente(clave, guion, resultado) \
+        if ia.es_suplente(resultado.get("cerebro")) and not prueba and not confirmar else None
+    if resultado["veredicto"] == "aprobado" and ia.es_suplente(resultado.get("cerebro")) and not prueba:
+        # lo aprueba un suplente: que lo confirme ahora mismo un juez de primera (con los mismos alegatos)
+        suplente, nota_del_suplente = resultado.get("cerebro"), resultado.get("total")
+        try:
+            segunda = la_sala(alegatos, True)
+            confirmado = _sentenciar(segunda, alegatos, resultado["fallos_graves"], canal, guion, medidas, gente) \
+                if isinstance(segunda, dict) else None
+        except Exception:
+            confirmado = None
+        if confirmado is None:
+            resultado = _espera(resultado, "lo ha dado por bueno un juez suplente: falta que lo confirme uno de primera")
+            resultado["id_suplente"] = id_suplente
+        else:
+            resultado = dict(confirmado, instruccion={"cerebro": suplente, "total": nota_del_suplente})
+            nota_suplente(id_suplente, confirmado)
+    elif ia.es_suplente(resultado.get("cerebro")):
+        resultado["suplente"] = resultado.get("cerebro")
+    total, sube = resultado.get("total"), resultado["veredicto"] == "aprobado"
     try:                                                  # en directo al móvil del dueño
         from bots.central import cartero
-        cartero.directo(f"⚖️ Juzgado: {total}/100 · {'APROBADO' if sube else 'NO PASA'} (hace falta {minima(canal)})",
-                        f"«{guion['titulo']}»\n🟢 Defensa: {alegatos.get('defensa', '')[:300]}\n🔴 Fiscalía: "
-                        f"{alegatos.get('fiscalia', '')[:300]}\n" + "\n".join(f"{'✅' if x['voto'] == 'sube' else '❌'} {x['juez']} "
-                        f"({x['nota']}): {x['razon'][:200]}" for x in votos) +
-                        (f"\n💡 {resultado['consejo'][:300]}" if resultado.get("consejo") else "")
-                        + (f"\n⛔ Fallos graves: {', '.join(fallos)}" if fallos else ""), etiqueta="scales")
+        if resultado.get("preaprobado"):
+            cartero.directo(f"⚖️ Juzgado: {resultado.get('nota_suplente')}/100 del juez suplente · ESPERA al juez de primera",
+                            f"«{guion['titulo']}»\nEl juez de reserva lo da por bueno, pero nada sale sin que lo confirme "
+                            "un juez de primera. Se queda en la Sala de espera.", etiqueta="scales")
+        else:
+            cartero.directo(f"⚖️ Juzgado: {total}/100 · {'APROBADO' if sube else 'NO PASA'} (hace falta {minima(canal)})",
+                            f"«{guion['titulo']}»\n🟢 Defensa: {resultado.get('defensa', '')[:300]}\n🔴 Fiscalía: "
+                            f"{resultado.get('fiscalia', '')[:300]}\n" + "\n".join(
+                                f"{'✅' if x['voto'] == 'sube' else '❌'} {x['juez']} ({x['nota']}): {x['razon'][:200]}"
+                                for x in resultado["votos"]) +
+                            (f"\n💡 {resultado['consejo'][:300]}" if resultado.get("consejo") else "")
+                            + (f"\n⛔ Fallos graves: {', '.join(resultado['fallos_graves'])}"
+                               if resultado.get("fallos_graves") else ""), etiqueta="scales")
     except Exception:
         pass
     with open(os.path.join(carpeta, "veredicto.json"), "w", encoding="utf-8") as f:
@@ -221,6 +300,7 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
         "version": v.get("version", 1), "arreglo_de": guion.get("arreglo_de"),
         "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro"), "guionista": guion.get("cerebro"),
+        "instruccion": v.get("instruccion"),      # si antes lo dio por bueno un juez suplente: quién y con qué nota
         "jurado": v.get("jurado"), "publico": v.get("publico"),
         "publico_resumen": publico.en_palabras(v.get("publico")) or None})
     for robot, que in (("detectives", "pruebas"), ("abogados", "alegatos"), ("jueces_sala", "votos"),

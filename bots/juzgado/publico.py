@@ -61,7 +61,8 @@ def mirar(guion, canal, imagenes, duracion, prueba=False):
                             gancho=guion.get("texto_pantalla", ""), narracion=str(guion.get("narracion", ""))[:6000],
                             espectadores="\n".join(espectadores(n, semilla=guion.get("titulo"))))
     try:
-        r = ia.preguntar(texto, papel="jurado", imagenes=imagenes, solo_bueno=True, temperatura=0.8)
+        # los modelos buenos (pocas preguntas al día) se guardan para los jueces: el público mira con los ligeros
+        r = ia.preguntar(texto, papel="jurado", imagenes=imagenes, ligero_primero=True, temperatura=0.8)
     except Exception:
         return None
     filas = r.get("publico") if isinstance(r, dict) else r

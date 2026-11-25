@@ -27,6 +27,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
 from bots.central import clips, dibujante, escritor, fotografo, huecos, montador, parasubir, reportero, subidor, videoteca  # noqa: E402
 from bots.comun import ia, privado  # noqa: E402
+from bots.juzgado import espera as sala_espera  # noqa: E402
 from bots.juzgado import juez_guardia, jurado, sala_ideas, tribunal  # noqa: E402
 from bots.coliseo import coliseo  # noqa: E402
 from bots.central import obras  # noqa: E402
@@ -56,11 +57,37 @@ class _Hecho(Exception):
     """El turno ya está terminado (lo ha hecho el estudio de animación)."""
 
 
-def _sin_juez(v, a, paso):
-    """Si no ha habido quien juzgue (la IA no contesta), el turno espera: ni segundo intento, ni suspenso, ni se tira."""
-    if v.get("veredicto") == "sin_juicio" and not a.prueba:
-        paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; espera a la siguiente ronda")
-        raise ia.SinIA("no hay juez ahora: el vídeo se queda sin juzgar y espera a la siguiente ronda")
+def _a_la_sala(v, paso, resumen, clave, video, g, segundos, id_guion=None, **extra):
+    """Un juez suplente da por bueno el vídeo: se guarda en la Sala de espera hasta que lo confirme un juez de primera.
+    Devuelve True si queda guardado (el turno acaba ahí, sin suspenso y sin tirar nada)."""
+    try:
+        sala_espera.guardar(clave, video, g, v, segundos, id_guion=id_guion, obra=resumen.get("obra"), extra=extra)
+    except Exception as e:
+        paso("juez_guardia", f"no he podido guardar el vídeo en la sala de espera ({type(e).__name__}): espera sin él")
+        return False
+    if g.get("tomas_usadas"):                  # que el siguiente vídeo no repita las mismas tomas mientras este espera
+        try:
+            videoteca.apuntar_usos(g.get("tomas_usadas") or [])
+        except Exception:
+            pass
+    nota = v.get("nota_suplente", "-")
+    paso("juez_guardia", f"el juez suplente lo da por bueno ({nota}/100), pero nada sale sin un juez de primera: el "
+         "vídeo se queda en la Sala de espera hasta que lo confirme", f"el juez suplente lo da por bueno ({nota}/100): "
+         "espera la confirmación de un juez de primera")
+    resumen.update(titulo=g.get("titulo"), destino_resultado="espera_juez", resultado="hecho", nota_suplente=nota,
+                   segundos=round(segundos, 1))
+    return True
+
+
+def _sin_juez(v, a, paso, sala=None):
+    """Si no ha habido quien juzgue (la IA no contesta), el turno espera: ni segundo intento, ni suspenso, ni se tira.
+    `sala`: lo que hace falta para guardar el vídeo si un juez suplente lo ha dado por bueno (ver _a_la_sala)."""
+    if v.get("veredicto") != "sin_juicio" or a.prueba:
+        return
+    if v.get("preaprobado") and sala and _a_la_sala(v, paso, **sala):
+        raise _Hecho()
+    paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; espera a la siguiente ronda")
+    raise ia.SinIA("no hay juez ahora: el vídeo se queda sin juzgar y espera a la siguiente ronda")
 
 
 def _voz_de_pago(g, canal):
@@ -190,6 +217,83 @@ def _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, 
             nombre = subidor.encolar(clave, video, g, motivo, v)
             paso("subidor", f"{motivo}: guardado en la cola ({nombre})", f"{motivo}: guardado en la cola")
             resumen.update(destino_resultado="en_cola", motivo=motivo)
+
+
+def _confirmar(clave, canal, ficha, cuadernos, ajustes, trabajo, paso, resumen, a):
+    """Un vídeo de esta cuenta espera en la Sala de espera (un juez suplente lo dio por bueno). Si ahora hay juez de
+    primera, lo juzga: aprobado → Coliseo y su destino de siempre; suspendido → fuera (o a arreglar, en el estudio).
+    Devuelve True si el turno se acaba aquí; False si la cuenta puede hacer otro vídeo mientras tanto."""
+    g = ficha["guion"]
+    nota_suplente = ficha.get("nota", "-")
+
+    def sigue_esperando(motivo):
+        if not sala_espera.llena(clave):
+            paso("juez_guardia", f"«{g.get('titulo', '')}» sigue en la Sala de espera ({motivo}); mientras, la cuenta "
+                 "hace otro vídeo", "un vídeo sigue en la Sala de espera; mientras, la cuenta hace otro")
+            return False
+        paso("juez_guardia", f"{motivo}: la Sala de espera de la cuenta está llena, así que espera al juez de primera "
+             "en vez de hacer más vídeos", "la Sala de espera está llena: la cuenta espera al juez de primera")
+        resumen.update(titulo=g.get("titulo"), destino_resultado="espera_juez", resultado="hecho",
+                       nota_suplente=nota_suplente)
+        return True
+    if not ia.hay_de_primera("juez"):
+        return sigue_esperando("todavía no hay juez de primera")
+    paso("juez_guardia", f"hay juez de primera: confirma «{g.get('titulo', '')}», que esperaba con {nota_suplente}/100 "
+         "del suplente", f"hay juez de primera: confirma el vídeo que esperaba ({nota_suplente}/100 del suplente)")
+    try:
+        video = sala_espera.bajar(ficha, os.path.join(trabajo, "espera"))
+    except Exception as e:
+        paso("juez_guardia", f"no encuentro el vídeo que esperaba ({type(e).__name__}): se quita de la sala")
+        sala_espera.quitar(clave, ficha)
+        return False
+    v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
+                        os.path.join(trabajo, "juicio-confirmacion"), confirmar=True, publico_previo=ficha.get("publico"))
+    if v.get("veredicto") == "sin_juicio":
+        return sigue_esperando("el juez de primera no ha contestado")
+    sala_espera.quitar(clave, ficha)
+    tribunal.nota_suplente(ficha.get("id_suplente"), v)       # el suplente aprende de lo que dice el juez de primera
+    segundos, id_guion = float(ficha.get("segundos") or montador.duracion(video)), ficha.get("id_guion")
+    version = int(ficha.get("version") or 1)
+    v.update(intento=ficha.get("intento", 1), version=version,
+             instruccion={"cerebro": ficha.get("suplente"), "total": ficha.get("nota")})
+    id_tribunal = tribunal.guardar_juicio(clave, g, v)
+    id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion, "confirmacion": True,
+                                                             "veredicto": v["veredicto"], "total": v.get("total"),
+                                                             "suplente": ficha.get("suplente"), "nota_suplente": ficha.get("nota")})
+    if id_guion:
+        try:
+            cuadernos["escritor"].nota(id_guion, v.get("total"), "nota del Juzgado (juez de primera)", v.get("consejo", ""))
+        except Exception:
+            pass
+    paso("juez_guardia", f"el juez de primera dice: {v['veredicto']} ({v.get('total', '-')}/100) {v.get('consejo', '')}",
+         f"el juez de primera dice: {v['veredicto']} ({v.get('total', '-')}/100)")
+    resumen.update(titulo=g.get("titulo"), veredicto=v["veredicto"], nota=v.get("total"), consejo=v.get("consejo"),
+                   juicio=id_juicio, juicio_app=id_tribunal, segundos=round(segundos, 1), confirmacion=True,
+                   nota_suplente=ficha.get("nota"), version=version, formato=g.get("formato"))
+    estudio = bool(ficha.get("estudio"))
+    if v["veredicto"] == "aprobado":
+        g = _coliseo(clave, canal, g, v, paso, a, resumen)
+        _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
+        if estudio:
+            try:
+                estudio_animacion.apuntar(clave, g)
+            except Exception:
+                pass
+    else:
+        nota, minimo = v.get("total"), tribunal.minima(canal)
+        umbral = int(canal.get("nota_para_arreglar", ajustes.get("nota_para_arreglar", NOTA_PARA_ARREGLAR)))
+        versiones = int(ajustes.get("versiones_por_video", VERSIONES))
+        if estudio and isinstance(nota, (int, float)) and nota >= umbral and version < versiones:
+            try:                # se queda cerca: su versión corregida (con lo que dice el juez de primera), lo siguiente
+                arreglar = _para_arreglar(g, v, version + 1, minimo)
+                _guardar_arreglo(clave, arreglar)
+                resumen["arreglo_pendiente"] = {"version": arreglar.get("version"), "titulo": arreglar.get("titulo")}
+            except Exception as e:
+                paso("escritor", f"no he podido apuntar el arreglo pendiente ({type(e).__name__})")
+        paso("subidor", f"el juez de primera no lo aprueba ({v.get('total', '-')}/100): no se sube")
+        resumen["destino_resultado"] = "suspendido"
+    resumen["resultado"] = "hecho"
+    return True
 
 
 def _toca_hipnotico(clave, canal):
@@ -326,6 +430,11 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         audio = os.path.join(trabajo, f"estudio{intento}", "voz.mp3")
         v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                             os.path.join(trabajo, f"juicio{intento}"), audio=audio if os.path.exists(audio) else None, prueba=a.prueba)
+        if v.get("veredicto") == "sin_juicio" and not a.prueba and v.get("preaprobado") and \
+                _a_la_sala(v, paso, resumen, clave, video, g, segundos, id_guion=id_guion, intento=intento,
+                           version=version, estudio=True):
+            _apuntar_arreglo(clave, None, a, acepta_arreglo)      # esa versión ya no está pendiente de arreglo
+            raise _Hecho()
         if v.get("veredicto") == "sin_juicio" and not a.prueba:
             # no hay juez ahora (ni la IA gratis ni la de pago): nada sale sin juicio y no cuenta como suspenso
             paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; la cuenta espera")
@@ -505,7 +614,7 @@ def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, 
         paso("juez_guardia", "juzgando el vídeo")
         v = tribunal.juzgar(video, g, canal, reglas_juez, os.path.join(trabajo, f"juicio{intento}"),
                             audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
-        _sin_juez(v, a, paso)
+        _sin_juez(v, a, paso)      # el clip del dueño no va a la Sala de espera: solo empieza con juez de primera
         v["intento"] = intento
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion, "clip": m.get("codigo"),
@@ -593,7 +702,8 @@ def _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, le
         paso("juez_guardia", "juzgando el vídeo")
         v = tribunal.juzgar(video, g, canal, reglas_juez, os.path.join(trabajo, f"juicio{intento}"),
                             audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
-        _sin_juez(v, a, paso)
+        _sin_juez(v, a, paso, sala=dict(resumen=resumen, clave=clave, video=video, g=g, segundos=segundos,
+                                        id_guion=id_guion, intento=intento))
         v["intento"] = intento
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
@@ -636,7 +746,13 @@ def main(argv=None):
 
     en_curso = {"robot": "escritor"}
 
-    id_obra = ((None if a.prueba else obras.retomar(clave)) or     # sigue en la ficha que se quedó esperando
+    en_sala = None if a.prueba else sala_espera.siguiente(clave)   # ¿hay un vídeo esperando a un juez de primera?
+    try:
+        confirma = bool(en_sala) and ia.hay_de_primera("juez")
+    except Exception:
+        confirma = False
+    id_obra = ((en_sala.get("obra") if confirma else None) or      # la confirmación sigue en la ficha de ese vídeo
+               (None if a.prueba else obras.retomar(clave)) or     # sigue en la ficha que se quedó esperando
                f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')}-{privado.alias(clave)}".replace(".", "-"))
 
     def paso(robot, texto, publico=None):
@@ -651,10 +767,16 @@ def main(argv=None):
                           detalle=publico if publico is not None else texto, titulo=resumen.get("titulo"))
 
     resumen = {"canal": clave, "nombre": canal["nombre"], "destino": canal["destino"], "prueba": a.prueba,
-               "empezado": privado.ahora()}
+               "empezado": privado.ahora(), "obra": id_obra}
     ia.SOLO_CLAUDE = canal.get("guionista") == "claude"      # la Élite puede pedir que esta cuenta solo la escriba Claude
     try:
+        if en_sala and _confirmar(clave, canal, en_sala, cuadernos, ajustes, trabajo, paso, resumen, a):
+            raise _Hecho()
         clip = None if canal.get("estudio") == "animacion" else clips.listo_para(clave)
+        if clip and not a.prueba and not ia.hay_de_primera("juez"):
+            # el clip que grabó el dueño no se juzga con suplentes: espera a un juez de primera; mientras, lo de siempre
+            paso("juez_guardia", "el clip del dueño espera a que haya juez de primera; mientras, la cuenta hace su vídeo")
+            clip = None
         if clip:                    # el dueño ha grabado un clip para este canal: va antes que nada
             cuadernos["portero_clips"] = privado.cuaderno("portero_clips")
             nombres["portero_clips"] = "portero_clips"
@@ -797,7 +919,8 @@ def main(argv=None):
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                                 os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
-            _sin_juez(v, a, paso)
+            _sin_juez(v, a, paso, sala=dict(resumen=resumen, clave=clave, video=video, g=g, segundos=segundos,
+                                            id_guion=id_guion, intento=intento))
             v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
             id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
             id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
@@ -851,6 +974,11 @@ def main(argv=None):
                                         else "el servicio gratis de dibujos no contesta ahora")
                                        + ": lo vuelve a intentar en la siguiente ronda") if fuera else
                               "se ha atascado aquí: lo miran los Mecánicos")
+            elif fin == "espera_juez":           # un suplente lo dio por bueno: espera en la sala al juez de primera
+                obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"), robot="juez_guardia", paso="juzgado",
+                              estado="esperando", en_sala=True,
+                              detalle=f"el juez suplente lo da por bueno ({resumen.get('nota_suplente', '-')}/100): "
+                                      "espera en la Sala de espera a que lo confirme un juez de primera")
             else:
                 pendiente = resumen.get("arreglo_pendiente")
                 obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"),

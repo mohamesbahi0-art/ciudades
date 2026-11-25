@@ -262,11 +262,30 @@ def jefe(e, desconocidos, prueba):
                 f"{parte['salida']}", prueba)
 
 
+def cadena_de_ia(e, prueba):
+    """La cadena de IA gratis de reserva: si una de sus llaves no vale, se le dice al dueño (una vez al día): solo él
+    puede poner otra. Mientras tanto la cadena sigue con los demás servicios."""
+    try:
+        from bots.comun import cadena
+        estado = privado.leer(cadena.ESTADO, {}) or {}
+    except Exception:
+        return
+    for servicio, dato in (estado.get("llaves_malas") or {}).items():
+        nombre = (cadena.SERVICIOS.get(servicio) or {}).get("nombre", servicio)
+        if servicio not in cadena.encendidos():      # ya no tiene llave puesta: nada que avisar
+            continue
+        _apunta(e, "mecanico_rondas", "llave_mala", f"la llave de {nombre} (IA gratis de reserva) no vale", prueba)
+        _avisa_una_vez(e, f"llave-{servicio}", f"🔧 La llave de {nombre} no funciona",
+                       f"Es una de las IA gratis de reserva. La fábrica sigue con las demás, pero esa no ayuda hasta "
+                       f"que pongas una llave nueva de {nombre} (los pasos están en la app, en «Más IA gratis»).", prueba)
+
+
 def revisar(prueba=False, lista=None):
     e = leer()
     rondas(e, turnos() if lista is None else lista, prueba)
     desconocidos = canales(e, prueba)
     limpieza(e, prueba)
+    cadena_de_ia(e, prueba)
     jefe(e, desconocidos, prueba)
     e["ultimo"] = privado.ahora()
     if not prueba:

@@ -221,7 +221,7 @@ def cuenta_de(valor):
     return clave
 
 
-def juzgar(original, peticion, codigo, trabajo, paso=print):
+def juzgar(original, peticion, codigo, trabajo, paso=print, confirmar=False):
     """Pasa un vídeo del dueño por todo el Juzgado y el Coliseo. Devuelve el resultado (para la app)."""
     clave = cuenta_de(peticion.get("cuenta"))
     base = {"codigo": codigo, "cuenta": clave, "alias": privado.alias(clave) if clave else "",
@@ -253,7 +253,13 @@ def juzgar(original, peticion, codigo, trabajo, paso=print):
         g["jurado"] = veredicto_jurado
         paso("jurado_popular", f"{codigo}: {veredicto_jurado['inocente']} inocente y {veredicto_jurado['culpable']} culpable")
     lecciones = privado.cuaderno("juez_guardia").para_el_prompt()
-    v = tribunal.juzgar(normal, g, canal, lecciones, os.path.join(trabajo, "juicio"), audio=audio)
+    v = tribunal.juzgar(normal, g, canal, lecciones, os.path.join(trabajo, "juicio"), audio=audio, confirmar=confirmar)
+    if v.get("preaprobado"):         # lo da por bueno un juez suplente (o no hay juez de primera): espera al de primera
+        paso("juez_mayor", f"{codigo}: espera a un juez de primera (el suplente le da {v.get('nota_suplente', '-')}/100)")
+        return dict(base, estado="espera_juez", nota_suplente=v.get("nota_suplente"), minimo=tribunal.minima(canal),
+                    segundos=round(dura, 1),
+                    problema="Un juez de reserva ya lo ha mirado, pero la nota que vale es la de un juez de primera y "
+                             "ahora no hay ninguno libre. No tienes que hacer nada: lo confirmo solo en cuanto haya uno.")
     if veredicto_jurado and not v.get("jurado"):
         v["jurado"] = veredicto_jurado
     minimo = tribunal.minima(canal)
@@ -295,6 +301,10 @@ def avisar(r):
         extra = " El Coliseo le ha puesto título, texto y hashtags." if r.get("coliseo") else ""
         return cartero.avisar(f"⚖️ Tu vídeo ha aprobado ({r.get('nota')}/100)",
                               f"Pasa el Juzgado.{extra} Lo tienes en la app, en «Juzga mi vídeo».", etiqueta="tada")
+    if r.get("estado") == "espera_juez":
+        return cartero.avisar("⚖️ Tu vídeo espera a un juez de primera",
+                              "Un juez de reserva ya lo ha mirado, pero la nota que vale es la de un juez de primera. "
+                              "Te aviso en cuanto lo confirme: no tienes que hacer nada.", etiqueta="hourglass")
     if r.get("estado") == "suspendido":
         primero = (r.get("arreglos") or [""])[0]
         return cartero.avisar(f"⚖️ Tu vídeo no pasa ({r.get('nota')}/100, hace falta {r.get('minimo')})",
@@ -343,26 +353,35 @@ def main(argv=None):
             if original and not tomar(codigo):
                 paso(ROBOT, f"{codigo}: ya lo está juzgando otro turno")
                 continue
+            antes = privado.leer(os.path.join("estado", "propios", f"{codigo}.json"), {}) or {}
             if not original:
                 r = {"codigo": codigo, "estado": "error", "problema": "No he encontrado el vídeo en el buzón."}
             else:
-                try:
-                    r = juzgar(original, peticion, codigo, t, paso)
+                try:           # si ya esperaba a un juez de primera, esta vuelta solo lo juzga uno de primera
+                    r = juzgar(original, peticion, codigo, t, paso, confirmar=antes.get("estado") == "espera_juez")
                 except Exception as e:      # un vídeo roto no para a los demás
                     print(f"ventanilla: {codigo}: fallo {type(e).__name__}", flush=True)
                     r = {"codigo": codigo, "estado": "error", "problema": "No he podido juzgarlo por un fallo mío: "
                          "lo vuelvo a intentar solo en la siguiente vuelta.", "cuenta": cuenta_de(peticion.get("cuenta"))}
-        antes = privado.leer(os.path.join("estado", "propios", f"{codigo}.json"), {}) or {}
         r["intentos"] = int(antes.get("intentos") or 0) + 1
         if r.get("estado") == "error" and r["intentos"] >= 3:
             r["problema"] = "No he podido juzgarlo después de 3 intentos. Súbelo otra vez, por favor."
             r["estado"] = "rechazado"
+        espera = r.get("estado") == "espera_juez"
+        if espera:                         # esperar al juez de primera no gasta intentos; a los dos días, se rinde
+            r["intentos"] = int(antes.get("intentos") or 0)
+            r["esperando_desde"] = antes.get("esperando_desde") or privado.ahora()
+            if r["esperando_desde"] < (dt.datetime.now(dt.timezone.utc)
+                                       - dt.timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ"):
+                r.update(estado="rechazado", problema="No ha habido juez de primera en dos días. Súbelo otra vez, por favor.")
+                espera = False
         guardar(r)
-        if r.get("estado") != "error":     # con un fallo nuestro la rama se queda para el siguiente intento
+        if r.get("estado") != "error" and not espera:     # con un fallo nuestro (o esperando al juez) la rama se queda
             borrar_rama(rama)
         soltar(codigo)
         try:
-            avisar(r)
+            if not (espera and antes.get("estado") == "espera_juez"):      # que espera se avisa una sola vez
+                avisar(r)
         except Exception:
             pass
         paso(ROBOT, f"{codigo}: {r.get('estado')} {r.get('nota') or ''}".strip())

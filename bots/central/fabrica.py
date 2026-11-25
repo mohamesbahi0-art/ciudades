@@ -87,8 +87,30 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
         except Exception:
             return False
 
+    de_primera = []                   # ¿hay juez de primera ahora? Se mira una vez, y solo si hace falta
+
+    def hay_juez_de_primera():
+        if not de_primera:
+            try:
+                from bots.comun import ia
+                de_primera.append(bool(ia.hay_de_primera("juez")))
+            except Exception:
+                de_primera.append(True)
+        return de_primera[0]
+
     def insiste(clave):
         hechos = fallidos.get(clave, 0)
+        try:                          # vídeos que un juez suplente dio por buenos y esperan al juez de primera
+            from bots.juzgado import espera as sala_espera
+            en_sala, llena = sala_espera.cuantos(clave), sala_espera.llena(clave)
+        except Exception:
+            en_sala, llena = 0, False
+        if en_sala and hay_juez_de_primera():
+            return True               # confirmar lo que espera va antes que nada y no gasta intentos
+        if llena:
+            esperan[clave] = (f"tiene {en_sala} vídeos en la Sala de espera (un juez suplente los dio por buenos): "
+                              "espera a que haya juez de primera para confirmarlos")
+            return False
         if pendiente(clave):          # un arreglo pendiente se salta el tope normal y la espera, pero no un tope duro
             if hechos >= tope * 2:
                 esperan[clave] = (f"hoy ya lleva {hechos} turnos sin llegar al 90, también con arreglos: mañana sigue "
@@ -211,9 +233,10 @@ def mejor_nota(clave, cuantos=6):
 
 
 def hay_ia(arreglo=False, solo_claude=False):
-    """¿Hay con qué hacer un vídeo ahora? Hace falta quien escriba (Claude con presupuesto para esta hora, o Gemini
-    contestando) Y quien juzgue (Claude de reserva, o un modelo de Gemini de los que ven imágenes): sin juez, el vídeo
-    se haría para nada, porque nada sale sin juicio. `arreglo`: el turno empieza por la versión corregida de un vídeo
+    """¿Hay con qué hacer un vídeo ahora? Hace falta quien escriba (Claude con presupuesto para esta hora, o la IA
+    gratis contestando) Y quien juzgue (Claude, Gemini de primera o, si no, un juez suplente de la IA gratis de
+    reserva: lo que el suplente dé por bueno espera en la Sala de espera al juez de primera): sin juez, el vídeo se
+    haría para nada, porque nada sale sin juicio. `arreglo`: el turno empieza por la versión corregida de un vídeo
     (tiene su propio presupuesto, por delante del de los guiones nuevos). Devuelve (sí o no, a quién le falta)."""
     from bots.comun import claude, gemini
     escribe = juzga = False
@@ -238,8 +261,13 @@ def hay_ia(arreglo=False, solo_claude=False):
         pass
     if not juzga:
         try:
+            juzga = not gemini.primera_agotada()         # Gemini de primera: se sabe por la última ronda, sin preguntar
+        except Exception:
+            juzga = False
+    if not juzga:
+        try:        # los suplentes gratis: suspenden y mandan arreglar; lo que den por bueno espera al juez de primera
             gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, solo_bueno=True,
-                             paciencia=0)
+                             paciencia=0, fila="segunda")
             juzga = True
         except Exception:
             juzga = False
@@ -255,8 +283,8 @@ def pausa_sin_ia(quien=""):
         hasta = claude.cuando_puede("juez" if quien == "juez" else "guionista")
     except Exception:
         hasta = None
-    motivo = ("No queda quien juzgue los vídeos ahora: la IA gratis que ve imágenes ha gastado su cupo de hoy y la de "
-              "pago, su parte del día." if quien == "juez" else
+    motivo = ("No queda quien juzgue los vídeos ahora: ni la IA gratis que ve imágenes (tampoco la de reserva) ni la de "
+              "pago pueden a esta hora." if quien == "juez" else
               "La IA gratis está saturada y la de pago ya ha gastado su parte de esta hora.")
     obras.pausar(motivo + " Lo que estaba a medias no se pierde: sigue solo en cuanto vuelva.", hasta)
 

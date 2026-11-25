@@ -5,6 +5,7 @@ El ligero confunde imágenes (lección de la fábrica antigua): para mirar fotog
 Necesita el secreto GEMINI_API_KEY.
 """
 import base64
+import datetime as dt
 import json
 import os
 import time
@@ -15,7 +16,11 @@ import urllib.request
 # siguiente. Los «buenos» también saben mirar imágenes; los ligeros, solo para texto (confunden imágenes).
 BUENOS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-flash-latest", "gemini-3.7-flash",
           "gemini-3.8-flash"]
-LIGEROS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+LIGEROS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview"]
+# La segunda fila (los suplentes): el pequeño de la familia nueva y los modelos abiertos de Google (Gemma), con la MISMA
+# llave y su cupo aparte, mucho mayor al día pero con pocos tokens por minuto. Ven imágenes. Van detrás de todos: son el
+# colchón para que la fábrica no se pare. (Comprobado con la llave el 25-nov-2026: existen y contestan.)
+SEGUNDA = ["gemini-4-hydrogen", "gemma-4-31b-it", "gemma-4-26b-a4b-it"]
 BUENO, LIGERO = BUENOS[0], LIGEROS[0]
 AGOTADOS = set()          # los que hoy ya han dicho que no les queda cupo (en esta ronda no se vuelven a probar)
 USO = {}                  # el Portero de Gemini lleva la cuenta: {modelo: {"bien": n, "sin_cupo": n, "fallos": n}}
@@ -34,6 +39,11 @@ def apuntar_portero():
     portero = privado.cuaderno("portero_gemini")
     portero.apuntar("reparto", {"uso": USO, "sin_cupo": sorted(AGOTADOS)})
     portero.guardar()
+    try:                                   # y lo que ha contestado la cadena de reserva
+        from bots.comun import cadena
+        cadena.apuntar_uso()
+    except Exception:
+        pass
     anterior = privado.leer("estado/gemini.json", {}) or {}
     privado.guardar_estado("gemini.json", {"ultimo_reparto": USO, "sin_cupo": sorted(AGOTADOS),
                                            "anteriores": (anterior.get("anteriores", []) + [anterior.get("ultimo_reparto")])[-20:]
@@ -59,8 +69,91 @@ ESPERAS = (20, 45, 60)         # segundos entre vuelta y vuelta
 TOPE_SEGUNDOS = 300            # una sola pregunta nunca tarda más que esto en total (hay turnos con tope de 15 minutos)
 
 
+QUIEN = {"servicio": "gemini"}      # quién contestó la última pregunta gratis: «gemini», «gemma» o un servicio de la cadena
+DE_PRIMERA = ("gemini",)            # los demás (Gemma y la cadena) son suplentes: valen para todo menos para aprobar un vídeo
+
+
 def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False,
-              audio=None, video=None, paciencia=None):
+              audio=None, video=None, paciencia=None, fila=None):
+    """La IA gratis de la fábrica: primero Gemini y, si no contesta (sin cupo o saturado), su segunda fila (Gemma) y la
+    cadena de servicios gratis de reserva (bots/comun/cadena.py), que salta de uno a otro. Así ningún robot tiene que
+    saber quién contesta. Un vídeo entero solo lo sabe ver Gemini; la voz (audio) solo la oye Gemini: los demás juzgan
+    con fotogramas y guion.
+    fila: None = todos por orden; «primera» = solo los modelos de primera de Gemini; «segunda» = solo los suplentes
+    (Gemma y la cadena), sin volver a llamar a los de primera."""
+    from bots.comun import cadena
+    ve = solo_bueno or bool(imagenes)
+    try:
+        hay_cadena = fila != "primera" and not video and bool(cadena.eslabones(vision=ve))
+    except Exception:
+        hay_cadena = False
+    args = dict(imagenes=imagenes, json_salida=json_salida, solo_bueno=solo_bueno, temperatura=temperatura,
+                intentos=intentos, ligero_primero=ligero_primero, audio=audio, video=video, fila=fila)
+
+    def gemini_contesta(pac):
+        r = _solo_gemini(texto, paciencia=pac, **args)
+        modelo = str(ULTIMO.get("modelo") or "")
+        QUIEN["servicio"] = "gemini" if modelo not in SEGUNDA else "gemma" if "gemma" in modelo else "gemini-4"
+        return r
+    try:
+        # con reserva detrás, Gemini no se hace esperar: si está saturado se salta al siguiente y ya está
+        return gemini_contesta(0 if hay_cadena else paciencia)
+    except SinIA as e:
+        if not hay_cadena:
+            raise
+        try:
+            r, servicio = cadena.preguntar(texto, imagenes=imagenes, json_salida=json_salida, temperatura=temperatura,
+                                           vision=ve)
+            QUIEN["servicio"] = servicio
+            return r
+        except cadena.SinCadena as e2:
+            try:                      # último cartucho: Gemini otra vez, ahora sí con paciencia
+                return gemini_contesta(paciencia)
+            except SinIA:
+                raise SinIA(f"{e} · y la cadena de reserva tampoco ({e2})") from e2
+
+
+ULTIMO = {}                         # el modelo de Google que contestó la última vez
+
+
+def primera_agotada():
+    """¿Han dicho ya hoy todos los modelos de primera que no les queda cupo? (Se sabe por la última ronda: no se gasta
+    una pregunta en comprobarlo.) El cupo vuelve a las 08:00 UTC."""
+    if all(m in AGOTADOS for m in BUENOS):
+        return True
+    try:
+        from bots.comun import privado
+        e = privado.leer(os.path.join("estado", "gemini.json"), {}) or {}
+        ahora = dt.datetime.now(dt.timezone.utc)
+        vuelve = ahora.replace(hour=8, minute=0, second=0, microsecond=0)
+        if ahora < vuelve:
+            vuelve -= dt.timedelta(days=1)
+        return str(e.get("actualizado") or "") >= vuelve.strftime("%Y-%m-%dT%H:%M:%SZ") and \
+            all(m in (e.get("sin_cupo") or []) for m in BUENOS)
+    except Exception:
+        return False
+
+
+def _pequenas(imagenes, lado=896):
+    """Las mismas imágenes, más pequeñas: la segunda fila tiene pocos tokens por minuto y cada imagen grande gasta más."""
+    salida = []
+    try:
+        from PIL import Image
+        import io
+        for ruta in imagenes:
+            with Image.open(ruta) as im:
+                im = im.convert("RGB")
+                im.thumbnail((lado, lado))
+                b = io.BytesIO()
+                im.save(b, "JPEG", quality=82)
+                salida.append(base64.b64encode(b.getvalue()).decode())
+        return salida
+    except Exception:
+        return None
+
+
+def _solo_gemini(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False,
+                 audio=None, video=None, paciencia=None, fila=None):
     """Pregunta a Gemini. Si todos los modelos fallan pero alguno está «vivo» (saturado, lento o con el límite por
     minuto, no sin cupo del día), espera un poco y da otra vuelta (hasta `paciencia` más): a mediodía los modelos
     ligeros contestan 1 de cada 5 veces y rendirse a la primera tiraba vídeos a medio hacer."""
@@ -80,8 +173,30 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
     cuerpo = {"contents": [{"role": "user", "parts": partes}], "generationConfig": {"temperature": temperatura}}
     if json_salida:
         cuerpo["generationConfig"]["responseMimeType"] = "application/json"
+    # a la segunda fila (Gemma) se le manda lo mismo sin la voz, con las imágenes más pequeñas y sin pedirle «modo
+    # JSON» (no lo tiene): el JSON lo pide ya la propia pregunta y se limpia igual
+    cuerpo_2 = None
+    if fila != "primera" and not video:
+        chicas = _pequenas(imagenes) if imagenes else []
+        partes_2 = [{"text": texto}] + (
+            [{"inline_data": {"mime_type": "image/jpeg", "data": d}} for d in chicas] if chicas is not None else
+            [x for x in partes[1:] if x.get("inline_data", {}).get("mime_type", "").startswith("image/")])
+        cuerpo_2 = {"contents": [{"role": "user", "parts": partes_2}],
+                    "generationConfig": {"temperature": min(1.0, temperatura)}}
     ultimo = "sin intentar"
-    orden = BUENOS if solo_bueno else (LIGEROS + BUENOS if ligero_primero else BUENOS + LIGEROS)
+    # Los modelos buenos tienen muy pocas preguntas al día (unas 20 cada uno): se guardan para lo que solo ellos hacen
+    # bien, que es mirar imágenes (los jueces). El texto va primero a los ligeros y a la segunda fila, y a los buenos
+    # solo cuando no queda otra.
+    con_fotos = bool(imagenes or audio or video)
+    suplentes = list(SEGUNDA) if cuerpo_2 else []         # la segunda fila no oye ni ve vídeos: fotogramas y texto
+    if fila == "segunda":
+        orden = suplentes
+    elif solo_bueno:
+        orden = BUENOS + ([] if fila == "primera" else suplentes)
+    elif con_fotos:              # ligero_primero: quien mira imágenes sin ser juez (El Cine) no gasta de los buenos
+        orden = (LIGEROS + BUENOS if ligero_primero else BUENOS + LIGEROS) + ([] if fila == "primera" else suplentes)
+    else:
+        orden = LIGEROS + ([] if fila == "primera" else suplentes) + BUENOS
     paciencia = PACIENCIA if paciencia is None else max(0, int(paciencia))
     empezo, raros = time.monotonic(), 0
     for vuelta in range(paciencia + 1):
@@ -91,7 +206,8 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
             for intento in range(intentos):
                 if time.monotonic() - empezo > TOPE_SEGUNDOS:
                     raise SinIA(f"Gemini no contesta: {ultimo} (tras {TOPE_SEGUNDOS // 60} minutos intentándolo)")
-                req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
+                req = urllib.request.Request(URL.format(modelo=modelo), method="POST",
+                                             data=json.dumps(cuerpo_2 if modelo in SEGUNDA else cuerpo).encode(),
                                              headers={"Content-Type": "application/json", "x-goog-api-key": clave})
                 try:
                     with urllib.request.urlopen(req, timeout=180) as r:
@@ -99,6 +215,7 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                     texto_respuesta = "".join(p.get("text", "") for p in datos["candidates"][0]["content"]["parts"])
                     salida = _limpiar_json(texto_respuesta) if json_salida else texto_respuesta
                     _contar(modelo, "bien")
+                    ULTIMO["modelo"] = modelo
                     return salida
                 except urllib.error.HTTPError as e:
                     ultimo = f"{modelo}: HTTP {e.code}"
@@ -125,8 +242,8 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                     if e.code in (500, 502, 503, 504):
                         vivos = True
                         _contar(modelo, "saturado")
-                        if intento >= 1:                   # saturado: mejor probar otro modelo que esperar
-                            break
+                        if intento >= 1 or modelo != modelos[-1]:   # saturado: se salta ya al siguiente modelo; solo
+                            break                                   # el último de la fila merece un segundo intento
                         time.sleep(8)
                         continue
                     break                                  # este modelo no acepta la petición (p. ej. audio): el siguiente

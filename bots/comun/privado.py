@@ -236,6 +236,22 @@ def fusionar(ruta, suyo, nuestro):
         if pausas:                                           # la pausa (o su final), la última que se apuntó
             junto["pausa"] = max(pausas, key=lambda x: str(x.get("actualizado") or ""))
         return junto
+    if ruta == "estado/cadena.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        # la cadena de IA gratis: lo que cada línea ha visto agotado se suma (gana la fecha más lejana) y el uso, lo mayor
+        junto = dict(suyo, **nuestro)
+        junto["agotados"] = dict(suyo.get("agotados") or {})
+        for k, hasta in (nuestro.get("agotados") or {}).items():
+            junto["agotados"][k] = max(str(hasta), str(junto["agotados"].get(k) or ""))
+        uso = {}
+        for lado in (suyo, nuestro):
+            for dia, servicios in (lado.get("uso") or {}).items():
+                for servicio, cuenta in servicios.items():
+                    antes = uso.setdefault(dia, {}).setdefault(servicio, {})
+                    for k, n_ in cuenta.items():
+                        antes[k] = max(antes.get(k, 0), n_)
+        junto["uso"] = uso
+        junto["llaves_malas"] = dict(suyo.get("llaves_malas") or {}, **(nuestro.get("llaves_malas") or {}))
+        return junto
     if ruta == "estado/cine/sesiones.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         # cuatro líneas juzgan a la vez y cada una apunta su sesión del Cine: se juntan todas (las 40 últimas)
         sesiones = {x.get("id"): x for x in (suyo.get("sesiones") or []) + (nuestro.get("sesiones") or []) if x.get("id")}
