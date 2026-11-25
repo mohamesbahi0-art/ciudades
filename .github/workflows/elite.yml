@@ -11,7 +11,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: write
 concurrency:
   group: elite
   cancel-in-progress: false
@@ -42,7 +41,6 @@ jobs:
         env:
           PRIVADO: privado
           MEMORIA_DIR: privado/memoria
-          GH_TOKEN: ${{ github.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python bots/elite/elite.py

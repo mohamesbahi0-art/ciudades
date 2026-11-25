@@ -115,7 +115,7 @@ def exigencia(canal):
             "la gente vería entero y compartiría. Si es «correcto» o «está bien», no llega: ponle menos de 80 y di qué falta.")
 
 
-def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
+def juzgar(video, guion, canal, lecciones, carpeta, audio=None, prueba=False):
     clave = canal["clave"]
     subprocess.run([sys.executable, os.path.join(RAIZ, "herramientas", "fotogramas.py"), video, "--salida", carpeta],
                    check=True, capture_output=True)
@@ -136,7 +136,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
              "medidas": json.dumps(medidas, ensure_ascii=False),
              "exigencia": exigencia(canal) + juez_guardia.nota_formato(canal)}
     try:                  # el Público mira el vídeo montado antes que nadie: su retención es una prueba más
-        gente = publico.mirar(guion, canal, imagenes, datos.get("duracion"))
+        gente = publico.mirar(guion, canal, imagenes, datos.get("duracion"), prueba=prueba)
     except Exception:
         gente = None
     del_publico = ("\n- " + publico.en_palabras(gente) + " (es un público simulado: tenlo en cuenta como una prueba "

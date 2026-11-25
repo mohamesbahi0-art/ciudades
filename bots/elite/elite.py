@@ -42,6 +42,11 @@ FALLOS_REPETIDOS = 4       # veces que un robot falla igual en un día para que 
 SEGUIR_CON = 3             # vídeos juzgados después de un cambio para volver a medirlo
 MEJORA, EMPEORA = 2, -3    # puntos de nota media para dar un cambio por bueno o deshacerlo
 CADUCA_CAMBIO = 72         # horas: un cambio que ni mejora ni empeora se da por neutro y deja sitio a otro
+SIN_VIDEOS = 24            # horas: un cambio de una cuenta que la deja sin hacer vídeos se deshace
+MARGEN_TURNO = 45          # minutos: los vídeos juzgados justo después de un cambio se empezaron antes y no cuentan
+LLAMADAS_DIA = 4           # veces al día, como mucho, que el Arquitecto piensa con el cerebro caro
+REPOSO_HORAS = 6           # un mismo problema de una misma cuenta no se vuelve a decidir antes de esto…
+REPOSO_JUICIOS = 4         # …ni sin estos vídeos juzgados nuevos (así no se decide dos veces con las mismas pruebas)
 
 
 def _entero(a, b):
@@ -103,12 +108,17 @@ PARTE GENERAL (últimas {horas} horas; lo sabes todo):
 CAMBIOS TUYOS QUE SIGUEN EN PRUEBA (no pongas otro en la misma cuenta hasta que se midan):
 {cambios}
 
+LO QUE YA DECIDISTE ANTES (no lo repitas con otras palabras; si no funcionó, sube un escalón: palanca, reforma u obra):
+{antes}
+
 PROBLEMAS NUEVOS, con sus pruebas:
 {problemas}
 
 Para CADA problema elige UNA salida:
-- "leccion": una lección concreta (1-2 frases, en español) para quien la necesita. "robot": "escritor" (quien escribe los
-  guiones de esa cuenta) o "juez" (el Juzgado). Va en "texto".
+- "leccion": una lección concreta y comprobable (1-2 frases, en español) para quien escribe los guiones de esa cuenta.
+  Va en "texto". Al Juzgado NO le das lecciones tú: si crees que el problema es el juez, la salida es "obra" y lo
+  explicas (nadie ablanda al juez sin que lo revise un programador). Mira antes en el parte si la cuenta está parada
+  esperando otra cosa ("espera"): a quien no está haciendo vídeos no le sirve una lección.
 - "palanca": cambiar UN ajuste. "ambito": "canal" o "fabrica"; "canal": la cuenta (como sale en el parte); "campo" y
   "valor" de esta lista y dentro de sus límites:
   De una cuenta:
@@ -123,7 +133,7 @@ Para CADA problema elige UNA salida:
 Nunca: tocar la nota mínima del dueño, contradecir algo que haya dicho el dueño, claves, permisos ni dinero.
 
 Devuelve SOLO un JSON: {{"decisiones": [{{"id": "id del problema", "causa": "la causa en una frase",
-"salida": "leccion|palanca|reforma|obra|nada", "robot": "escritor|juez", "ambito": "canal|fabrica", "canal": "…",
+"salida": "leccion|palanca|reforma|obra|nada", "ambito": "canal|fabrica", "canal": "…",
 "campo": "…", "valor": …, "texto": "…", "porque": "la prueba en una frase",
 "como_se_sabra": "qué tiene que pasar para darlo por bueno"}}]}}"""
 
@@ -149,7 +159,8 @@ def _media(notas):
 
 def leer():
     e = privado.leer(ESTADO, {}) or {}
-    for k, v in (("reformas", {}), ("obras", []), ("decisiones", []), ("vistos", {}), ("cambios", [])):
+    for k, v in (("reformas", {}), ("obras", []), ("decisiones", []), ("vistos", {}), ("cambios", []), ("ultimas", {}),
+                 ("llamadas", {})):
         e.setdefault(k, v)
     return e
 
@@ -184,7 +195,8 @@ def _juicios(desde=None):
 def parte_general(desde):
     """Todo lo que pasa, cuenta a cuenta y en la fábrica entera (lo que «sabe» la Élite). Sin IA."""
     cfg = privado.config()
-    juicios = _juicios(desde)
+    todos = _juicios()
+    juicios = {k: [j for j in js if (_fecha(j.get("fecha")) or desde) >= desde] for k, js in todos.items()}
     esperan = {}
     for ruta in glob.glob(os.path.join(privado.carpeta(), "estado", "fabrica*.json")):
         esperan.update((privado.leer(os.path.relpath(ruta, privado.carpeta()), {}) or {}).get("esperan") or {})
@@ -208,7 +220,8 @@ def parte_general(desde):
                        if t.get("resultado") == "error" and (_fecha(t.get("terminado")) or desde) >= desde]
             fuera = [t for t in errores if str(t.get("error") or "").startswith("SinIA") or "dibujos" in str(t.get("error"))]
             dato = {"clave": clave, "que": "canal de YouTube" if seccion == "canales" else "cuenta de TikTok/Instagram",
-                    "formato": c.get("formato_estudio") or c.get("tipo"), "juicios": len(js),
+                    "formato": c.get("formato_estudio") or c.get("tipo"), "de_que_va": str(c.get("tema") or "")[:160] or None,
+                    "juicios": len(js), "juicios_total": len(todos.get(clave) or []),
                     "mejor": max(notas) if notas else None, "media": _media(notas), "ultima": notas[-1] if notas else None,
                     "por_guionista": {k: {"n": len(v), "media": _media(v)} for k, v in quien.items()},
                     "por_version": {k: {"n": len(v), "media": _media(v)} for k, v in version.items() if v},
@@ -240,6 +253,7 @@ def parte_general(desde):
             "casos_abiertos": [{"id": c.get("id"), "robot": c.get("robot"), "problema": str(c.get("problema"))[:120],
                                 "desde": c.get("fecha"), "veces": c.get("veces")} for c in casos[:8]],
             "robots_con_mala_salud": sorted(k for k, v in salud.items() if v.get("salud") == "mala")[:10],
+            "orden_de_trabajo": [privado.alias(k) for k in (privado.ajustes().get("prioridad") or [])],
             "cambios_fabrica_elite": cambios["fabrica"] or None}
 
 
@@ -260,8 +274,8 @@ def espia(parte, desde):
     for p in [p for p in (privado.leer(os.path.join("estado", "mecanicos", "taller.json"), {}) or {}).get("partes") or []
               if p.get("estado") == "para_claude"][-3:]:
         salida.append({"id": f"parte-{p.get('id') or p.get('fecha')}", "tipo": "parte", "robot": "mecanicos",
-                       "canal": privado.alias(p.get("canal") or ""), "clave": p.get("canal"), "veces": 1,
-                       "pruebas": [str(p.get("causa"))[:200]]})
+                       "canal": privado.alias(p.get("canal") or ""), "clave": p.get("canal"), "veces": p.get("veces") or 1,
+                       "pruebas": [str(p.get("causa") or "")[:200], str(p.get("error") or "")[:200]]})
     ayer = _iso(_ahora() - dt.timedelta(hours=24))
     for c in parte.get("casos_abiertos") or []:
         if str(c.get("desde") or "9") < ayer and "gemini" not in str(c.get("id")):
@@ -271,32 +285,38 @@ def espia(parte, desde):
 
 
 # ------------------------------------------------------------------------------------ la Estratega: calidad y resultados
+
 def estratega(parte):
     """Lo que no llega y por qué: [{id, tipo, canal, clave, pruebas…}]."""
-    hoy = _ahora().strftime("%Y%m%d")
     activos = {c.get("clave") for c in leer()["cambios"] if c.get("estado") == "activo"}
     salida = []
     for alias, c in (parte.get("cuentas") or {}).items():
         clave = c["clave"]
-        if c["juicios"] >= MIN_JUICIOS and (c["mejor"] or 0) < LEJOS and not c.get("reforma"):
-            salida.append({"id": f"formato-{alias}-{hoy}", "tipo": "formato", "canal": alias, "clave": clave,
+        if c.get("reforma"):
+            continue                                        # ya está en reforma: no se le da más vueltas
+        if c["juicios"] >= MIN_JUICIOS and (c["mejor"] or 0) < LEJOS:
+            salida.append({"id": f"formato-{alias}", "tipo": "formato", "canal": alias, "clave": clave,
                            "juicios": c["juicios"], "mejor": c["mejor"], "media": c["media"],
                            "pruebas": _consejos(clave) + ([f"cine: {json.dumps(c['cine'], ensure_ascii=False)}"] if c.get("cine") else [])})
         pago, gratis = (c["por_guionista"].get("claude") or {}), (c["por_guionista"].get("gemini") or {})
         if pago.get("n", 0) >= 2 and gratis.get("n", 0) >= 2 and pago["media"] - gratis["media"] >= 8 \
                 and (c.get("cambios_elite") or {}).get("guionista") != "claude" and clave not in activos:
-            salida.append({"id": f"cerebro-{alias}-{hoy}", "tipo": "cerebro", "canal": alias, "clave": clave,
+            salida.append({"id": f"cerebro-{alias}", "tipo": "cerebro", "canal": alias, "clave": clave,
                            "pruebas": [f"guiones del cerebro de pago: {pago['n']} con media {pago['media']}; del gratis: "
                                        f"{gratis['n']} con media {gratis['media']}"]})
         cine = c.get("cine") or {}
         if cine.get("sesiones", 0) >= 3 and (cine.get("pasan_3s") or 100) < 45:
-            salida.append({"id": f"gancho-{alias}-{hoy}", "tipo": "gancho", "canal": alias, "clave": clave,
+            salida.append({"id": f"gancho-{alias}", "tipo": "gancho", "canal": alias, "clave": clave,
                            "pruebas": [f"en {cine['sesiones']} sesiones del Cine solo el {cine['pasan_3s']} % pasa del segundo 3"]})
         v1, v2 = (c["por_version"].get("1") or {}), (c["por_version"].get("2+") or {})
         if v2.get("n", 0) >= 3 and v1.get("n") and v2["media"] <= v1["media"]:
-            salida.append({"id": f"arreglos-{alias}-{hoy}", "tipo": "arreglos", "canal": alias, "clave": clave,
+            salida.append({"id": f"arreglos-{alias}", "tipo": "arreglos", "canal": alias, "clave": clave,
                            "pruebas": [f"las versiones corregidas ({v2['n']}, media {v2['media']}) no superan a las "
                                        f"originales (media {v1['media']})"]})
+        if c.get("cambios_elite") and not c["juicios"] and not c.get("espera"):
+            salida.append({"id": f"parada-{alias}", "tipo": "parada", "canal": alias, "clave": clave,
+                           "pruebas": [f"tiene cambios de la Élite ({json.dumps(c['cambios_elite'], ensure_ascii=False)}) "
+                                       "y lleva 24 horas sin un solo vídeo juzgado"]})
         tirados = privado.descartes(clave, 4)
         if tirados.count("\n") >= 1:                       # dos o más descartes del dueño: su gusto manda
             salida.append({"id": f"descartes-{alias}-{hashlib.md5(tirados.encode()).hexdigest()[:6]}",
@@ -314,64 +334,101 @@ def _guardar_cambios(d):
     privado.escribir(privado.CAMBIOS_ELITE, dict(d, actualizado=_iso()))
 
 
+
+def _videos(js, desde=None):
+    """Un vídeo cuenta una vez, con su mejor nota (sus versiones corregidas son el mismo vídeo). {vídeo: nota}."""
+    por = {}
+    for j in js:
+        if desde and (j.get("fecha") or "") <= desde:
+            continue
+        k = (j.get("canal"), j.get("arreglo_de") or j.get("titulo"))
+        por[k] = max(por.get(k, 0), j["nota"])
+    return por
+
+
 def _medida(clave=None):
-    """La nota media y la mejor de una cuenta (o de todas) en las últimas 48 horas, y cuántos juicios hay en total."""
+    """La nota media y la mejor de una cuenta (o, cuenta a cuenta, de todas) en las últimas 48 horas."""
     por = _juicios()
-    js = por.get(clave, []) if clave else [j for lista in por.values() for j in lista]
     hace = _iso(_ahora() - dt.timedelta(hours=48))
-    recientes = [j["nota"] for j in js if (j.get("fecha") or "") >= hace] or [j["nota"] for j in js[-6:]]
-    return {"media": _media(recientes), "mejor": max(recientes) if recientes else None, "total": len(js)}
+    if clave:
+        notas = list(_videos(por.get(clave, []), hace).values()) or [j["nota"] for j in por.get(clave, [])[-6:]]
+        return {"media": _media(notas), "mejor": max(notas) if notas else None, "videos": len(notas)}
+    cuentas = {k: _media(list(_videos(js, hace).values())) for k, js in por.items() if _videos(js, hace)}
+    return {"por_cuenta": cuentas, "media": _media(list(cuentas.values())), "videos": sum(len(_videos(js, hace)) for js in por.values())}
+
 
 
 def _deshacer(cambio):
+    """Quita el cambio. Si antes había otro valor puesto por la propia Élite (un cambio anterior que funcionó), vuelve a
+    ese; si no, se quita del todo y manda otra vez la configuración."""
     d = privado.cambios_elite()
-    if cambio["ambito"] == "canal":
-        d["canales"].get(cambio["clave"], {}).pop(cambio["campo"], None)
-        if not d["canales"].get(cambio["clave"]):
-            d["canales"].pop(cambio["clave"], None)
+    sitio = d["canales"].setdefault(cambio["clave"], {}) if cambio["ambito"] == "canal" else d["fabrica"]
+    if cambio.get("habia_cambio"):
+        sitio[cambio["campo"]] = cambio.get("antes")
     else:
-        d["fabrica"].pop(cambio["campo"], None)
+        sitio.pop(cambio["campo"], None)
+    if cambio["ambito"] == "canal" and not d["canales"].get(cambio["clave"]):
+        d["canales"].pop(cambio["clave"], None)
     _guardar_cambios(d)
 
 
+
 def seguimiento(e, prueba=False):
-    """Vuelve a medir cada cambio en prueba: el que mejora se queda, el que empeora se deshace, y de los dos se aprende."""
-    cerrados = []
-    cuaderno = None
+    """Vuelve a medir cada cambio en prueba: el que mejora se queda, el que empeora (o deja a la cuenta sin hacer vídeos)
+    se deshace, y de todo se aprende. Solo cuentan los vídeos empezados después del cambio, cada vídeo una vez, y en los
+    cambios de la fábrica entera se compara cada cuenta consigo misma."""
+    cerrados, cuaderno = [], None
+    por = _juicios()
     for c in e["cambios"]:
         if c.get("estado") != "activo":
             continue
-        clave = c.get("clave") if c["ambito"] == "canal" else None
-        por = _juicios()
-        js = por.get(clave, []) if clave else [j for lista in por.values() for j in lista]
-        despues = [j["nota"] for j in js if (j.get("fecha") or "") > c["fecha"]]
-        horas = (_ahora() - (_fecha(c["fecha"]) or _ahora())).total_seconds() / 3600
-        antes = (c.get("base") or {}).get("media")
-        if len(despues) < SEGUIR_CON or antes is None:
-            if horas > CADUCA_CAMBIO:
-                c.update(estado="neutro", cerrado=_iso(), resultado="no ha habido vídeos bastantes para medirlo")
-                cerrados.append(c)
-            continue
-        ahora_media = _media(despues)
-        donde = f"la cuenta {privado.alias(clave)}" if clave else "la fábrica"
+        hecho = _fecha(c["fecha"]) or _ahora()
+        desde = _iso(hecho + dt.timedelta(minutes=MARGEN_TURNO))
+        horas = (_ahora() - hecho).total_seconds() / 3600
+        base = c.get("base") or {}
+        if c["ambito"] == "canal":
+            despues = list(_videos(por.get(c.get("clave"), []), desde).values())
+            antes, ahora_media, bastantes = base.get("media"), _media(despues), len(despues) >= SEGUIR_CON
+            donde = f"la cuenta {privado.alias(c.get('clave') or '')}"
+        else:                                   # cada cuenta contra su propia media de antes
+            difs = [m - base["por_cuenta"][k] for k, m in
+                    ((k, _media(list(_videos(js, desde).values()))) for k, js in por.items()
+                     if len(_videos(js, desde)) >= 2 and k in (base.get("por_cuenta") or {})) if m is not None]
+            antes, ahora_media = 0.0, (_media(difs) if difs else None)
+            bastantes = len(difs) >= 2
+            despues, donde = difs, "la fábrica"
         que = f"poner {c['campo']} = {json.dumps(c['despues'], ensure_ascii=False)} en {donde}"
-        if ahora_media - antes >= MEJORA:
-            c.update(estado="funciono", cerrado=_iso(), resultado=f"la nota media pasó de {antes} a {ahora_media}")
-            leccion = f"FUNCIONÓ {que}: la nota media pasó de {antes} a {ahora_media} ({c.get('causa') or 'sin causa apuntada'})."
+        leccion = None
+        if c["ambito"] == "canal" and not despues and horas > SIN_VIDEOS:
+            c.update(estado="deshecho", cerrado=_iso(), resultado=f"en {SIN_VIDEOS} horas la cuenta no hizo ni un vídeo: deshecho")
+            leccion = f"NO FUNCIONÓ {que}: dejó la cuenta {SIN_VIDEOS} horas sin hacer vídeos; se ha deshecho. No repetirlo ahí."
+            if not prueba:
+                _deshacer(c)
+        elif not bastantes or antes is None or ahora_media is None:
+            if horas <= CADUCA_CAMBIO:
+                continue
+            c.update(estado="neutro", cerrado=_iso(), resultado="no ha habido vídeos bastantes para medirlo: se queda")
+        elif ahora_media - antes >= MEJORA:
+            c.update(estado="funciono", cerrado=_iso(),
+                     resultado=(f"la nota media pasó de {antes} a {ahora_media}" if c["ambito"] == "canal"
+                                else f"las cuentas subieron {ahora_media} puntos de media"))
+            leccion = f"FUNCIONÓ {que}: {c['resultado']} ({c.get('causa') or 'sin causa apuntada'})."
         elif ahora_media - antes <= EMPEORA:
-            c.update(estado="deshecho", cerrado=_iso(), resultado=f"la nota media bajó de {antes} a {ahora_media}: deshecho")
-            leccion = f"NO FUNCIONÓ {que}: la nota media bajó de {antes} a {ahora_media}; se ha deshecho. No repetirlo ahí."
+            c.update(estado="deshecho", cerrado=_iso(),
+                     resultado=(f"la nota media bajó de {antes} a {ahora_media}: deshecho" if c["ambito"] == "canal"
+                                else f"las cuentas bajaron {abs(ahora_media)} puntos de media: deshecho"))
+            leccion = f"NO FUNCIONÓ {que}: {c['resultado']}. No repetirlo ahí."
             if not prueba:
                 _deshacer(c)
         elif horas > CADUCA_CAMBIO:
-            c.update(estado="neutro", cerrado=_iso(), resultado=f"ni mejora ni empeora ({antes} → {ahora_media}): se queda")
-            leccion = f"NI FU NI FA {que}: la nota media siguió igual ({antes} → {ahora_media})."
+            c.update(estado="neutro", cerrado=_iso(), resultado="ni mejora ni empeora: se queda")
+            leccion = f"NI FU NI FA {que}: la nota siguió igual."
         else:
             continue
         cerrados.append(c)
-        if not prueba:
+        if leccion and not prueba:
             cuaderno = cuaderno or privado.cuaderno("elite_arquitecto")
-            cuaderno.aprender(leccion, confianza=0.8)
+            cuaderno.aprender(leccion, confianza=0.7)
     if cuaderno:
         cuaderno.guardar()
     return cerrados
@@ -409,22 +466,47 @@ def _cuaderno_de(clave, robot):
     return "archivero_mapas" if clave == "mapas" else "escritor"
 
 
+def _toca(p, e, parte):
+    """¿Hay que decidir este problema ahora? Solo si es nuevo o si desde la última vez que se decidió han pasado horas
+    Y hay vídeos juzgados nuevos (así no se paga dos veces por decidir lo mismo con las mismas pruebas)."""
+    if p["id"] in e["vistos"]:
+        ultima = e["ultimas"].get(p["id"]) or {"fecha": e["vistos"][p["id"]], "juicios": 0}
+        if p["tipo"] in ("descartes", "robot", "parte", "caso"):
+            return False                      # su id ya cambia cuando cambian las pruebas
+        horas = (_ahora() - (_fecha(ultima.get("fecha")) or _ahora())).total_seconds() / 3600
+        total = ((parte["cuentas"].get(p.get("canal")) or {}).get("juicios_total") or 0)
+        return horas >= REPOSO_HORAS and total - (ultima.get("juicios") or 0) >= REPOSO_JUICIOS
+    return True
+
+
+def _llamadas_hoy(e):
+    return (e.get("llamadas") or {}).get(_iso()[:10], 0)
+
+
 def arquitecto(problemas, parte, e, prueba=False):
     """Decide con el cerebro bueno y ejecuta. Devuelve las decisiones tomadas ahora."""
-    nuevos = [p for p in problemas if p["id"] not in e["vistos"]]
+    e.setdefault("ultimas", {})
+    nuevos = [p for p in problemas if _toca(p, e, parte)]
     if not nuevos:
         return []
+    if _llamadas_hoy(e) >= LLAMADAS_DIA:        # hoy ya ha pensado bastante: lo nuevo espera a mañana (o a otra hucha)
+        print(f"élite: hoy ya ha decidido {LLAMADAS_DIA} veces; lo nuevo espera", flush=True)
+        return []
     cfg = privado.config()
-    por_alias = {privado.alias(k): k for s in ("canales", "barrios") for k in (cfg.get(s) or {})}
+    todas = {k for s_ in ("canales", "barrios") for k in (cfg.get(s_) or {})}
+    por_alias = {privado.alias(k): k for k in todas}
     activos = [c for c in e["cambios"] if c.get("estado") == "activo"]
     parte_corto = dict(parte, cuentas={a: {k: v for k, v in c.items() if k != "clave" and v not in (None, {}, 0, "")}
                                        for a, c in parte["cuentas"].items()})
+    antes = [{"cuando": d.get("fecha"), "canal": d.get("canal"), "problema": d.get("tipo"), "salida": d.get("salida"),
+              "que": str(d.get("texto") or d.get("campo") or "")[:160]} for d in e["decisiones"][-14:] if d.get("salida") != "nada"]
     texto = DECIDIR.format(
         skills=_skills(), lecciones=privado.cuaderno("elite_arquitecto").para_el_prompt(12), horas=HORAS,
         parte=json.dumps(parte_corto, ensure_ascii=False)[:9000],
         cambios=json.dumps([{k: c.get(k) for k in ("ambito", "campo", "despues", "fecha")} | {"canal": privado.alias(c.get("clave") or "")}
                             for c in activos], ensure_ascii=False) or "[]",
-        problemas=json.dumps([{k: v for k, v in p.items() if k != "clave"} for p in nuevos], ensure_ascii=False)[:7000],
+        antes=json.dumps(antes, ensure_ascii=False)[:3000] or "[]",
+        problemas=json.dumps([{k: v for k, v in p.items() if k != "clave"} for p in nuevos[:8]], ensure_ascii=False)[:7000],
         palancas_canal=_palancas(PALANCAS_CANAL), palancas_fabrica=_palancas(PALANCAS_FABRICA), reforma=REFORMA_HORAS)
     try:
         r = ia.preguntar(texto, papel="elite", temperatura=0.3)
@@ -434,93 +516,133 @@ def arquitecto(problemas, parte, e, prueba=False):
         decisiones, listo = None, False
     if not isinstance(decisiones, list):
         return []                                           # sin IA: los problemas se quedan para la hora siguiente
+    if listo:
+        e.setdefault("llamadas", {})[_iso()[:10]] = _llamadas_hoy(e) + 1
+        e["llamadas"] = {k: v for k, v in e["llamadas"].items() if k >= _iso(_ahora() - dt.timedelta(days=7))[:10]}
     ahora, hechas = _iso(), []
-    for p in nuevos:
-        d = next((x for x in decisiones if isinstance(x, dict) and x.get("id") == p["id"]), None) or {}
-        salida = d.get("salida") if d.get("salida") in ("leccion", "palanca", "reforma", "obra", "nada") else "nada"
-        texto_d = str(d.get("texto") or "")[:600]
-        clave = p.get("clave") or por_alias.get(str(d.get("canal") or ""))
-        apunte = {"id": p["id"], "fecha": ahora, "tipo": p.get("tipo"), "canal": p.get("canal"), "salida": salida,
-                  "causa": str(d.get("causa") or "")[:240], "texto": texto_d, "porque": str(d.get("porque") or "")[:300],
-                  "como_se_sabra": str(d.get("como_se_sabra") or "")[:240], "cerebro": "claude" if listo else "gratis"}
-        if salida in ("palanca", "reforma") and not listo:
-            # un cambio de verdad solo lo decide el cerebro bueno: se deja para cuando tenga su hucha (no se marca visto)
+    for p in nuevos[:8]:
+        d = next((x for x in decisiones if isinstance(x, dict) and x.get("id") == p["id"]), None)
+        if not d:
+            continue                                        # el modelo no contestó a este: sigue pendiente, no «visto»
+        try:
+            apunte = _ejecutar(p, d, e, cfg, todas, por_alias, activos, listo, ahora, prueba)
+        except Exception as err:                            # un problema raro no tira a los demás ni deja nombres fuera
+            print(f"élite: una decisión no se ha podido ejecutar ({type(err).__name__})", flush=True)
             continue
-        if salida == "leccion" and texto_d:
-            robot = _cuaderno_de(clave, d.get("robot"))
-            nombre = ((cfg.get("barrios") or {}).get(clave) or (cfg.get("canales") or {}).get(clave) or {}).get("nombre") or "todas"
-            if not prueba:
-                c = privado.cuaderno(robot)
-                c.aprender(f"(Élite, para «{nombre}») {texto_d}", confianza=0.75 if listo else 0.55)   # nunca «del dueño»
-                c.guardar()
-            apunte.update(robot=robot, deshacer=f"quitar esa lección del cuaderno de {robot}")
-        elif salida == "palanca":
-            ambito = "fabrica" if d.get("ambito") == "fabrica" else "canal"
-            campo, valor = str(d.get("campo") or ""), d.get("valor")
-            if ambito == "canal" and not clave:
-                apunte.update(salida="nada", rechazada="no se sabe de qué cuenta habla")
-            elif not _vale(ambito, campo, valor):
-                apunte.update(salida="nada", rechazada=f"«{campo}» = {json.dumps(valor, ensure_ascii=False)[:60]} no está "
-                                                       "en la lista de palancas o se sale de sus límites")
-            elif any(c["ambito"] == ambito and c.get("clave") == (clave if ambito == "canal" else None) for c in activos):
-                apunte.update(salida="nada", rechazada="ya hay un cambio en prueba ahí: primero se mide ese")
-            else:
-                cambios = privado.cambios_elite()
-                if ambito == "canal":
-                    antes = privado.canal(clave).get(campo)
-                    cambios["canales"].setdefault(clave, {})[campo] = valor
-                else:
-                    antes = privado.ajustes()
-                    for parte_ruta in campo.split("."):
-                        antes = antes.get(parte_ruta) if isinstance(antes, dict) else None
-                    cambios["fabrica"][campo] = valor
-                cambio = {"id": p["id"], "fecha": ahora, "ambito": ambito, "clave": clave if ambito == "canal" else None,
-                          "campo": campo, "antes": antes, "despues": valor, "causa": apunte["causa"],
-                          "base": _medida(clave if ambito == "canal" else None), "estado": "activo"}
-                if not prueba:
-                    _guardar_cambios(cambios)
-                e["cambios"].append(cambio)
-                activos.append(cambio)
-                apunte.update(ambito=ambito, campo=campo, antes=antes, despues=valor,
-                              deshacer="se deshace solo si empeora; a mano, quitándolo de estado/elite/ajustes.json")
-        elif salida == "reforma" and clave:
-            hasta = _iso(_ahora() + dt.timedelta(hours=REFORMA_HORAS))
-            e["reformas"][clave] = {"hasta": hasta, "desde": ahora,
-                                    "motivo": "en reforma por la Élite: " + (apunte["causa"] or "su formato no llega a la nota")
-                                              + "; descansa mientras se rehace"}
-            e["obras"].append({"id": p["id"], "fecha": ahora, "estado": "para_claude", "canal": p.get("canal"),
-                               "que": texto_d or "rehacer el formato de esta cuenta", "porque": apunte["porque"],
-                               "pruebas": p.get("pruebas")})
-            apunte.update(hasta=hasta, deshacer="quitar la cuenta de «reformas» en estado/elite/elite.json")
-        elif salida == "obra":
-            e["obras"].append({"id": p["id"], "fecha": ahora, "estado": "para_claude", "canal": p.get("canal"),
-                               "que": texto_d, "porque": apunte["porque"], "pruebas": p.get("pruebas")})
+        if apunte is None:
+            continue
         e["vistos"][p["id"]] = ahora
+        e["ultimas"][p["id"]] = {"fecha": ahora, "juicios": (parte["cuentas"].get(p.get("canal")) or {}).get("juicios_total") or 0}
         hechas.append(apunte)
+        if not prueba:
+            privado.escribir(ESTADO, e)                     # cada decisión queda apuntada al momento (con su ficha)
     return hechas
+
+
+def _ejecutar(p, d, e, cfg, todas, por_alias, activos, listo, ahora, prueba):
+    """Ejecuta una decisión dentro de lo permitido. Devuelve su apunte, o None si se deja para cuando piense el cerebro bueno."""
+    salida = d.get("salida") if d.get("salida") in ("leccion", "palanca", "reforma", "obra", "nada") else "nada"
+    texto_d = str(d.get("texto") or "")[:600]
+    clave = p.get("clave") or por_alias.get(str(d.get("canal") or ""))
+    if clave not in todas:
+        clave = None                                        # esa cuenta ya no existe: no se toca nada suyo
+    apunte = {"id": p["id"], "fecha": ahora, "tipo": p.get("tipo"), "canal": p.get("canal"), "salida": salida,
+              "causa": str(d.get("causa") or "")[:240], "texto": texto_d, "porque": str(d.get("porque") or "")[:300],
+              "como_se_sabra": str(d.get("como_se_sabra") or "")[:240], "cerebro": "claude" if listo else "gratis"}
+    if salida in ("palanca", "reforma") and not listo:
+        return None           # un cambio de verdad solo lo decide el cerebro bueno: se deja para cuando tenga su hucha
+    if salida == "leccion" and (d.get("robot") == "juez" or not clave):
+        salida = apunte["salida"] = "obra"                  # al Juzgado no se le dan lecciones sin que lo revise Claude
+        texto_d = apunte["texto"] = "Revisar esto (la Élite no cambia sola al Juzgado ni a robots sin cuenta): " + texto_d
+    if salida == "leccion" and texto_d:
+        robot = _cuaderno_de(clave, "escritor")
+        nombre = ((cfg.get("barrios") or {}).get(clave) or (cfg.get("canales") or {}).get(clave) or {}).get("nombre") or "todas"
+        if not prueba:
+            c = privado.cuaderno(robot)
+            c.aprender(f"(Élite, para «{nombre}») {texto_d}", confianza=0.75 if listo else 0.55)   # nunca «del dueño»
+            c.guardar()
+        apunte.update(robot=robot, deshacer=f"quitar esa lección del cuaderno de {robot}")
+    elif salida == "palanca":
+        ambito = "fabrica" if d.get("ambito") == "fabrica" else "canal"
+        campo, valor = str(d.get("campo") or ""), d.get("valor")
+        if campo == "prioridad" and isinstance(valor, list):      # el modelo ve alias: se pasan a las claves de verdad
+            valor = [por_alias.get(str(x), str(x)) for x in valor]
+        if ambito == "canal" and not clave:
+            apunte.update(salida="nada", rechazada="no se sabe de qué cuenta habla, o ya no existe")
+        elif not _vale(ambito, campo, valor):
+            apunte.update(salida="nada", rechazada=f"«{campo}» no está en la lista de palancas o se sale de sus límites")
+        elif any(c["ambito"] == ambito and c.get("clave") == (clave if ambito == "canal" else None) for c in activos):
+            apunte.update(salida="nada", rechazada="ya hay un cambio en prueba ahí: primero se mide ese")
+        else:
+            cambios = privado.cambios_elite()
+            if ambito == "canal":
+                habia = campo in (cambios["canales"].get(clave) or {})
+                antes = privado.canal(clave).get(campo)
+                cambios["canales"].setdefault(clave, {})[campo] = valor
+            else:
+                habia = campo in cambios["fabrica"]
+                antes = privado.ajustes()
+                for parte_ruta in campo.split("."):
+                    antes = antes.get(parte_ruta) if isinstance(antes, dict) else None
+                cambios["fabrica"][campo] = valor
+            cambio = {"id": p["id"], "fecha": ahora, "ambito": ambito, "clave": clave if ambito == "canal" else None,
+                      "campo": campo, "antes": antes, "habia_cambio": habia, "despues": valor, "causa": apunte["causa"],
+                      "base": _medida(clave if ambito == "canal" else None), "estado": "activo"}
+            e["cambios"].append(cambio)
+            activos.append(cambio)
+            if not prueba:
+                _guardar_cambios(cambios)
+            apunte.update(ambito=ambito, campo=campo, antes=antes, despues=valor,
+                          deshacer="se deshace solo si empeora; a mano, quitándolo de estado/elite/ajustes.json")
+    elif salida == "reforma" and clave:
+        hasta = _iso(_ahora() + dt.timedelta(hours=REFORMA_HORAS))
+        # el motivo es fijo (sale en los registros públicos de la fábrica); la causa, que escribe la IA, va aparte
+        e["reformas"][clave] = {"hasta": hasta, "desde": ahora, "causa": apunte["causa"],
+                                "motivo": "en reforma por orden de la Élite: descansa mientras se rehace su formato"}
+        e["obras"].append({"id": p["id"], "fecha": ahora, "estado": "para_claude", "canal": p.get("canal"),
+                           "que": texto_d or "rehacer el formato de esta cuenta", "porque": apunte["porque"],
+                           "pruebas": p.get("pruebas")})
+        apunte.update(hasta=hasta, deshacer="quitar la cuenta de «reformas» en estado/elite/elite.json")
+    elif salida == "reforma":
+        apunte.update(salida="nada", rechazada="no se sabe de qué cuenta habla, o ya no existe")
+    elif salida == "obra":
+        e["obras"].append({"id": p["id"], "fecha": ahora, "estado": "para_claude", "canal": p.get("canal"),
+                           "que": texto_d, "porque": apunte["porque"], "pruebas": p.get("pruebas")})
+    return apunte
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--prueba", action="store_true", help="mira y decide, pero no cambia nada")
     a = p.parse_args(argv)
+    try:
+        return _repaso(a.prueba)
+    except BaseException as err:               # nada de trazas con datos privados en el registro público
+        if isinstance(err, KeyboardInterrupt):
+            raise
+        print(f"élite: el repaso se ha cortado ({type(err).__name__}); lo vuelve a intentar la hora que viene", flush=True)
+        return 1
+
+
+def _repaso(prueba):
     desde = _ahora() - dt.timedelta(hours=HORAS)
     e = leer()
-    medidos = seguimiento(e, a.prueba)                 # 1. lo que cambió antes: ¿funcionó?
+    medidos = seguimiento(e, prueba)                   # 1. lo que cambió antes: ¿funcionó?
     parte = parte_general(desde)                       # 2. el Espía junta el parte general
     fallos, calidad = espia(parte, desde), estratega(parte)   # 3. qué falla y qué no llega
-    hechas = arquitecto(fallos + calidad, parte, e, a.prueba)  # 4. el Arquitecto decide y ejecuta
+    hechas = arquitecto(fallos + calidad, parte, e, prueba)   # 4. el Arquitecto decide y ejecuta
     e["decisiones"] = (e["decisiones"] + hechas)[-60:]
     e["obras"] = e["obras"][-40:]
     e["cambios"] = e["cambios"][-60:]
-    limite = _iso(_ahora() - dt.timedelta(days=7))
+    limite = _iso(_ahora() - dt.timedelta(days=30))
     e["vistos"] = {k: v for k, v in e["vistos"].items() if v >= limite}
+    e["ultimas"] = {k: v for k, v in (e.get("ultimas") or {}).items() if k in e["vistos"]}
     e["reformas"] = {k: v for k, v in e["reformas"].items() if str(v.get("hasta") or "") >= _iso()}
     e.update(ultimo=_iso(), mirado={"fallos": len(fallos), "calidad": len(calidad), "cuentas": len(parte["cuentas"])},
              parte=dict(parte, cuentas={alias: {k: v for k, v in c.items() if k != "clave"}
                                         for alias, c in parte["cuentas"].items()}),
              problemas=[{k: p.get(k) for k in ("id", "tipo", "canal")} for p in fallos + calidad])
-    if not a.prueba:
+    if not prueba:
         privado.escribir(ESTADO, e)
         for robot, que, dato in (
                 ("elite_espia", "vigilancia", {"cuentas": len(parte["cuentas"]), "fallos_repetidos": len(fallos)}),

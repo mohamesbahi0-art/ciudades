@@ -58,7 +58,7 @@ def mirar(guion, canal, imagenes, duracion, prueba=False):
     idioma = {"es": "español", "nl": "neerlandés", "en": "inglés"}.get((canal.get("idioma") or "es")[:2], "español")
     texto = PREGUNTA.format(donde="YouTube Shorts" if canal.get("destino", "youtube") == "youtube" else "TikTok e Instagram",
                             n=n, idioma=idioma, duracion=round(float(duracion)), titulo=guion.get("titulo", ""),
-                            gancho=guion.get("texto_pantalla", ""), narracion=str(guion.get("narracion", ""))[:2500],
+                            gancho=guion.get("texto_pantalla", ""), narracion=str(guion.get("narracion", ""))[:6000],
                             espectadores="\n".join(espectadores(n, semilla=guion.get("titulo"))))
     try:
         r = ia.preguntar(texto, papel="jurado", imagenes=imagenes, solo_bueno=True, temperatura=0.8)
@@ -69,7 +69,7 @@ def mirar(guion, canal, imagenes, duracion, prueba=False):
     for f in filas if isinstance(filas, list) else []:
         try:
             votos.append((max(0.0, min(float(duracion), float(f[1]))), str(f[2])[:60], 1 if f[3] in (1, True, "1") else 0))
-        except (TypeError, ValueError, IndexError):
+        except (TypeError, ValueError, IndexError, KeyError):
             continue
     if len(votos) < n * 0.6:                  # contestaron pocos: no vale como prueba
         return None
@@ -89,6 +89,8 @@ def mirar(guion, canal, imagenes, duracion, prueba=False):
                "motivos_irse": mas_dichos([v[1] for v in votos if v[0] < d * 0.5]),
                "motivos_quedarse": mas_dichos([v[1] for v in votos if v[0] >= d * 0.9], 3),
                "cerebro": ia.quien().get("motor", "gemini"), "prueba": prueba}
+    if prueba:                             # un vídeo de prueba no cuenta como sesión de verdad
+        return resumen
     try:                                   # la sesión queda apuntada para «El Cine» de la app (las 40 últimas)
         clave = canal.get("clave", "")
         sesion = dict(resumen, canal=clave, titulo=str(guion.get("titulo", ""))[:120], fecha=privado.ahora(),

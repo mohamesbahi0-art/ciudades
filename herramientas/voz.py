@@ -88,7 +88,7 @@ async def generar(texto, voz, velocidad, tono, carpeta):
             return palabras
         except (RuntimeError, OSError, ValueError, KeyError) as e:
             MOTOR.update(motor="edge", aviso=f"ElevenLabs no ha podido ({str(e)[:120]}); voz gratis")
-            print(f"voz: {MOTOR['aviso']}", flush=True)
+            print("voz: ElevenLabs no ha podido; va la voz gratis de reserva", flush=True)   # el detalle, en privado
             voz = gratis or os.environ.get("VOZ_GRATIS", VOZ_GRATIS)
     else:
         MOTOR.update(motor="edge", aviso=None)
@@ -111,7 +111,7 @@ async def generar(texto, voz, velocidad, tono, carpeta):
             except edge_tts.exceptions.NoAudioReceived:
                 continue
             MOTOR["aviso"] = f"{voz} no ha podido con «{texto[:40]}»; uso {v} {r}"
-            print(f"voz: {MOTOR['aviso']}", flush=True)
+            print("voz: la primera voz no ha contestado; va la de reserva", flush=True)       # el detalle, en privado
             break
         if palabras is None:
             raise

@@ -105,7 +105,7 @@ def deliberar(guion, canal, alegatos, comun, forzar=False):
     if not a.get("encendido", True) or (not forzar and int(hoy.get("jurados", 0)) >= int(a.get("por_dia", 12))):
         return None
     narracion = (guion.get("narracion") or " ".join(str(e.get("voz", "")) if isinstance(e, dict) else str(e)
-                                                    for e in guion.get("escenas") or []))[:1500]
+                                                    for e in guion.get("escenas") or []))[:6000]
     texto_alegatos = ""
     if alegatos.get("defensa") or alegatos.get("fiscalia"):
         texto_alegatos = (f"Alegato de la defensa (dice que va a funcionar): {alegatos.get('defensa', '')}\n"

@@ -71,13 +71,16 @@ def main():
         problemas.append("simulacro.yml: el último cambio del código rompe la ronda de mentira (mirar antes de la de verdad)")
     # ¿Hay más trabajo que manos? Si en 4 de las 6 últimas rondas se quedan canales sin turno, hace falta más fábrica
     # (más vídeos por ronda o turnos a la vez). Si no pasa, duplicar robots solo gastaría antes la IA gratis.
-    rondas = ((privado.leer(os.path.join("estado", "fabrica.json"), {}) or {}).get("rondas") or [])[-6:]
+    rondas = []                   # las cuatro líneas de la fábrica, cada una con su fichero
+    for nombre in ("fabrica.json", "fabrica-dibujos.json", "fabrica-cuentas.json", "fabrica-cuentas2.json"):
+        rondas += (privado.leer(os.path.join("estado", nombre), {}) or {}).get("rondas") or []
+    rondas = sorted(rondas, key=lambda r: str(r.get("empezada") or ""))[-12:]
     # (una ronda que se quedó corta porque la IA no contestaba no cuenta: ahí no faltan manos, falta IA)
     apretadas = [r for r in rondas if r.get("sin_sitio")
                  and not any(str(t.get("error") or "").startswith("SinIA") for t in r.get("turnos") or [])]
-    if len(rondas) >= 6 and len(apretadas) >= 4:
+    if len(rondas) >= 8 and len(apretadas) >= 6:
         faltan = sorted({privado.alias(k) for r in apretadas for k in r["sin_sitio"]})
-        problemas.append(f"fabrica.yml: hay más trabajo que manos ({len(apretadas)} de las 6 últimas rondas dejan sin "
+        problemas.append(f"fabrica.yml: hay más trabajo que manos ({len(apretadas)} de las últimas rondas dejan sin "
                          f"turno a {', '.join(faltan)}): subir videos_por_ronda o hacer turnos a la vez")
     privado.guardar_estado("maquinas.json", {"turnos": turnos, "problemas": problemas})
     jefa = privado.cuaderno("jefa_maquinas")

@@ -118,14 +118,17 @@ def en_cola():
     return items
 
 
-def vaciar_cola(ajustes, revisiones, trabajo, avisar=print):
-    """Sube lo que espera en la cola, el más antiguo primero, mientras haya cupo. Devuelve cuántos subió."""
+def vaciar_cola(ajustes, revisiones, trabajo, avisar=print, solo=None):
+    """Sube lo que espera en la cola, el más antiguo primero, mientras haya cupo. Devuelve cuántos subió.
+    `solo`: función que dice si un canal es de esta línea (cada línea de la fábrica vacía solo la cola de los suyos)."""
     registro = privado.leer(REGISTRO, []) or []
     hechos = 0
     for item in en_cola():
         if not hay_cupo(ajustes):
             break
         clave = item["canal"]
+        if solo and not solo(clave):
+            continue
         canal = privado.canal(clave)
         if canal.get("pausado"):
             continue

@@ -246,7 +246,9 @@ function bolas(t, c) {
     const sale = dentro - 0.12 - 0.12 * k; if (sale <= 0) return;
     let { x, y, r } = p, rot = 0, alfa = 1, mira = Math.sign(hx - x) || 0;
     const escala = atras(sale / 0.35);
+    const vz = (e.voces || []).find(v => v.pais === p.b.pais && v.a != null);   // cuándo habla esta bola con su voz
     y += Math.sin(t * 3 + k) * r * 0.04;                       // respira
+    if (vz && t >= vz.a && t <= vz.b) y -= Math.abs(Math.sin((t - vz.a) * 9)) * r * 0.12;   // bota mientras habla
     const fase = (t - e.inicio) * 2.2 + k * 0.4;
     if (e.accion === "salta" || e.accion === "celebra") y -= Math.abs(Math.sin(Math.PI * fase)) * r * 0.35;
     if (e.accion === "tiembla" || p.b.expresion === "asustado") x += Math.sin(t * 60 + k) * r * 0.05;
@@ -256,8 +258,9 @@ function bolas(t, c) {
       const otro = pos[1 - k], f = Math.abs(Math.sin(Math.PI * fase * 0.8));
       x += (otro.x - p.x) * 0.38 * f; rot = (k ? -1 : 1) * 0.12 * f; mira = Math.sign(otro.x - p.x);
     }
-    if (p.b.pais === G.pais && t > tb) {                       // la bola del país que se borra se hunde y se va
-      const f = lim((t - tb) / 1.2); y += f * 220; alfa = 1 - f;
+    const tbb = vz ? Math.max(tb, vz.b + 0.15) : tb;           // si tiene frase, no se va hasta que la acaba
+    if (p.b.pais === G.pais && t > tbb) {                      // la bola del país que se borra se hunde y se va
+      const f = lim((t - tbb) / 1.2); y += f * 220; alfa = 1 - f;
     }
     if (alfa <= 0.02) return;
     const parpadeo = ((t + k * 0.7) % 3.1) < 0.09;
@@ -270,7 +273,7 @@ function bolas(t, c) {
       const f = Math.abs(Math.sin(Math.PI * fase * 0.8));
       if (f > 0.85) { ctx.save(); ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 4; const sx = (x + pos[1].x) / 2, sy = (y + pos[1].y) / 2 - r * 0.6; ctx.beginPath(); for (let j = 0; j < 10; j++) { const a = j * Math.PI / 5, rr = j % 2 ? 22 : 50; ctx.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
     }
-    bocadillo(p.b.dice, x, y, r * escala, dentro - 0.3 - 0.25 * k);
+    bocadillo(p.b.dice, x, y, r * escala, vz ? t - vz.a + 0.1 : dentro - 0.3 - 0.25 * k);   // el bocadillo, cuando suena su voz
   });
 }
 function centroDe(iso) {

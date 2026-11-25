@@ -151,12 +151,12 @@ def _turnos_de_hoy():
     todas = []
     for nombre in ("fabrica.json", "fabrica-dibujos.json", "fabrica-cuentas.json", "fabrica-cuentas2.json"):   # las líneas
         f = privado.leer(os.path.join("estado", nombre), {}) or {}
-        todas += list(f.get("rondas") or []) + [f]
+        todas += [dict(r, _linea=nombre) for r in list(f.get("rondas") or []) + [f]]
     todas.sort(key=lambda r: str(r.get("empezada") or ""))
     vistos, salida = set(), []
-    for r in todas:
-        if r.get("empezada") and r["empezada"] not in vistos and not r.get("prueba"):
-            vistos.add(r["empezada"])
+    for r in todas:           # la misma ronda sale dos veces en su fichero; dos líneas pueden empezar en el mismo segundo
+        if r.get("empezada") and (r["_linea"], r["empezada"]) not in vistos and not r.get("prueba"):
+            vistos.add((r["_linea"], r["empezada"]))
             salida += [dict(t, cuando=r["empezada"]) for t in r.get("turnos") or []]
     return salida[-60:]
 

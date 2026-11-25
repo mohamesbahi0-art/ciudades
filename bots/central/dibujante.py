@@ -84,13 +84,24 @@ def dibujar(escenas, modelo, carpeta, espera_maxima=1800, sin_avance=420, repeti
     hechas, fin = {}, time.time() + espera_maxima
     avance = time.time()
     probados = [modelo]
-    modelo, motivo = elegir_modelo(modelo)
+    vivos = estado_modelos()
+    modelo, motivo = elegir_modelo(modelo, vivos)
     if motivo:
         print(f"  dibujos: {motivo}")
         probados.append(modelo)
+    # si el servicio dice que tiene cola, se le espera vez y media esa cola antes de darlo por parado
+    sin_avance = max(sin_avance, int(1.5 * ((vivos.get(modelo) or {}).get("espera") or 0)))
+    prorroga = False
     while (pendientes or por_pedir) and time.time() < fin:
         if time.time() - avance > sin_avance:
-            otro, motivo = elegir_modelo(modelo, salvo=probados) if len(probados) < 3 else (modelo, "")
+            ahora_vivos = estado_modelos()
+            actual = ahora_vivos.get(modelo) or {"robots": 0, "espera": 9e9}
+            if hechas and actual["robots"] >= 1 and not prorroga:      # va lento pero va entregando: una prórroga
+                prorroga, avance = True, time.time()
+                continue
+            otro, motivo = elegir_modelo(modelo, ahora_vivos, salvo=probados) if len(probados) < 3 else (modelo, "")
+            if otro != modelo and actual["robots"] >= 1 and actual["espera"] <= (ahora_vivos.get(otro) or {}).get("espera", 9e9):
+                otro = modelo                                           # el plan B tiene más cola que este: no se cambia
             if otro == modelo:
                 print(f"  dibujos: {sin_avance // 60} min sin que llegue ninguno: el servicio no da para más ahora")
                 break
@@ -104,20 +115,20 @@ def dibujar(escenas, modelo, carpeta, espera_maxima=1800, sin_avance=420, repeti
             try:
                 pendientes[i] = {"id": pedir(escenas[i]["dibujo"], modelo), "repetida": 0}
                 por_pedir.remove(i)
-            except (urllib.error.URLError, KeyError) as err:
-                print(f"  escena {i + 1}: todavía no se puede pedir ({err})")
+            except (urllib.error.URLError, KeyError, OSError, ValueError) as err:
+                print(f"  escena {i + 1}: todavía no se puede pedir ({type(err).__name__})")
                 break
         time.sleep(20)
         for i, p in list(pendientes.items()):
             try:
                 estado = _peticion("GET", f"/generate/check/{p['id']}")
-            except urllib.error.URLError:
+            except (urllib.error.URLError, OSError, ValueError):
                 continue
             if estado.get("faulted") or (estado.get("done") is False and not estado.get("is_possible", True)):
                 if p["repetida"] < repeticiones:        # solo se repite el dibujo que ha fallado, no todos
                     try:
                         p.update(id=pedir(escenas[i]["dibujo"], modelo), repetida=p["repetida"] + 1)
-                    except (urllib.error.URLError, KeyError):
+                    except (urllib.error.URLError, KeyError, OSError, ValueError):
                         pass                             # no deja pedir ahora: se vuelve a mirar en la próxima vuelta
                 else:
                     pendientes.pop(i)
@@ -141,8 +152,8 @@ def dibujar(escenas, modelo, carpeta, espera_maxima=1800, sin_avance=420, repeti
                         f.write(r.read())
                     hechas[i] = ruta
                     avance = time.time()
-                except (urllib.error.URLError, KeyError, IndexError) as err:
-                    print(f"  escena {i + 1}: no se pudo descargar ({err})")
+                except (urllib.error.URLError, KeyError, IndexError, OSError, ValueError) as err:
+                    print(f"  escena {i + 1}: no se pudo descargar ({type(err).__name__})")
                 pendientes.pop(i)
         print(f"  dibujos: {len(hechas)}/{len(escenas)} hechos, {len(pendientes)} esperando, {len(por_pedir)} por pedir")
     return [hechas.get(i) for i in range(len(escenas))]

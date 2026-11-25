@@ -28,7 +28,13 @@ def _texto(valor):
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", str(valor or "")))).strip()
 
 
-def buscar(consulta, cuantas=8):
+NO_SON_FOTOS = ("logo", "map", "kaart", "karte", "coat of arms", "wapen", "signature", "handtekening", "flag", "vlag",
+                "icon", "diagram", "chart", "stamp", "postzegel", "locator", "blason", "escudo")
+USOS_POR_FOTO = 3              # una misma foto, como mucho en 3 escenas (con encuadres distintos)
+MIN_DISTINTAS = 5              # con menos fotos distintas no hay vídeo: se cambia de persona
+
+
+def buscar(consulta, cuantas=40):
     """Fotos libres de Commons para una búsqueda: [{titulo, url, ancho, alto, autor, licencia, pagina}]."""
     q = urllib.parse.urlencode({"action": "query", "generator": "search", "gsrsearch": f"{consulta} filetype:bitmap",
                                 "gsrnamespace": 6, "gsrlimit": cuantas, "prop": "imageinfo",
@@ -46,6 +52,9 @@ def buscar(consulta, cuantas=8):
         licencia = _texto((m.get("LicenseShortName") or {}).get("value"))
         if i.get("mime") not in ("image/jpeg", "image/png") or not _libre(licencia) or min(i.get("width") or 0, i.get("height") or 0) < 500:
             continue
+        titulo = str(p.get("title") or "").lower()
+        if any(x in titulo for x in NO_SON_FOTOS):           # logos, mapas, escudos, firmas: no son fotos de la persona
+            continue
         fotos.append({"titulo": p.get("title", ""), "url": i.get("thumburl") or i.get("url"), "ancho": i.get("width"),
                       "alto": i.get("height"), "autor": _texto((m.get("Artist") or {}).get("value"))[:80] or "Wikimedia Commons",
                       "licencia": licencia, "pagina": i.get("descriptionurl")})
@@ -60,34 +69,47 @@ def _vertical(origen, destino):
                     "-q:v", "3", destino], check=True)
 
 
+def hay_fotos(persona):
+    """Cuántas fotos libres distintas hay de esa persona (para elegir de quién se puede hacer el vídeo)."""
+    return len({f["url"] for f in buscar(str(persona or "").strip()[:80])}) if str(persona or "").strip() else 0
+
+
 def fotografiar(escenas, carpeta, persona=""):
-    """Una foto por escena (None si no hay ninguna que valga) y los créditos de las usadas."""
+    """Una foto por escena (None si no hay ninguna que valga) y de dónde sale cada una. Primero la foto que pide la
+    escena; si no hay, una de la persona. Las fotos se reparten: la menos usada primero y ninguna más de 3 veces; una
+    escena que solo podría repetir una foto ya gastada se queda sin foto (y cuenta como que falta)."""
     os.makedirs(carpeta, exist_ok=True)
-    usadas, creditos, rutas, cache = set(), [], [], {}
+    usos, hechas, origen, rutas, cache = {}, {}, [], [], {}
     for n, e in enumerate(escenas, 1):
         ruta = None
         for consulta in dict.fromkeys(x for x in (str(e.get("dibujo") or "").strip()[:80], persona) if x):
             if consulta not in cache:
                 cache[consulta] = buscar(consulta)
-            for f in sorted(cache[consulta], key=lambda x: x["url"] in usadas):   # primero las que no han salido
-                cruda = os.path.join(carpeta, f"cruda{n:02d}")
-                try:
-                    req = urllib.request.Request(f["url"], headers={"User-Agent": AGENTE})
-                    with urllib.request.urlopen(req, timeout=60) as r, open(cruda, "wb") as out:
-                        out.write(r.read())
-                    ruta = os.path.join(carpeta, f"escena{n:02d}.jpg")
-                    _vertical(cruda, ruta)
-                except (urllib.error.URLError, OSError, subprocess.CalledProcessError):
-                    ruta = None
+            for f in sorted(cache[consulta], key=lambda x: usos.get(x["url"], 0)):   # la menos usada primero
+                if usos.get(f["url"], 0) >= USOS_POR_FOTO:
                     continue
-                finally:
-                    if os.path.exists(cruda):
-                        os.remove(cruda)
-                if f["url"] not in usadas:
-                    creditos.append(f"{f['autor']} ({f['licencia']})")
-                usadas.add(f["url"])
+                if f["url"] not in hechas:                     # cada foto se baja y se prepara una sola vez
+                    cruda = os.path.join(carpeta, f"cruda{n:02d}")
+                    lista = os.path.join(carpeta, f"foto{len(hechas) + 1:02d}.jpg")
+                    try:
+                        req = urllib.request.Request(f["url"], headers={"User-Agent": AGENTE})
+                        with urllib.request.urlopen(req, timeout=60) as r, open(cruda, "wb") as out:
+                            out.write(r.read(25_000_000))
+                        _vertical(cruda, lista)
+                    except (urllib.error.URLError, OSError, ValueError, subprocess.CalledProcessError):
+                        usos[f["url"]] = USOS_POR_FOTO          # esa foto no se puede usar: no se vuelve a probar
+                        continue
+                    finally:
+                        if os.path.exists(cruda):
+                            os.remove(cruda)
+                    hechas[f["url"]] = lista
+                    origen.append({"pagina": f.get("pagina"), "autor": f.get("autor"), "licencia": f.get("licencia")})
+                usos[f["url"]] = usos.get(f["url"], 0) + 1
+                ruta = hechas[f["url"]]
                 break
             if ruta:
                 break
         rutas.append(ruta)
-    return rutas, list(dict.fromkeys(creditos))
+    if len(hechas) < MIN_DISTINTAS:                 # con tan pocas fotos el vídeo sería una sola imagen: no vale
+        return [None] * len(escenas), origen
+    return rutas, origen

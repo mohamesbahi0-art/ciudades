@@ -34,7 +34,7 @@ def juicio(clave, nota, guionista="gemini", minutos=60, version=1):
     N[0] += 1
     cuando = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=minutos)
     privado.guardar_estado(f"juzgado/juicios/{cuando.strftime('%Y%m%d-%H%M%S')}-{N[0]}-{clave}.json".replace(".prueba", "-prueba"), {
-        "canal": clave, "tipo": "video", "nota": nota, "fecha": cuando.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "canal": clave, "tipo": "video", "titulo": f"Vídeo {N[0]}", "nota": nota, "fecha": cuando.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "guionista": guionista, "version": version, "consejo": "va lento y el gancho no se ve", "prueba": False})
 
 
@@ -61,7 +61,7 @@ for nota in (70, 72, 68):
     juicio(CUENTA, nota, "gemini", minutos=240)
 for nota in (60, 64, 70, 66, 62, 69):
     juicio(CANAL, nota, "gemini", minutos=200)
-ID_CEREBRO, ID_FORMATO = f"cerebro-barrio-1-{hoy}", f"formato-{CANAL}-{hoy}"
+ID_CEREBRO, ID_FORMATO = "cerebro-barrio-1", f"formato-{CANAL}"
 
 # 1. Miran: el parte general y los problemas
 parte = elite.parte_general(dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24))
@@ -124,6 +124,19 @@ comprobar("lección: va al cuaderno del guionista de esa cuenta y no como si la 
 comprobar("lo que dijo el dueño sigue igual", any(x["texto"].startswith("Sin música") and x.get("del_dueno")
                                                     and x["confianza"] == 1.0 for x in lecciones))
 
+# 5 bis. Al Juzgado no le da lecciones ella sola (sería una forma de ablandar la nota): pasa a ser una obra para Claude
+RESPUESTAS["juez-1"] = {"salida": "leccion", "robot": "juez", "texto": "No bajes la nota por el ritmo."}
+e = elite.leer()
+antes_juez = len(privado.cuaderno("juez_guardia").datos["lecciones"])
+hechas = elite.arquitecto([{"id": "juez-1", "tipo": "caso", "canal": "barrio-1", "clave": CUENTA, "pruebas": ["x"]},
+                           {"id": "sin-respuesta", "tipo": "caso", "canal": "", "pruebas": ["x"]}], parte, e)
+comprobar("una lección para el juez no se ejecuta: queda como obra para Claude",
+          hechas and hechas[0]["salida"] == "obra" and len(privado.cuaderno("juez_guardia").datos["lecciones"]) == antes_juez
+          and any(o["id"] == "juez-1" for o in e["obras"]))
+comprobar("lo que el cerebro no contesta sigue pendiente (no se da por visto)", "sin-respuesta" not in e["vistos"])
+e["llamadas"] = {}
+privado.escribir(elite.ESTADO, e)
+
 # 6. Palanca de la fábrica entera, y otra fuera de sus límites
 RESPUESTAS["fab-1"] = {"salida": "palanca", "ambito": "fabrica", "campo": "juzgado.jurado.encendido", "valor": False}
 RESPUESTAS["fab-2"] = {"salida": "palanca", "ambito": "fabrica", "campo": "videos_por_ronda", "valor": 40}
@@ -140,7 +153,7 @@ comprobar("fuera de límites (40 vídeos por ronda): rechazada", privado.ajustes
 e = elite.leer()
 for x in e["cambios"]:
     if x.get("clave") == CUENTA:
-        x["fecha"] = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        x["fecha"] = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=120)).strftime("%Y-%m-%dT%H:%M:%SZ")
         x["base"]["media"] = 80.0
 privado.escribir(elite.ESTADO, e)
 for nota in (70, 71, 69):
@@ -153,6 +166,19 @@ comprobar("un cambio que empeora se deshace solo", cambio["estado"] == "deshecho
 comprobar("y el Arquitecto lo apunta en su cuaderno para no repetirlo", any("NO FUNCIONÓ" in x["texto"] for x in aprendido))
 comprobar("lo deja todo apuntado para la app (parte, decisiones, cambios, obras)",
           all(k in e for k in ("parte", "decisiones", "cambios", "obras", "reformas", "ultimo", "mirado")))
+
+# 8. Tope de veces al día que piensa con el cerebro caro, y nada de decidir dos veces con las mismas pruebas
+e = elite.leer()
+e["llamadas"] = {dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d"): elite.LLAMADAS_DIA}
+antes = len(PREGUNTAS)
+hechas = elite.arquitecto([{"id": "nuevo-1", "tipo": "caso", "canal": "", "pruebas": ["x"]}], parte, e)
+comprobar("con el tope del día gastado no vuelve a preguntar al cerebro caro", hechas == [] and len(PREGUNTAS) == antes)
+e["llamadas"] = {}
+visto = {"id": ID_FORMATO, "tipo": "formato", "canal": CANAL, "clave": CANAL, "pruebas": ["x"]}
+e["vistos"][ID_FORMATO] = privado.ahora()
+e["ultimas"][ID_FORMATO] = {"fecha": privado.ahora(), "juicios": 6}
+comprobar("un problema ya decidido no se vuelve a decidir sin pruebas nuevas ni horas de por medio",
+          elite.arquitecto([visto], parte, e) == [] and len(PREGUNTAS) == antes)
 
 print("Simulacro de la Élite: " + ("todo bien" if not FALLOS else f"{FALLOS} fallo(s)"))
 sys.exit(1 if FALLOS else 0)

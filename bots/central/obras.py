@@ -24,11 +24,11 @@ def _leer():
 
 
 def retomar(canal):
-    """El vídeo de esta cuenta que se quedó «esperando» (sin IA o sin dibujos) en la ronda anterior: el turno nuevo sigue
+    """El vídeo de esta cuenta que se quedó «esperando» (sin IA o sin dibujos) o atascado en la ronda anterior: el turno nuevo sigue
     en esa misma ficha en vez de abrir otra (así la app no se llena de intentos a medias). None si no hay."""
     try:
         esperando = [(str(o.get("actualizado") or ""), k) for k, o in (_leer().get("obras") or {}).items()
-                     if o.get("canal") == canal and o.get("estado") == "esperando"]
+                     if o.get("canal") == canal and o.get("estado") in ("esperando", "atasco")]
         return max(esperando)[1] if esperando else None
     except Exception:
         return None
@@ -81,7 +81,7 @@ def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_ma
         limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=GUARDA_HORAS)
         espera = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=ESPERA_HORAS)
         for k in [k for k, v in obras.items() if k != id_obra and (
-                (v.get("estado") in ("terminado", "descartado")
+                (v.get("estado") in ("terminado", "descartado", "atasco")
                  and str(v.get("actualizado", "")) < limite.strftime("%Y-%m-%dT%H:%M:%SZ")) or
                 (v.get("estado") == "esperando"                  # una espera vieja ya no dice nada: fuera
                  and str(v.get("actualizado", "")) < espera.strftime("%Y-%m-%dT%H:%M:%SZ")))]:

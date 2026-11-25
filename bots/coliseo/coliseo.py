@@ -88,7 +88,7 @@ def hay_sitio():
 def _narracion(g):
     texto = g.get("narracion") or " ".join(str(e.get("voz", "")) if isinstance(e, dict) else str(e)
                                            for e in g.get("escenas") or [])
-    return texto.strip()[:1500]
+    return texto.strip()[:6000]
 
 
 CREDITOS = ("🎙️ Voz:", "🎙 Voz:", "🎬 Clip:")      # menciones obligatorias: la voz gratis y el creador del clip (CC BY)

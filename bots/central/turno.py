@@ -56,6 +56,37 @@ class _Hecho(Exception):
     """El turno ya está terminado (lo ha hecho el estudio de animación)."""
 
 
+def _sin_juez(v, a, paso):
+    """Si no ha habido quien juzgue (la IA no contesta), el turno espera: ni segundo intento, ni suspenso, ni se tira."""
+    if v.get("veredicto") == "sin_juicio" and not a.prueba:
+        paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; espera a la siguiente ronda")
+        raise ia.SinIA("no hay juez ahora: el vídeo se queda sin juzgar y espera a la siguiente ronda")
+
+
+def _voz_de_pago(g, canal):
+    """Apunta con qué voz ha salido el vídeo y, si es la de ElevenLabs en su plan gratis, la nombra en los textos (lo
+    pide ese plan). Igual que hace el estudio de animación."""
+    g["voz_motor"] = locutor.MOTOR.get("motor", "edge")
+    if g["voz_motor"] == "elevenlabs" and canal.get("eleven_gratis", True):
+        for campo in ("texto_tiktok", "texto_instagram", "descripcion"):
+            if g.get(campo) and "elevenlabs.io" not in g[campo]:
+                g[campo] = f"{g[campo].rstrip()}\n🎙️ Voz: elevenlabs.io"
+
+
+def _ideas_con_fotos(propuestas, paso):
+    """De las ideas de una cuenta de biografías, solo las de personas con fotos libres bastantes (se mira ANTES de
+    gastar guion y voz). Devuelve (ideas que valen, personas sin fotos)."""
+    valen, sin = [], []
+    for idea in propuestas:
+        persona = str(idea.get("persona") or "").strip()
+        if persona and fotografo.hay_fotos(persona) >= fotografo.MIN_DISTINTAS:
+            valen.append(idea)
+        else:
+            sin.append(persona or "?")
+    paso("dibujante", f"fotos libres: {len(valen)} de {len(propuestas)} ideas tienen bastantes")
+    return valen, sin
+
+
 def de_fuera(error):
     """Fallos que no son del código: la IA sin cupo o saturada, o el servicio gratis de dibujos caído."""
     e = str(error or "")
@@ -193,7 +224,7 @@ def arreglo_pendiente(clave):
     """El vídeo de esta cuenta que se quedó cerca de la nota en el turno anterior y espera su versión corregida
     (None si no hay o si ya es viejo). Lo usa también la fábrica al planear: los arreglos van antes que lo nuevo."""
     d = privado.leer(_ruta_arreglo(clave), {}) or {}
-    if not d.get("guion"):
+    if not d.get("guion") or d.get("clave") not in (None, clave):     # el alias puede pasar a otra cuenta: se comprueba
         return None
     try:
         hecho = dt.datetime.strptime(d.get("fecha", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
@@ -207,9 +238,21 @@ def arreglo_pendiente(clave):
 def _guardar_arreglo(clave, arreglar):
     """Deja apuntado (o borra, con None) el vídeo que hay que rehacer en el siguiente turno de la cuenta."""
     if arreglar:
-        privado.escribir(_ruta_arreglo(clave), dict(arreglar, fecha=privado.ahora()))
+        antes = privado.leer(_ruta_arreglo(clave), {}) or {}
+        misma = antes.get("guion") and antes.get("titulo") == arreglar.get("titulo") and antes.get("version") == arreglar.get("version")
+        privado.escribir(_ruta_arreglo(clave), dict(arreglar, clave=clave,
+                                                    fecha=antes.get("fecha") if misma else privado.ahora()))
     elif os.path.exists(os.path.join(privado.carpeta(), _ruta_arreglo(clave))):
         privado.escribir(_ruta_arreglo(clave), {"guion": None, "fecha": privado.ahora()})   # ya no hay nada pendiente
+
+
+def _apuntar_arreglo(clave, arreglar, a, acepta):
+    if a.prueba or not acepta:
+        return
+    try:
+        _guardar_arreglo(clave, arreglar)
+    except Exception:
+        pass
 
 
 def _para_arreglar(g, v, version, minimo):
@@ -282,7 +325,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                                                   "estudio": g.get("formato")})
         audio = os.path.join(trabajo, f"estudio{intento}", "voz.mp3")
         v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
-                            os.path.join(trabajo, f"juicio{intento}"), audio=audio if os.path.exists(audio) else None)
+                            os.path.join(trabajo, f"juicio{intento}"), audio=audio if os.path.exists(audio) else None, prueba=a.prueba)
         if v.get("veredicto") == "sin_juicio" and not a.prueba:
             # no hay juez ahora (ni la IA gratis ni la de pago): nada sale sin juicio y no cuenta como suspenso
             paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; la cuenta espera")
@@ -301,6 +344,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                        formato=g.get("formato"), version=version)
         if v["veredicto"] == "aprobado" or a.prueba:
             arreglar = None
+            _apuntar_arreglo(clave, arreglar, a, acepta_arreglo)
             break
         nota = v.get("total")
         anterior = ((arreglar or {}).get("veredicto") or {}).get("total")
@@ -311,11 +355,13 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                                 no_repetir=(arreglar.get("no_repetir") or []) + [str(v.get("consejo") or "")[:300]])
             else:
                 arreglar = _para_arreglar(g, v, version + 1, minimo)
+            _apuntar_arreglo(clave, arreglar, a, acepta_arreglo)
             if intento < intentos:
                 paso("juez_guardia", f"se queda en {nota}/100: no se tira, se rehace corrigiendo lo que han visto los "
                      f"jueces (versión {version + 1})")
             continue
         arreglar = None
+        _apuntar_arreglo(clave, arreglar, a, acepta_arreglo)
         consejo = (f"\n- (El Juzgado ha suspendido el intento anterior, «{g.get('titulo', '')}», con "
                    f"{v.get('total', '-')}/100: {v.get('consejo', '')} "
                    + " ".join(f"{x.get('juez')}: {str(x.get('razon'))[:200]}" for x in (v.get("votos") or [])[:3])
@@ -330,6 +376,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         except Exception as e:
             paso("escritor", f"no he podido apuntar el arreglo pendiente ({type(e).__name__})")
     if sin_juez:
+        resumen.pop("destino_resultado", None)          # no es un suspenso: es una espera
         raise ia.SinIA("no hay juez ahora: el vídeo se queda sin juzgar y la cuenta espera a la siguiente ronda")
     if video is None:          # el jurado popular rechazó todos los guiones: no se ha grabado nada
         paso("subidor", "el jurado popular rechazó todos los guiones: hoy no se graba nada (se ahorran voz y dibujos)")
@@ -438,10 +485,11 @@ def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, 
                                                            "prueba": a.prueba})
         paso("escritor", f"«{g['titulo']}»", "narración lista")
 
-        paso("locutor", f"grabando la voz ({canal.get('voz')})")
+        paso("locutor", f"grabando la voz ({canal.get('voz')})", "grabando la voz")
         asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
                                     "+0Hz", trabajo))
         quitado = locutor.apretar(trabajo)
+        _voz_de_pago(g, canal)
         cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
         paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
 
@@ -456,7 +504,8 @@ def _turno_clip(clave, canal, m, cuadernos, ajustes, trabajo, paso, resumen, a, 
 
         paso("juez_guardia", "juzgando el vídeo")
         v = tribunal.juzgar(video, g, canal, reglas_juez, os.path.join(trabajo, f"juicio{intento}"),
-                            audio=os.path.join(trabajo, "voz.mp3"))
+                            audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
+        _sin_juez(v, a, paso)
         v["intento"] = intento
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion, "clip": m.get("codigo"),
@@ -524,10 +573,11 @@ def _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, le
         paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas con {len(g['tomas_usadas'])} tomas)",
              f"guion listo ({len(g['escenas'])} escenas con {len(g['tomas_usadas'])} tomas)")
 
-        paso("locutor", f"grabando la voz ({canal.get('voz')})")
+        paso("locutor", f"grabando la voz ({canal.get('voz')})", "grabando la voz")
         asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
                                     "+0Hz", trabajo))
         quitado = locutor.apretar(trabajo)
+        _voz_de_pago(g, canal)
         cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
         paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
 
@@ -542,7 +592,8 @@ def _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, le
 
         paso("juez_guardia", "juzgando el vídeo")
         v = tribunal.juzgar(video, g, canal, reglas_juez, os.path.join(trabajo, f"juicio{intento}"),
-                            audio=os.path.join(trabajo, "voz.mp3"))
+                            audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
+        _sin_juez(v, a, paso)
         v["intento"] = intento
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
         id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
@@ -633,13 +684,37 @@ def main(argv=None):
             _turno_tomas(clave, canal, cuadernos, ajustes, trabajo, paso, resumen, a, lecciones_escritor, fuentes, lista)
             raise _Hecho()
         idea, id_idea = None, None
-        if ajustes.get("sala_ideas", True):     # la Sala de Ideas elige la mejor de 3 antes de gastar dibujos
+        sin_fotos = []
+        con_fotos = canal.get("fotos") == "commons"
+        if ajustes.get("sala_ideas", True) or con_fotos:     # la Sala de Ideas elige la mejor de 3 antes de gastar
             paso("escritor", "proponiendo ideas a la Sala de Ideas")
             try:
                 propuestas = escritor.ideas(canal, lecciones_escritor, privado.titulos_recientes(clave), fuentes)
-                idea, id_idea = sala_ideas.elegir(clave, canal, propuestas, tribunal._pruebas(clave, canal))
+                if con_fotos:                    # solo valen las personas de las que hay fotos libres bastantes
+                    propuestas, sin_fotos = _ideas_con_fotos(propuestas, paso)
+                    if not propuestas:           # otra tanda de ideas, sabiendo de quién no hay
+                        propuestas = escritor.ideas(canal, lecciones_escritor + "\n- (De estas personas NO hay fotos "
+                                                    "libres: " + "; ".join(sin_fotos) + ". Propón otras.)",
+                                                    privado.titulos_recientes(clave), fuentes)
+                        propuestas, mas = _ideas_con_fotos(propuestas, paso)
+                        sin_fotos += mas
+                    if not propuestas:
+                        paso("subidor", "no hay fotos libres de ninguna de las personas propuestas: hoy no se graba")
+                        resumen.update(destino_resultado="suspendido", resultado="hecho",
+                                       motivo="no hay fotos libres de las personas propuestas")
+                        raise _Hecho()
+                if ajustes.get("sala_ideas", True):
+                    idea, id_idea = sala_ideas.elegir(clave, canal, propuestas, tribunal._pruebas(clave, canal))
+                else:
+                    idea = propuestas[0] if propuestas else None
                 paso("escritor", f"la Sala de Ideas eligió «{(idea or {}).get('titulo')}» de {len(propuestas)}",
                      f"la Sala de Ideas eligió 1 de {len(propuestas)}")
+            except _Hecho:
+                raise
+            except ia.SinIA:
+                if con_fotos:           # sin ideas no se sabe de quién hay fotos: mejor esperar que escribir a ciegas
+                    raise
+                paso("escritor", "sin Sala de Ideas hoy (SinIA)")
             except Exception as e:      # sin Sala de Ideas, el Escritor sigue solo
                 paso("escritor", f"sin Sala de Ideas hoy ({type(e).__name__})")
         aviso_juez = ""
@@ -665,30 +740,50 @@ def main(argv=None):
                                                                "prueba": a.prueba})
             paso("escritor", f"«{g['titulo']}» ({len(g['escenas'])} escenas)", f"guion listo ({len(g['escenas'])} escenas)")
 
-            paso("locutor", f"grabando la voz ({canal.get('voz')})")
+            imagenes = None
+            if canal.get("fotos") == "commons":       # biografías: fotos libres de verdad, antes de gastar en la voz
+                paso("dibujante", f"buscando {len(g['escenas'])} fotos libres en Wikimedia Commons")
+                imagenes, origen = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, f"dibujos{intento}"),
+                                                         persona=str(g.get("persona") or (idea or {}).get("persona") or ""))
+                g["fotos_de"] = origen             # de dónde sale cada foto queda apuntado, pero no se pone en el vídeo
+                faltan = imagenes.count(None)
+                cuadernos["dibujante"].apuntar("fotos", {"canal": clave, "pedidas": len(imagenes), "faltan": faltan,
+                                                         "distintas": len(origen)})
+                if faltan > max(1, len(imagenes) // 3):
+                    paso("dibujante", f"solo hay fotos libres para {len(imagenes) - faltan} de {len(imagenes)} escenas: "
+                         "esa persona no vale")
+                    sin_fotos.append(str(g.get("persona") or g.get("titulo") or "?"))
+                    aviso_juez = ("\n- (De estas personas NO hay fotos libres bastantes: " + "; ".join(sin_fotos) +
+                                  ". Elige OTRA persona de la que sí haya, como dicen las reglas.)")
+                    idea = None
+                    if intento == 2:
+                        paso("subidor", "sin fotos libres de dos personas seguidas: hoy no se graba (cuenta como intento)")
+                        resumen.update(titulo=g.get("titulo"), destino_resultado="suspendido", resultado="hecho",
+                                       motivo="no hay fotos libres bastantes de esa persona")
+                        raise _Hecho()
+                    continue
+                paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} escenas con foto libre ({len(origen)} fotos distintas)")
+
+            paso("locutor", f"grabando la voz ({canal.get('voz')})", "grabando la voz")
             asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
                                         "+0Hz", trabajo))
             quitado = locutor.apretar(trabajo)
+            _voz_de_pago(g, canal)
             cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
             paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
 
-            t0 = dt.datetime.now(dt.timezone.utc)
-            if canal.get("fotos") == "commons":       # biografías: fotos libres de verdad, con su crédito
-                paso("dibujante", f"buscando {len(g['escenas'])} fotos libres en Wikimedia Commons")
-                imagenes, creditos = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "dibujos"),
-                                                           persona=str(g.get("persona") or ""))
-                g["fotos_de"] = creditos           # se guarda de dónde sale cada foto, pero no se pone en el vídeo
-            else:
+            if imagenes is None:
+                t0 = dt.datetime.now(dt.timezone.utc)
                 paso("dibujante", f"pidiendo {len(g['escenas'])} dibujos a AI Horde ({canal.get('dibujos')})")
                 imagenes = dibujante.dibujar(g["escenas"], canal.get("dibujos", "AlbedoBase XL (SDXL)"),
                                              os.path.join(trabajo, "dibujos"))
-            faltan = imagenes.count(None)
-            minutos = round((dt.datetime.now(dt.timezone.utc) - t0).total_seconds() / 60, 1)
-            cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan,
-                                                       "minutos": minutos})
-            if faltan > max(1, len(imagenes) // 3):
-                raise RuntimeError(f"faltan {faltan} dibujos de {len(imagenes)}")
-            paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos en {minutos} min")
+                faltan = imagenes.count(None)
+                minutos = round((dt.datetime.now(dt.timezone.utc) - t0).total_seconds() / 60, 1)
+                cuadernos["dibujante"].apuntar("dibujos", {"canal": clave, "pedidos": len(imagenes), "faltan": faltan,
+                                                           "minutos": minutos})
+                if faltan > max(1, len(imagenes) // 3):
+                    raise RuntimeError(f"faltan {faltan} dibujos de {len(imagenes)}")
+                paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos en {minutos} min")
 
             paso("montador", "montando el vídeo")
             video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
@@ -701,7 +796,8 @@ def main(argv=None):
 
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
-                                os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"))
+                                os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
+            _sin_juez(v, a, paso)
             v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
             id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
             id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,

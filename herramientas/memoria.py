@@ -104,7 +104,9 @@ class Cuaderno:
     # --- leer antes de trabajar ------------------------------------------------------------------
     def para_el_prompt(self, cuantas=10):
         """Las mejores lecciones en texto, para leerlas (o meterlas en las instrucciones de la IA) antes de trabajar."""
-        mejores = self.datos["lecciones"][:cuantas]
+        todas = self.datos["lecciones"]
+        # las del dueño van siempre, todas; las demás (lo aprendido, lo que enseña la Élite), las `cuantas` mejores
+        mejores = [l for l in todas if l.get("del_dueno")] + [l for l in todas if not l.get("del_dueno")][:cuantas]
         if not mejores:
             return f"{self.robot}: todavía no ha aprendido nada; trabaja con las reglas de su skill."
         lineas = [f"Lo que ha aprendido {self.robot} (de lo más seguro a lo menos):"]

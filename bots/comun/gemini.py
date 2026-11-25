@@ -56,6 +56,7 @@ def _limpiar_json(texto):
 
 PACIENCIA = 2                  # vueltas de más por todos los modelos cuando están saturados (503) pero vivos
 ESPERAS = (20, 45, 60)         # segundos entre vuelta y vuelta
+TOPE_SEGUNDOS = 300            # una sola pregunta nunca tarda más que esto en total (hay turnos con tope de 15 minutos)
 
 
 def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatura=0.9, intentos=3, ligero_primero=False,
@@ -82,11 +83,14 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
     ultimo = "sin intentar"
     orden = BUENOS if solo_bueno else (LIGEROS + BUENOS if ligero_primero else BUENOS + LIGEROS)
     paciencia = PACIENCIA if paciencia is None else max(0, int(paciencia))
+    empezo, raros = time.monotonic(), 0
     for vuelta in range(paciencia + 1):
         modelos = [m for m in orden if m not in AGOTADOS]    # para texto sencillo, los ligeros primero: guardan cupo bueno
         vivos = False                 # ¿alguno está saturado o lento, pero con cupo? Entonces merece otra vuelta
         for modelo in modelos:
             for intento in range(intentos):
+                if time.monotonic() - empezo > TOPE_SEGUNDOS:
+                    raise SinIA(f"Gemini no contesta: {ultimo} (tras {TOPE_SEGUNDOS // 60} minutos intentándolo)")
                 req = urllib.request.Request(URL.format(modelo=modelo), data=json.dumps(cuerpo).encode(), method="POST",
                                              headers={"Content-Type": "application/json", "x-goog-api-key": clave})
                 try:
@@ -128,19 +132,22 @@ def preguntar(texto, imagenes=(), json_salida=True, solo_bueno=False, temperatur
                     break                                  # este modelo no acepta la petición (p. ej. audio): el siguiente
                 except (KeyError, IndexError, ValueError) as e:
                     ultimo = f"{modelo}: respuesta rara ({type(e).__name__})"
-                    vivos = True
+                    raros += 1
+                    vivos = vivos or raros <= 2          # lo que falla raro una y otra vez no merece más vueltas
                     time.sleep(3)
                 except urllib.error.URLError as e:
                     ultimo = f"{modelo}: sin conexión ({e.reason})"
-                    vivos = True
+                    raros += 1
+                    vivos = vivos or raros <= 2          # lo que falla raro una y otra vez no merece más vueltas
                     time.sleep(5)
                 except (TimeoutError, OSError) as e:          # tarda demasiado en contestar: otro intento u otro modelo
                     ultimo = f"{modelo}: no contesta a tiempo ({type(e).__name__})"
-                    vivos = True
+                    raros += 1
+                    vivos = vivos or raros <= 2          # lo que falla raro una y otra vez no merece más vueltas
                     time.sleep(5)
-        if not vivos or vuelta >= paciencia:
-            break
         espera = ESPERAS[min(vuelta, len(ESPERAS) - 1)]
+        if not vivos or vuelta >= paciencia or time.monotonic() - empezo + espera > TOPE_SEGUNDOS:
+            break
         print(f"gemini: saturado; espero {espera} s y doy otra vuelta ({vuelta + 1} de {paciencia})", flush=True)
         time.sleep(espera)
     raise SinIA(f"Gemini no contesta: {ultimo}")

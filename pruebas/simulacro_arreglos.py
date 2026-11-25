@@ -50,7 +50,7 @@ NOTAS = []          # las notas que irá poniendo el Juzgado de mentira (None = 
 JUZGADOS = []
 
 
-def juzgar(video, guion, canal, lecciones, carpeta, audio=None):
+def juzgar(video, guion, canal, lecciones, carpeta, audio=None, prueba=False):
     nota = NOTAS.pop(0)
     JUZGADOS.append({"titulo": guion.get("titulo"), "version": guion.get("version"), "nota": nota})
     if nota is None:
@@ -179,10 +179,17 @@ un_turno([85], intentos=1)
 ajustes = dict(privado.ajustes(), intentos_fallidos_dia=1)
 hoy = privado.ahora()
 privado.guardar_estado("fabrica-cuentas.json", {"rondas": [{"empezada": hoy, "turnos": [
-    {"canal": CLAVE, "destino": "suspendido"}, {"canal": CLAVE, "destino": "suspendido"}]}]})
+    {"canal": CLAVE, "destino": "suspendido"}]}]})
 plan, esperan = fabrica.planear(ajustes, privado.config(), {}, linea="cuentas")
 comprobar("planear: el arreglo pendiente entra en el plan aunque se haya pasado del tope del día",
           [k for k, _ in plan] == [CLAVE] and CLAVE not in esperan)
+privado.guardar_estado("fabrica-cuentas.json", {"rondas": [{"empezada": hoy, "turnos": [
+    {"canal": CLAVE, "destino": "suspendido"}, {"canal": CLAVE, "destino": "suspendido"}]}]})
+plan, esperan = fabrica.planear(ajustes, privado.config(), {}, linea="cuentas")
+comprobar("planear: pero con el doble del tope, también el arreglo pendiente espera a mañana (no hay bucle sin fin)",
+          plan == [] and "mañana" in esperan.get(CLAVE, ""))
+privado.guardar_estado("fabrica-cuentas.json", {"rondas": [{"empezada": hoy, "turnos": [
+    {"canal": CLAVE, "destino": "suspendido"}]}]})
 turno._guardar_arreglo(CLAVE, None)
 plan, esperan = fabrica.planear(ajustes, privado.config(), {}, linea="cuentas")
 comprobar("planear: sin arreglo pendiente, el tope del día sí frena", plan == [] and "mañana" in esperan.get(CLAVE, ""))

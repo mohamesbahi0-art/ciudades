@@ -88,9 +88,13 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
             return False
 
     def insiste(clave):
-        if pendiente(clave):
-            return True
         hechos = fallidos.get(clave, 0)
+        if pendiente(clave):          # un arreglo pendiente se salta el tope normal y la espera, pero no un tope duro
+            if hechos >= tope * 2:
+                esperan[clave] = (f"hoy ya lleva {hechos} turnos sin llegar al 90, también con arreglos: mañana sigue "
+                                  "con el que tiene pendiente")
+                return False
+            return True
         if hechos >= tope:
             esperan[clave] = f"hoy ya lo ha intentado {hechos} veces sin llegar al 90: mañana más"
             return False
@@ -217,8 +221,8 @@ def hay_ia(arreglo=False, solo_claude=False):
         escribe = claude.puede("guionista") or (arreglo and claude.puede("arreglo"))
     except Exception:
         pass
-    if not escribe and solo_claude:          # esta cuenta solo la escribe Claude: sin su presupuesto, espera
-        return False, "escritor"
+    if not escribe and solo_claude:          # esta cuenta solo la escribe Claude: sin su presupuesto, espera ELLA
+        return False, "claude"               # (las demás cuentas de la línea siguen con la IA gratis)
     if not escribe:
         try:
             gemini.preguntar("Contesta solo con la palabra OK.", json_salida=False, intentos=1, ligero_primero=True,
@@ -329,8 +333,9 @@ def main():
         if not a.prueba and not a.sin_guardar:
             privado.git_guardar(mensaje)
 
-    if not a.prueba and tareas:
-        subidos = subidor.vaciar_cola(ajustes, revs, trabajo)
+    if not a.prueba and a.linea in (None, "canales", "dibujos"):
+        mios = None if not a.linea else (lambda k: de_linea(a.linea, k, (cfg.get("canales") or {}).get(k) or {}, cfg))
+        subidos = subidor.vaciar_cola(ajustes, revs, trabajo, solo=mios)
         ronda["cola_subidos"] = subidos
         if subidos:
             print(f"cola: {subidos} vídeo(s) subidos", flush=True)
@@ -404,6 +409,14 @@ def main():
         except BaseException:
             solo_claude = False
         con_ia, falta = (True, "") if a.prueba else hay_ia(arreglo=con_arreglo, solo_claude=solo_claude)
+        if not con_ia and falta == "claude":     # cosa de esta cuenta, no de la fábrica: ni se corta la línea ni hay pausa
+            ronda["esperan"][clave] = ("solo escribe con el cerebro de pago (lo decidió la Élite) y ahora no tiene su "
+                                       "parte de esta hora: lo intenta en la siguiente ronda")
+            print(privado.limpiar(f"  {privado.alias(clave)}: espera al cerebro de pago; la línea sigue"), flush=True)
+            continue
+        if con_ia and not a.prueba:  # hay con qué trabajar: fuera la pausa de la app (si la había)
+            from bots.central import obras
+            obras.reanudar()
         if not con_ia:               # sin IA no se empieza un turno (no se gastan voz, dibujos ni intentos)
             hechos = {t["canal"] for t in ronda["turnos"]}
             for k, _ in plan[:maximo]:

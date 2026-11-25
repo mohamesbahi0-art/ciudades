@@ -23,7 +23,7 @@ permissions:
   contents: read
 jobs:
   ronda:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'   # los Mecánicos sí pueden arrancarla
     name: Línea de ${{ matrix.linea }}
     strategy:
       fail-fast: false
@@ -75,24 +75,24 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
-          YT_ID_GTA: ${{ secrets.YT_ID_GTA }}
-          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
-          YT_ID_CLIPS: ${{ secrets.YT_ID_CLIPS }}
-          YT_REFRESH_CURIOS: ${{ secrets.YT_REFRESH_CURIOS }}
-          YT_ID_CURIOS: ${{ secrets.YT_ID_CURIOS }}
-          YT_REFRESH_VERSUS: ${{ secrets.YT_REFRESH_VERSUS }}
-          YT_ID_VERSUS: ${{ secrets.YT_ID_VERSUS }}
-          YT_REFRESH_MAPAS: ${{ secrets.YT_REFRESH_MAPAS }}
-          YT_ID_MAPAS: ${{ secrets.YT_ID_MAPAS }}
-          YT_REFRESH_TERROR: ${{ secrets.YT_REFRESH_TERROR }}
-          YT_ID_TERROR: ${{ secrets.YT_ID_TERROR }}
-          YT_REFRESH_SOBSHORTS: ${{ secrets.YT_REFRESH_SOBSHORTS }}
-          YT_ID_SOBSHORTS: ${{ secrets.YT_ID_SOBSHORTS }}
-          YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
-          YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
+          YT_CLIENT_ID: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_CLIENT_ID || '' }}
+          YT_CLIENT_SECRET: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_CLIENT_SECRET || '' }}
+          YT_REFRESH_GTA: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_GTA || '' }}
+          YT_ID_GTA: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_GTA || '' }}
+          YT_REFRESH_CLIPS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_CLIPS || '' }}
+          YT_ID_CLIPS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_CLIPS || '' }}
+          YT_REFRESH_CURIOS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_CURIOS || '' }}
+          YT_ID_CURIOS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_CURIOS || '' }}
+          YT_REFRESH_VERSUS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_VERSUS || '' }}
+          YT_ID_VERSUS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_VERSUS || '' }}
+          YT_REFRESH_MAPAS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_MAPAS || '' }}
+          YT_ID_MAPAS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_MAPAS || '' }}
+          YT_REFRESH_TERROR: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_TERROR || '' }}
+          YT_ID_TERROR: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_TERROR || '' }}
+          YT_REFRESH_SOBSHORTS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_SOBSHORTS || '' }}
+          YT_ID_SOBSHORTS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_SOBSHORTS || '' }}
+          YT_REFRESH_NIVSHORTS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_NIVSHORTS || '' }}
+          YT_ID_NIVSHORTS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_NIVSHORTS || '' }}
         run: python bots/central/fabrica.py --linea ${{ matrix.linea }} ${{ steps.que.outputs.args }}
       - name: Guardar lo que quede en el repositorio privado
         if: always()

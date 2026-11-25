@@ -493,7 +493,7 @@ def hacer(canal, lecciones="", formato=None, carpeta=None, avisar=print, guion=N
     if str(canal.get("voz_estudio") or "").startswith("eleven:"):      # por qué no ha sonado la voz del dueño (si pasa)
         aviso = locutor.MOTOR.get("aviso")
         if aviso:
-            avisar(f"locutor: {aviso}")
+            avisar("locutor: no ha sonado la voz elegida; va la de reserva")     # el porqué queda en estado/voz.json
         try:
             privado.guardar_estado("voz.json", {"aviso": aviso, "motor": g["voz_motor"]})
         except Exception:

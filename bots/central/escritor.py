@@ -44,7 +44,11 @@ REGLAS_TIPO["biografias"] = (
     "- OJO con «dibujo»: aquí NO es una descripción. Es lo que hay que BUSCAR en Wikimedia Commons para la foto de esa "
     "escena: de 1 a 4 palabras con el nombre real de la persona, la empresa, el lugar o el objeto (por ejemplo «Freddy "
     "Heineken», «Heineken brewery Amsterdam», «Wall Street»). La primera escena, siempre la persona.\n"
-    "- Añade al JSON \"persona\": \"nombre y apellidos\".")
+    "- Solo se pueden usar fotos de dominio público (sin créditos): elige personas de las que las haya. Lo más seguro: "
+    "neerlandeses y flamencos fotografiados por la prensa entre 1945 y 1989 (deportistas, empresarios, artistas y "
+    "políticos de esa época), figuras históricas anteriores a 1950 y personas con fotos oficiales del gobierno de "
+    "Estados Unidos o de la NASA. De famosos de hoy casi nunca hay.\n"
+    "- Añade al JSON (también en cada idea) \"persona\": \"nombre y apellidos\".")
 
 IDIOMAS = {"es": "español de España", "nl": "neerlandés (de los Países Bajos)", "en": "inglés"}
 
@@ -155,9 +159,15 @@ def escribir(canal, lecciones, titulos, fuentes=None, intentos=3, idea=None):
         estilo_dibujo=dibujo, extra="" if youtube else EXTRA_REDES,
         fuentes_usadas=',\n  "fuentes_usadas": ["los números de las fuentes que has usado"]' if fuentes else "",
         **medidas(canal))
+    if tipo == "biografias":            # aquí «dibujo» no es una descripción: es lo que se busca en el archivo de fotos
+        texto = texto.replace(
+            f'"dibujo": "descripción en INGLÉS de la imagen vertical de esa escena: estilo {dibujo}, sin letras ni texto"',
+            '"dibujo": "lo que hay que BUSCAR en Wikimedia Commons para la foto de esta escena: de 1 a 4 palabras con el '
+            'nombre real de la persona, la empresa, el lugar o el objeto"')
     if idea:
         texto += (f"\n\nLa Sala de Ideas ha elegido ESTA idea: escribe su guion.\nIdea: {idea.get('idea')}\n"
-                  f"Título propuesto: {idea.get('titulo')}\nGancho: {idea.get('gancho')}")
+                  f"Título propuesto: {idea.get('titulo')}\nGancho: {idea.get('gancho')}"
+                  + (f"\nPersona: {idea.get('persona')}" if idea.get("persona") else ""))
     ultimo = []
     for _ in range(intentos):
         g = ia.preguntar(texto, papel="guionista")

@@ -61,7 +61,7 @@ def _pagina(url):
 def _numero(texto):
     """«1,234», «12.5K», «1.2M» o «3 mil» → número entero."""
     t = str(texto).strip().lower().replace("\xa0", " ")
-    m = re.match(r"([\d.,]+)\s*(k|m|mil|mill)?", t)
+    m = re.match(r"([\d.,]+)\s*(mill|mil|k|m)?", t)      # lo largo primero: «3 mil» no es «3 m»
     if not m:
         return None
     cifra, sufijo = m.group(1), m.group(2) or ""
@@ -223,8 +223,11 @@ def para_app(contado=None):
     for clave, redes in (contado.get("cuentas") or {}).items():
         barrios[clave] = {"cifrasPorRed": {red: dict(c, auto=True) for red, c in redes.items()},
                           "videos": (contado.get("videos") or {}).get(clave, [])[:12]}
-    for dia, cuentas in (contado.get("dias") or {}).items():
+    ultima = {}                      # la última cifra conocida de cada red de cada cuenta: se arrastra si un día falta
+    for dia, cuentas in sorted((contado.get("dias") or {}).items()):
         for clave, redes in cuentas.items():
+            ultima.setdefault(clave, {}).update({red: c for red, c in redes.items() if c.get("seguidores") is not None})
+        for clave, redes in ultima.items():
             seguidores = sum((c.get("seguidores") or 0) for c in redes.values())
             por_dia.setdefault(dia, {}).setdefault("barrios", {})[clave] = {
                 "seguidores": seguidores, "porRed": {red: c.get("seguidores") for red, c in redes.items()},

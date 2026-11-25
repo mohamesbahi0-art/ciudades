@@ -212,14 +212,15 @@ def _cifras_voz(voz):
 
 
 def _cifra_que_dice(voz, valor):
-    """La cifra de un contador o de un deslizador tiene que ser la que dice la voz: si la voz dice otra del mismo orden
-    (o la misma con los ceros bailados), manda la voz. Si no está claro, se queda como venía."""
-    dichas = [x for x in _cifras_voz(voz) if x > 0]
-    if not dichas or valor <= 0 or any(abs(x - valor) <= 0.02 * max(x, valor) for x in dichas):
+    """La cifra de un contador o de un deslizador tiene que ser la que dice la voz. Solo se corrige cuando es seguro: la
+    voz dice UNA sola cifra y es la misma con los ceros bailados (×10, ×100, ×1000). Si la voz dice varias, o una que no
+    se parece (otra unidad, un año, un porcentaje), la de pantalla se queda como venía: mejor no tocar que estropear."""
+    dichas = sorted({x for x in _cifras_voz(voz) if x > 0})
+    if len(dichas) != 1 or valor <= 0:
         return valor
-    for x in sorted(dichas, key=lambda x: abs(x - valor)):
-        if 0.5 <= x / valor <= 2 or any(abs(x / valor - f) < 1e-9 for f in (10, 100, 1000, 0.1, 0.01, 0.001)):
-            return x
+    x = dichas[0]
+    if any(abs(x / valor - f) < 1e-9 for f in (10, 100, 1000, 0.1, 0.01, 0.001)):
+        return x
     return valor
 
 

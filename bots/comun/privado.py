@@ -78,8 +78,9 @@ def canal(clave):
         datos = dict(cfg["barrios"][clave], destino="parasubir")
         datos.setdefault("nombre", clave)
     else:
-        raise SystemExit(f"No conozco «{clave}». Canales: {', '.join(cfg.get('canales', {}))}; "
-                         f"barrios: {', '.join(cfg.get('barrios', {}))}")
+        # sin nombres: este mensaje sale en los registros públicos de GitHub
+        raise SystemExit(f"No conozco ese canal o barrio. Canales: {', '.join(cfg.get('canales', {}))}; "
+                         f"barrios: del barrio-1 al barrio-{len(cfg.get('barrios', {}))}")
     datos.update(cambios_elite()["canales"].get(clave) or {})      # lo que la Élite ha cambiado en esta cuenta
     datos["clave"] = clave
     return datos
@@ -235,6 +236,11 @@ def fusionar(ruta, suyo, nuestro):
         if pausas:                                           # la pausa (o su final), la última que se apuntó
             junto["pausa"] = max(pausas, key=lambda x: str(x.get("actualizado") or ""))
         return junto
+    if ruta == "estado/cine/sesiones.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        # cuatro líneas juzgan a la vez y cada una apunta su sesión del Cine: se juntan todas (las 40 últimas)
+        sesiones = {x.get("id"): x for x in (suyo.get("sesiones") or []) + (nuestro.get("sesiones") or []) if x.get("id")}
+        return {"sesiones": sorted(sesiones.values(), key=lambda x: str(x.get("fecha") or ""))[-40:],
+                "actualizado": max(str(suyo.get("actualizado") or ""), str(nuestro.get("actualizado") or ""))}
     if ruta == "estado/cuota.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
         if suyo.get("dia") != nuestro.get("dia"):          # el libro de un día nuevo gana entero
             return max(suyo, nuestro, key=lambda c: c.get("dia") or "")

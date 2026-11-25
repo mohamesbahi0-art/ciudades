@@ -111,7 +111,8 @@ def limpiar(g):
             b["x"], b["y"] = p["centro"][0] + (0 if b["pais"] in m["paises"] else 60 * (k + 1)), p["centro"][1]
     for e in escenas:                    # lo que dice cada bola suena con la voz de su país, detrás del narrador
         e["voces"] = [dict(voz_de(b["pais"]), texto=b["dice"], pais=b["pais"]) for b in e["bolas"]
-                      if len(re.findall(r"\w", b.get("dice") or "")) >= 2][:2]
+                      if len(re.findall(r"\w", b.get("dice") or "")) >= 2
+                      and not (b["pais"] == pais and parte > 1)][:2]     # la bola del país borrado ya no se dibuja: no habla
     g["escenas"] = escenas
     g["pais"], g["parte"], g["partes"] = pais, parte, partes
     g["pais_nombre"] = cartografo.nombre(pais)
