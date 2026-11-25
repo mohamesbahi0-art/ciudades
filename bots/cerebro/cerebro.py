@@ -401,6 +401,56 @@ class Cerebro:
         return self.guardar()
 
 
+ENSAYO = """Eres EL CEREBRO de una fábrica de vídeos cortos. Antes de grabar, haces el ENSAYO: lees el guion como lo
+leerían los tres jueces más duros (gancho, ritmo y si se comparte) y el público, y dices qué nota sacaría y qué hay que
+cambiar para que saque {meta}. Con menos de {minimo} no se publica.
+
+CUENTA: {que} · formato «{formato}» · idioma {idioma}.
+LO QUE LOS JUECES YA LE HAN CRITICADO A ESTA CUENTA (que no vuelva a pasar):
+{pegas}
+{manual}
+EL GUION QUE SE VA A GRABAR:
+{guion}
+
+Sé exigente y concreto. Mira sobre todo: ¿el primer segundo enseña algo concreto y chocante, con nombre propio o cifra?
+¿El título promete algo que el guion cumple de verdad? ¿Hay protagonistas con nombre y un detalle real, o son genéricos?
+¿Es la historia de siempre? ¿El final da para discutir en comentarios?
+Devuelve SOLO un JSON: {{"nota": número de 0 a 100 que le pondrían los jueces, "cambios": ["de 0 a 4 cambios CONCRETOS
+al texto del guion (qué frase, qué título, qué dato) que más subirían la nota; lista vacía si ya está para {meta}"]}}"""
+ENSAYO_BASTA = 92         # con esta nota prevista o más, el guion va tal cual
+
+
+def ensayo(guion, canal, clave=None):
+    """El ensayo antes de grabar: el Cerebro lee el guion como los jueces y devuelve (nota prevista, texto con los
+    cambios para el guionista) o (nota, "") si ya vale. Si no hay IA o falla, (None, ""): el vídeo sigue sin ensayo."""
+    try:
+        clave = clave or canal.get("clave")
+        videos = (((privado.leer(MEMORIA, {}) or {}).get("cuentas") or {}).get(clave) or {}).get("videos") or []
+        pegas = [p for v in videos[-8:] for p in (v.get("pegas") or [])][-10:]
+        formato = canal.get("formato_estudio") or canal.get("tipo") or "vídeo corto"
+        escenas = guion.get("escenas") or []
+        texto_guion = json.dumps({"titulo": guion.get("titulo"), "gancho": guion.get("texto_pantalla") or
+                                  (escenas[0].get("texto") if escenas else ""),
+                                  "escenas": [{k: e.get(k) for k in ("voz", "texto") if e.get(k)} for e in escenas]},
+                                 ensure_ascii=False)[:7000]
+        r = ia.preguntar(ENSAYO.format(
+            meta=META, minimo=int(canal.get("nota_minima") or 90), que=canal.get("apodo") or canal.get("tema") or formato,
+            formato=formato, idioma={"es": "español", "nl": "neerlandés", "en": "inglés"}.get(str(canal.get("idioma", "es"))[:2], "español"),
+            pegas="\n".join(f"- {p}" for p in pegas) or "- (todavía ninguna)",
+            manual=saber(formato, canal.get("tipo"), tope=3000), guion=texto_guion), papel="elite", temperatura=0.3)
+        if isinstance(r, list) and r:
+            r = r[0]
+        nota = max(0, min(100, int(r.get("nota") or 0)))
+        cambios = [str(x).strip()[:300] for x in (r.get("cambios") or []) if str(x).strip()][:4]
+        if nota >= ENSAYO_BASTA or not cambios:
+            return nota, ""
+        return nota, ("\n- (ENSAYO DEL CEREBRO antes de grabar: este guion sacaría " + str(nota) + "/100. Reescríbelo ENTERO "
+                      "con el mismo tema, aplicando estos cambios uno por uno) " + " | ".join(cambios)
+                      + "\n  El guion ensayado era: " + texto_guion[:2500])
+    except Exception:
+        return None, ""
+
+
 def receta(clave):
     """Lo que el Cerebro le dice al guionista de esta cuenta antes de escribir (texto listo para sus lecciones)."""
     r = ((privado.leer(RECETAS, {}) or {}).get("cuentas") or {}).get(clave)

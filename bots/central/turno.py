@@ -120,6 +120,28 @@ def de_fuera(error):
     return e.startswith("SinIA") or ("faltan" in e and "dibujos" in e)
 
 
+def _ensayo(clave, canal, g, paso, a, reescribir):
+    """El ensayo del Cerebro antes de grabar: si prevé que el guion no llega, el guionista lo reescribe UNA vez con sus
+    cambios. Nunca para un vídeo: si algo falla, sigue el guion que había."""
+    if a.prueba:
+        return g
+    try:
+        from bots.cerebro import cerebro
+        nota, cambios = cerebro.ensayo(g, canal, clave)
+        if not cambios:
+            if nota is not None:
+                paso("escritor", f"ensayo del Cerebro: prevé {nota}/100; el guion va tal cual")
+            return g
+        paso("escritor", f"ensayo del Cerebro: prevé {nota}/100; el guionista lo reescribe con sus cambios antes de grabar")
+        nuevo = reescribir(cambios)
+        if isinstance(nuevo, dict) and nuevo.get("escenas"):
+            nuevo["ensayo"] = {"nota_prevista": nota}
+            return nuevo
+    except Exception as e:
+        paso("escritor", f"el ensayo del Cerebro no ha podido ser ({type(e).__name__}): sigue el guion que había")
+    return g
+
+
 def _jurado_guion(clave, canal, g, paso, a, reescribir, alegatos=None, veces=2):
     """El Jurado popular lee el guion ANTES de gastar en voz, dibujos y montaje (lo barato filtra primero). Si lo
     rechaza (9 de 12 o más), el Escritor lo reescribe con lo que han dicho, hasta `veces` veces. Devuelve (guion, vale):
@@ -403,6 +425,8 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
             paso("escritor", "escribiendo el guion del estudio")
             g0 = formato.guionizar(canal, lecciones + consejo)
             g0["cerebro"] = ia.quien().get("motor", "gemini")
+            g0 = _ensayo(clave, canal, g0, paso, a, lambda extra: dict(
+                formato.guionizar(canal, lecciones + consejo + extra), cerebro=ia.quien().get("motor", "gemini")))
             g0, vale = _jurado_guion(clave, canal, g0, paso, a,
                                      reescribir=lambda extra: dict(formato.guionizar(canal, lecciones + consejo + extra),
                                                                    cerebro=ia.quien().get("motor", "gemini")))
@@ -851,6 +875,8 @@ def main(argv=None):
             paso("escritor", "escribiendo el guion")
             g = escritor.escribir(canal, lecciones_escritor + aviso_juez,
                                  privado.titulos_recientes(clave), fuentes, idea=idea)
+            g = _ensayo(clave, canal, g, paso, a, lambda extra: escritor.escribir(
+                canal, lecciones_escritor + aviso_juez + extra, privado.titulos_recientes(clave), fuentes, idea=idea))
             g, vale = _jurado_guion(clave, canal, g, paso, a, alegatos=_alegatos_idea(id_idea),
                                     reescribir=lambda extra: escritor.escribir(
                                         canal, lecciones_escritor + aviso_juez + extra, privado.titulos_recientes(clave),

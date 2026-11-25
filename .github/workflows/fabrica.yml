@@ -99,6 +99,22 @@ jobs:
           YT_REFRESH_NIVSHORTS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_REFRESH_NIVSHORTS || '' }}
           YT_ID_NIVSHORTS: ${{ (matrix.linea == 'canales' || matrix.linea == 'dibujos') && secrets.YT_ID_NIVSHORTS || '' }}
         run: python bots/central/fabrica.py --linea ${{ matrix.linea }} ${{ steps.que.outputs.args }}
+      - name: El Cerebro aprende de lo que se acaba de juzgar
+        if: always() && matrix.linea == 'cuentas'
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          (cd privado && git pull -q --rebase || true)
+          python bots/cerebro/cerebro.py
       - name: Guardar lo que quede en el repositorio privado
         if: always()
         env:
