@@ -25,8 +25,20 @@ def pedir(ruta, cuerpo=None, metodo=None):
     req = urllib.request.Request(API + ruta, data=json.dumps(cuerpo).encode() if cuerpo is not None else None,
                                  method=metodo or ("POST" if cuerpo is not None else "GET"),
                                  headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:           # qué dice ElevenLabs (solo el tipo de fallo, nunca la llave)
+        try:
+            d = json.loads(e.read().decode("utf-8", "replace")).get("detail")
+            llave = os.environ["ELEVENLABS_API_KEY"]
+            print(f"ElevenLabs dice {e.code} en {ruta.split('?')[0]}: "
+                  f"{(d.get('status') if isinstance(d, dict) else str(d))[:80]} · "
+                  f"{(d.get('message', '') if isinstance(d, dict) else '')[:160].replace(llave, '***')}"
+                  f" · la llave mide {len(llave)} y {'tiene' if llave != llave.strip() or ' ' in llave else 'no tiene'} espacios")
+        except Exception:
+            pass
+        raise
 
 
 def main():
