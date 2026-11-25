@@ -418,8 +418,29 @@ def probar():
         Image.new("RGB", (96, 96), (220, 20, 20)).save(foto, "JPEG")
     except Exception:
         foto = None
+    FORMA = {"groq": "gsk_", "openrouter": "sk-or-"}
     for k in vivos:
         s = SERVICIOS[k]
+        llave = os.environ[s["secreto"]]
+        cuenta = os.environ.get(s.get("cuenta") or "", "")
+        print(f"CADENA {k} llave: mide {len(llave)}"
+              + (f", {'empieza' if llave.strip().startswith(FORMA[k]) else 'NO empieza'} por {FORMA[k]}" if k in FORMA else "")
+              + (", lleva espacios o saltos de línea" if llave != llave.strip() or " " in llave else "")
+              + (f"; el número de cuenta mide {len(cuenta)} (tiene que medir 32)"
+                 + ("" if re.fullmatch(r"[0-9a-f]{32}", cuenta.strip()) else " y NO tiene forma de número de cuenta")
+                 if s.get("cuenta") else ""), flush=True)
+        try:                                        # qué dice el servicio de la llave (sin enseñarla)
+            req = urllib.request.Request(_url(s) + "/chat/completions", method="POST",
+                                         data=json.dumps(_cuerpo(k, (s.get("texto") or [""])[0], "Di hola", (), False, 0.5)).encode(),
+                                         headers={"Content-Type": "application/json", "User-Agent": AGENTE,
+                                                  "Authorization": "Bearer " + llave.strip()})
+            with urllib.request.urlopen(req, timeout=60):
+                print(f"CADENA {k} llave: vale", flush=True)
+        except urllib.error.HTTPError as e:
+            texto = e.read().decode("utf-8", "replace")[:260].replace(llave.strip(), "***").replace(cuenta.strip() or "§", "***")
+            print(f"CADENA {k} dice {e.code}: {' '.join(texto.split())}", flush=True)
+        except Exception as e:
+            print(f"CADENA {k}: no contesta ({type(e).__name__})", flush=True)
         try:                                        # qué modelos ofrece hoy (para corregir el catálogo si cambian)
             req = urllib.request.Request(_url(s) + "/models", headers={
                 "User-Agent": AGENTE, "Authorization": "Bearer " + os.environ[s["secreto"]]})
