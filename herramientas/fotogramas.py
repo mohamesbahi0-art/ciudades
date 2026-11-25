@@ -71,9 +71,14 @@ def main():
     for n, t in enumerate(momentos, 1):
         t = min(max(0.0, t), max(0.0, d - 0.05))
         ruta = os.path.join(a.salida, f"f{n}.jpg")
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", a.video, "-frames:v", "1",
-                        "-vf", f"scale={a.ancho}:-2", "-q:v", "4", ruta], check=True)
-        fotos.append({"archivo": os.path.basename(ruta), "segundo": round(t, 2)})
+        # si la imagen del vídeo acaba un poco antes que el sonido, justo al final no hay fotograma: se prueba antes
+        for atras in (0.0, 1.0, 2.5, 5.0):
+            t2 = max(0.0, t - atras)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t2:.2f}", "-i", a.video, "-frames:v", "1",
+                            "-vf", f"scale={a.ancho}:-2", "-q:v", "4", ruta], check=False)
+            if os.path.exists(ruta) and os.path.getsize(ruta) > 0:
+                fotos.append({"archivo": os.path.basename(ruta), "segundo": round(t2, 2)})
+                break
 
     log = ffmpeg_log(["-i", a.video, "-vf", "select='gt(scene,0.25)',showinfo", "-an"])
     cortes = [float(x) for x in re.findall(r"pts_time:([\d.]+)", log)]

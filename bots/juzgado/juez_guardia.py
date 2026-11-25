@@ -89,6 +89,7 @@ def juzgar(video, guion, canal, lecciones, carpeta):
                              narracion=guion["narracion"], medidas=json.dumps(medidas, ensure_ascii=False),
                              formato=nota_formato(canal), lecciones=lecciones)
     imagenes = [os.path.join(carpeta, f["archivo"]) for f in datos["fotogramas"]]
+    imagenes = [r for r in imagenes if os.path.exists(r)]      # un fotograma que no se pudo sacar no tumba el juicio
     try:
         v = ia.preguntar(texto, papel="juez", imagenes=imagenes, solo_bueno=True, temperatura=0.3)
         if isinstance(v, list) and v:

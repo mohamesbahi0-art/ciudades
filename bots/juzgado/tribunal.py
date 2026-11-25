@@ -196,6 +196,7 @@ def juzgar(video, guion, canal, lecciones, carpeta, audio=None, prueba=False, co
     if datos.get("sin_audio"):
         fallos.append("sin voz")
     imagenes = [os.path.join(carpeta, f["archivo"]) for f in datos["fotogramas"]]
+    imagenes = [r for r in imagenes if os.path.exists(r)]      # un fotograma que no se pudo sacar no tumba el juicio
     comun = {"donde": "un canal de YouTube Shorts" if canal.get("destino", "youtube") == "youtube"
              else "una cuenta de Instagram y TikTok", "nombre": canal["nombre"],
              "idioma": {"es": "español", "nl": "neerlandés"}.get(canal.get("idioma", "es")[:2], "español"),
