@@ -178,5 +178,20 @@ def escribir(canal, lecciones, titulos, fuentes=None, intentos=3, idea=None):
             g["titulo"] = g["titulo"].strip()[:100]
             g["cerebro"] = ia.quien().get("motor", "gemini")        # quién lo escribió (Claude o Gemini)
             return g
-        texto += f"\n\nEl intento anterior no valía ({'; '.join(ultimo)}). Corrígelo."
+        m = medidas(canal)       # se le dice con números qué cambiar: «corrígelo» a secas no les basta a los modelos flojos
+        como = []
+        if isinstance(g, dict):
+            n_pal, n_esc = len(palabras(g.get("narracion", ""))), len(g.get("escenas") or [])
+            if n_esc > m["esc_max"]:
+                como.append(f"junta escenas hasta quedarte en {m['esc_max']} como mucho (sobran {n_esc - m['esc_max']})")
+            elif 0 < n_esc < m["esc_min"]:
+                como.append(f"añade escenas hasta llegar a {m['esc_min']} (faltan {m['esc_min'] - n_esc})")
+            if n_pal < m["pal_min"]:
+                como.append(f"la narración se queda corta: faltan al menos {m['pal_min'] - n_pal} palabras; cada escena "
+                            f"necesita unas {max(8, (m['pal_min'] + m['pal_max']) // 2 // max(1, m['esc_max']))} palabras "
+                            "de voz, con datos concretos, no frases sueltas")
+            elif n_pal > m["pal_max"]:
+                como.append(f"la narración se pasa: quita al menos {n_pal - m['pal_max']} palabras")
+        texto += (f"\n\nEl intento anterior no valía ({'; '.join(ultimo)}). Corrígelo"
+                  + (": " + "; ".join(como) if como else "") + ". Devuelve el guion ENTERO otra vez.")
     raise ValueError("El Escritor no consiguió un guion válido: " + "; ".join(ultimo))
