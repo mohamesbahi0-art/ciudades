@@ -134,7 +134,30 @@ def falso(texto, imagenes=(), **kw):
         narr = ("¿GTA 6 ha dejado en ridículo a GTA 5? Ronda uno, los coches: en GTA 5 se ven bien, pero en GTA 6 "
                 "brillan de verdad. Ronda dos, la policía: en GTA 6 te rodean en segundos. Ronda tres, el agua: "
                 "las olas de GTA 6 parecen reales. Tres a cero. ¿Con cuál te quedas?")
-        if "pantalla partida" in texto:
+        if "pantalla partida" in texto and "Corrígelo" in texto:      # a la segunda, como pide el Cerebro
+            narr = ("¿Coches, policía o agua? Tres rondas, un ganador. Ronda uno, los coches: en GTA cinco brillan poco. "
+                    "En GTA seis reflejan toda la calle. Gana GTA seis. Ronda dos, la policía: en GTA cinco tarda en "
+                    "llegar. En GTA seis te rodean en segundos. Gana GTA seis. Ronda tres, el agua: el puerto de GTA "
+                    "cinco sorprende. Las olas de GTA seis salen planas. Gana GTA cinco. GTA seis gana dos a uno. "
+                    "¿Con cuál te quedas?")
+            escenas = [{"texto": "¿Coches, policía o agua? Tres rondas, un ganador.", "gta5": "V-5", "gta6": "V-1"},
+                       {"texto": "Ronda uno, los coches: en GTA cinco brillan poco.",
+                        "gta5": "V-5", "gta6": "V-1", "rotulo": "RONDA 1: COCHES"},
+                       {"texto": "En GTA seis reflejan toda la calle. Gana GTA seis.",
+                        "gta5": "V-5", "gta6": "V-1", "rotulo": "RONDA 1: COCHES", "gana": "gta6"},
+                       {"texto": "Ronda dos, la policía: en GTA cinco tarda en llegar.",
+                        "gta5": "NO-EXISTE", "gta6": "V-2", "rotulo": "RONDA 2: POLICÍA"},
+                       {"texto": "En GTA seis te rodean en segundos. Gana GTA seis.",
+                        "gta5": "V-6", "gta6": "V-2", "rotulo": "RONDA 2: POLICÍA", "gana": "gta6"},
+                       {"texto": "Ronda tres, el agua: el puerto de GTA cinco sorprende.",
+                        "gta5": "V-4", "gta6": "T-2", "rotulo": "RONDA 3: AGUA"},
+                       {"texto": "Las olas de GTA seis salen planas. Gana GTA cinco.",
+                        "gta5": "T-1", "gta6": "T-2", "rotulo": "RONDA 3: AGUA", "gana": "gta5"},
+                       {"texto": "GTA seis gana dos a uno. ¿Con cuál te quedas?", "gta5": "T-1", "gta6": "V-3"}]
+            return {"idea": "prueba", "titulo": "GTA 6 contra GTA 5: no hay color 😱",
+                    "texto_pantalla": "COCHES, POLICÍA Y AGUA", "narracion": narr, "escenas": escenas,
+                    "descripcion": "La comparación.", "hashtags": ["#gta6", "gta5"], "fuentes_usadas": [1]}
+        if "pantalla partida" in texto:              # a la primera, escenas largas y todo para GTA 6: se lo devuelven
             escenas = [{"texto": "¿GTA 6 ha dejado en ridículo a GTA 5?", "gta5": "V-5", "gta6": "V-1"},
                        {"texto": "Ronda uno, los coches: en GTA 5 se ven bien, pero en GTA 6 brillan de verdad.",
                         "gta5": "V-5", "gta6": "V-1", "rotulo": "RONDA 1: COCHES", "gana": "gta6"},
@@ -280,6 +303,26 @@ video = videos[0]
 comprobar(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
                           "-of", "csv=p=0", video], capture_output=True, text=True).stdout.strip() == "1080,1920",
           "el vídeo sale en 1080x1920")
+if os.environ.get("SIMULACRO_GUARDAR"):           # para mirar los fotogramas a mano
+    os.makedirs(os.environ["SIMULACRO_GUARDAR"], exist_ok=True)
+    shutil.copy(video, os.path.join(os.environ["SIMULACRO_GUARDAR"], "versus.mp4"))
+comprobar(len(VISTO["guiones"]) >= 2 and "pasan de 10 palabras" in VISTO["guiones"][1]
+          and "tienen que ser 3" not in VISTO["guiones"][1],
+          "un guion con escenas de más de 10 palabras se devuelve al Escritor con el fallo")
+comprobar(all(len(re.findall(r"\w+", e["texto"])) <= 10 for e in guion["escenas"])
+          and sum(1 for e in guion["escenas"] if e.get("gana")) == 3,
+          "el versus sale con 3 rondas y 10 palabras de voz como mucho por escena " + str([(len(re.findall(r"\w+", e["texto"])), e.get("gana")) for e in guion["escenas"]]))
+comprobar(videoteca.marcador(guion["escenas"])[2::2] == [(0, 1), (0, 2), (1, 2)]
+          and videoteca.veredicto(guion["escenas"]) == "GTA 6 GANA 2-1",
+          f"el marcador sube ronda a ronda y da el veredicto ({videoteca.veredicto(guion['escenas'])})")
+comprobar(25 <= resumen["segundos"] <= 30, f"dura entre 25 y 30 s ({resumen['segundos']})")
+planos = videoteca._planos(guion["escenas"], [2.6, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2])
+comprobar(max(p[2] for p in planos) <= 2.3 and planos[0][2] < 2, "cambio de plano cada 2 s o menos, el primero antes del 2")
+grande, pequeno = color(video, 0.2, 392, 300), color(video, 3.0, 392, 300)
+comprobar(grande[0] > 180 and grande[2] < 90 and not (pequeno[0] > 180 and pequeno[2] < 90),
+          f"segundo 0: la etiqueta de cada juego sale en grande {grande}")
+marco = color(video, 8.4, 6, 1300)                # al acabar la ronda 1, marco verde en la mitad que gana (GTA 6)
+comprobar(marco[1] > 150 and marco[0] < 120, f"la ronda termina señalando al ganador {marco}")
 rojo, azul = color(video, 3.0, 30, 300), color(video, 3.0, 30, 1112)
 comprobar(rojo[0] > 180 and rojo[2] < 90 and azul[2] > 180 and azul[0] < 90,
           f"pantalla partida: rótulo rojo de GTA 5 arriba {rojo} y azul de GTA 6 abajo {azul}")
@@ -296,6 +339,10 @@ comprobar(all(e["toma"] in {t["id"] for t in videoteca.tomas() if t["juego"] == 
 comprobar("FUENTES" in VISTO["guiones"][-1] and "pantalla partida" not in VISTO["guiones"][-1],
           "el Escritor de noticias ve las fuentes y el catálogo de tomas")
 comprobar(not any("dibujo" in e for e in guion["escenas"]), "ni un dibujo")
+comprobar("enseñar ya la cosa de la que habla el título" in VISTO["guiones"][-1],
+          "al Escritor se le pide que la primera toma enseñe ya la cosa del título")
+if os.environ.get("SIMULACRO_GUARDAR"):
+    shutil.copy(videos[0], os.path.join(os.environ["SIMULACRO_GUARDAR"], "gta.mp4"))
 
 # 3b. El momento viral, ya limpio en la videoteca, se convierte en su Short (sin volver a pasar por el Portero)
 antes = VISTO["portero"]
