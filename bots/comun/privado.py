@@ -73,6 +73,26 @@ def ajustes():
     return base
 
 
+NOTA_MINIMA = 90          # la de siempre si no hay escalera en config/fabrica.json
+
+
+def nota_minima(cuando=None):
+    """La nota mínima para publicar HOY. La decide el dueño con una escalera en config/fabrica.json:
+    "nota_minima_escalera": [{"desde": "AAAA-MM-DD", "nota": 80}, {"desde": ..., "nota": 90}, ...]. Vale el último
+    escalón cuya fecha ya ha llegado. Nadie más la toca (ni la Élite ni el Cerebro)."""
+    hoy = (cuando or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%d")
+    try:
+        escalera = (leer(os.path.join("config", "fabrica.json"), {}) or {}).get("nota_minima_escalera") or []
+        validos = sorted((str(e["desde"]), int(e["nota"])) for e in escalera if isinstance(e, dict) and "desde" in e)
+        nota = NOTA_MINIMA
+        for desde, n in validos:
+            if desde <= hoy:
+                nota = n
+        return nota
+    except Exception:
+        return NOTA_MINIMA
+
+
 def canal(clave):
     """Un canal de YouTube o un barrio (cuenta de TikTok/Instagram), con su clave y su destino."""
     cfg = config()

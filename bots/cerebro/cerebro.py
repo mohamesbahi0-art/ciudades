@@ -318,7 +318,7 @@ class Cerebro:
             manual = saber(formato, c.get("tipo"), foco=_foco(ultimos))
             manual = ("TU MANUAL (lo que funciona en vídeos cortos; saca de aquí cifras y plantillas para tus órdenes):\n"
                       + manual + "\n") if manual else ""
-            texto = PENSAR.format(meta=META, minimo=int(c.get("nota_minima") or 90),
+            texto = PENSAR.format(meta=META, minimo=int(c.get("nota_minima") or privado.nota_minima()),
                                   que=c.get("apodo") or c.get("tema") or formato, formato=formato,
                                   idioma={"es": "español", "nl": "neerlandés", "en": "inglés"}.get(str(c.get("idioma", "es"))[:2], "español"),
                                   donde="YouTube Shorts" if c["destino"] == "youtube" else "TikTok e Instagram",
@@ -434,7 +434,7 @@ def ensayo(guion, canal, clave=None):
                                   "escenas": [{k: e.get(k) for k in ("voz", "texto") if e.get(k)} for e in escenas]},
                                  ensure_ascii=False)[:7000]
         r = ia.preguntar(ENSAYO.format(
-            meta=META, minimo=int(canal.get("nota_minima") or 90), que=canal.get("apodo") or canal.get("tema") or formato,
+            meta=META, minimo=int(canal.get("nota_minima") or privado.nota_minima()), que=canal.get("apodo") or canal.get("tema") or formato,
             formato=formato, idioma={"es": "español", "nl": "neerlandés", "en": "inglés"}.get(str(canal.get("idioma", "es"))[:2], "español"),
             pegas="\n".join(f"- {p}" for p in pegas) or "- (todavía ninguna)",
             manual=saber(formato, canal.get("tipo"), tope=3000), guion=texto_guion), papel="elite", temperatura=0.3)

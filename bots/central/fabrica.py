@@ -78,7 +78,7 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
     except Exception:
         con_clip = set()
 
-    cada_lejos = float(ajustes.get("horas_si_va_lejos", 2))   # el que va lejos del 90 no para: lo intenta cada 2 horas
+    cada_lejos = float(ajustes.get("horas_si_va_lejos", 2))   # el que va lejos de la nota mínima no para: lo intenta cada 2 horas
 
     def pendiente(clave):
         """¿Tiene un vídeo que se quedó cerca de la nota y espera su versión corregida? Eso va antes que nada."""
@@ -118,10 +118,10 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
                 return False
             return True
         if hechos >= tope:
-            esperan[clave] = f"hoy ya lo ha intentado {hechos} veces sin llegar al 90: mañana más"
+            esperan[clave] = f"hoy ya lo ha intentado {hechos} veces sin llegar a la nota mínima: mañana más"
             return False
         mejor = mejor_nota(clave)
-        if hechos >= lejos and mejor is not None and mejor < 80:
+        if hechos >= lejos and mejor is not None and mejor < privado.nota_minima() - 10:
             ultimo = ((privado.leer(os.path.join("estado", "central", f"{clave}.json"), {}) or {})
                       .get("ultimo_turno") or {}).get("terminado")
             try:

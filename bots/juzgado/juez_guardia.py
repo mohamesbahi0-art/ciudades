@@ -6,13 +6,13 @@ import os
 import subprocess
 import sys
 
-from bots.comun import gemini, ia
+from bots.comun import gemini, ia, privado
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
 import fotogramas  # noqa: E402
 
-MINIMO = 90               # el dueño: solo se publica lo de 90 o más, en todas las plataformas
+MINIMO = 90               # solo si falla la escalera del dueño (privado.nota_minima): 80 ahora y sube por semanas
 
 PLANTILLA = """Eres el Juez de guardia del Juzgado de {donde} llamado «{nombre}». El vídeo está en {idioma}.
 Juzgas si este vídeo hará que la gente que va pasando vídeos cortos se pare y lo vea entero.
@@ -100,7 +100,7 @@ def juzgar(video, guion, canal, lecciones, carpeta):
         fallos += [str(x) for x in v.get("fallos_graves", []) if x]
         total = sum(notas.values())
         try:
-            minimo = int(canal.get("nota_minima", MINIMO))
+            minimo = int(canal["nota_minima"]) if canal.get("nota_minima") is not None else privado.nota_minima()
         except (TypeError, ValueError):
             minimo = MINIMO
         veredicto = "suspendido" if fallos or total < minimo else "aprobado"

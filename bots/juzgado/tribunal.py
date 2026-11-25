@@ -34,7 +34,7 @@ JUECES = {
               "especialidad": "el público: si a la gente le importa este tema ahora, si el título da ganas de verlo y si provoca comentarios"},
 }
 JEFE_INICIAL = "reloj"
-NOTA_MINIMA = 90          # el dueño: solo se publica lo de 90 o más, en todas las plataformas
+NOTA_MINIMA = 90          # solo si falla la escalera del dueño (privado.nota_minima): 80 ahora y sube por semanas
 
 ABOGADOS = """Eres el Juzgado de {donde} «{nombre}». Hoy se juzga si este vídeo merece subirse. El vídeo está en {idioma}.
 Título: {titulo}
@@ -100,11 +100,14 @@ def _jefe():
 
 
 def minima(canal):
-    """La nota mínima para publicar: la del perfil si la tiene (el dueño pide 90 en TikTok/Instagram), si no la general."""
+    """La nota mínima para publicar: la del perfil si la tiene; si no, la de la escalera del dueño para hoy
+    (privado.nota_minima: 80 al principio, y sube con las semanas)."""
     try:
-        return int(canal.get("nota_minima", NOTA_MINIMA))
+        if canal and canal.get("nota_minima") is not None:
+            return int(canal["nota_minima"])
     except (TypeError, ValueError):
-        return NOTA_MINIMA
+        pass
+    return privado.nota_minima()
 
 
 def exigencia(canal):
@@ -300,7 +303,7 @@ def guardar_juicio(clave, guion, v, prueba=False):
         "fecha": ahora.strftime("%Y-%m-%dT%H:%M:%SZ"), "resumen": resumen, "consejo": v.get("consejo"),
         "fallos_graves": v.get("fallos_graves"), "prueba": prueba, "intento": v.get("intento", 1),
         "version": v.get("version", 1), "arreglo_de": guion.get("arreglo_de"),
-        "nota": v["total"], "minimo": NOTA_MINIMA, "cerebro": v.get("cerebro"), "guionista": guion.get("cerebro"),
+        "nota": v["total"], "minimo": v.get("minimo") or privado.nota_minima(), "cerebro": v.get("cerebro"), "guionista": guion.get("cerebro"),
         "instruccion": v.get("instruccion"),      # si antes lo dio por bueno un juez suplente: quién y con qué nota
         "jurado": v.get("jurado"), "publico": v.get("publico"),
         "publico_resumen": publico.en_palabras(v.get("publico")) or None})
