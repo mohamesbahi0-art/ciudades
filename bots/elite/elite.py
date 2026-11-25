@@ -470,9 +470,25 @@ def _cuaderno_de(clave, robot):
     return "archivero_mapas" if clave == "mapas" else "escritor"
 
 
+def _recien_arreglado(p, e):
+    """¿Claude ya arregló hace poco una obra de este mismo problema (mismo tipo y cuenta)? Entonces se espera a tener
+    vídeos juzgados DESPUÉS del arreglo: las pruebas de ahora son de antes, y pedir la misma obra otra vez no sirve."""
+    for o in e.get("obras") or []:
+        if o.get("estado") != "arreglado" or o.get("canal") != p.get("canal"):
+            continue
+        if not str(o.get("id", "")).startswith(f"{p.get('tipo')}-"):
+            continue
+        cuando = _fecha(o.get("arreglado_en") or o.get("fecha"))
+        if cuando and (_ahora() - cuando).total_seconds() < HORAS * 3600:
+            return True
+    return False
+
+
 def _toca(p, e, parte):
     """¿Hay que decidir este problema ahora? Solo si es nuevo o si desde la última vez que se decidió han pasado horas
     Y hay vídeos juzgados nuevos (así no se paga dos veces por decidir lo mismo con las mismas pruebas)."""
+    if _recien_arreglado(p, e):
+        return False
     if p["id"] in e["vistos"]:
         ultima = e["ultimas"].get(p["id"]) or {"fecha": e["vistos"][p["id"]], "juicios": 0}
         if p["tipo"] in ("descartes", "robot", "parte", "caso"):
