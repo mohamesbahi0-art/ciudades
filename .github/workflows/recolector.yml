@@ -6,6 +6,8 @@ on:
   schedule:
     - cron: "3 8 * * *"
     - cron: "33 14 * * *"
+    - cron: "33 20 * * *"
+    - cron: "33 2 * * *"
   push:
     paths:
       - "peticiones/recolector.json"
