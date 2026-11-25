@@ -83,7 +83,10 @@ function trozos(ws) {
 function textoArriba(e, tl, T, idxEscena = 0) {
   const ws = palabrasDe(e);
   if (!ws.length) return "";
-  const grupos = trozos(ws);
+  // El gancho (primera escena) sale ENTERO y legible desde el fotograma 0, no palabra a palabra: en el segundo 1 es
+  // cuando se va la gente (lo vio el Cerebro en el Cine), y una frase a medias no para el dedo.
+  const entero = idxEscena === 0 && ws.length <= 10;
+  const grupos = entero ? [ws] : trozos(ws);
   let k = grupos.findIndex(g => T < g[g.length - 1].b + 0.25);
   if (k < 0) k = grupos.length - 1;
   const g = grupos[k];
@@ -100,7 +103,9 @@ function textoArriba(e, tl, T, idxEscena = 0) {
     const tk = 30, txt = previo.toUpperCase();
     s += `<text x="540" y="268" text-anchor="middle" font-weight="800" font-size="${tk}" letter-spacing="5" fill="#8590A6" opacity="${f2(0.9 * salida(tramo(tl, 0, 0.2)))}">${esc(txt)}</text>`;
   }
-  const tam = g.map(x => x.w).join(" ").length > 16 ? 70 : 80;
+  let tam = g.map(x => x.w).join(" ").length > 16 ? 70 : 80;
+  const mide = t => g.map(x => ancho(x.w.toUpperCase(), 800, t)).reduce((a, b) => a + b, 0) + ancho(" ", 800, t) * (g.length - 1);
+  if (entero) while (tam > 44 && mide(tam) > 980 * 1.85) tam -= 6;      // que quepa en dos filas
   const esp = ancho(" ", 800, tam);
   const anchos = g.map(x => ancho(x.w.toUpperCase(), 800, tam));
   const total = anchos.reduce((a, b) => a + b, 0) + esp * (g.length - 1);
@@ -116,7 +121,7 @@ function textoArriba(e, tl, T, idxEscena = 0) {
       const sc = dicha ? 1 + 0.12 * (1 - q) : 1;
       const cx = x + anchos[i] / 2;
       const fill = dicha ? (m ? color : "#FFFFFF") : "#FFFFFF";
-      const op = dicha ? 1 : 0.22;
+      const op = dicha || entero ? 1 : 0.22;
       s += `<g transform="translate(${f1(cx)} ${y}) scale(${f2(sc)})" opacity="${op}"><text x="0" y="0" text-anchor="middle" font-weight="800" font-size="${tam}" fill="${fill}">${esc(p.w.toUpperCase())}</text></g>`;
       if (m && dicha) s += `<rect x="${f1(x)}" y="${y + 14}" width="${f1(anchos[i] * salida(tramo(T, p.a, 0.3)))}" height="8" rx="4" fill="${color}"/>`;
       x += anchos[i] + esp;
@@ -401,7 +406,7 @@ function dibujaEscena(e, tl, idx, T) {
   ps.forEach((o, i) => {
     const nuevo = !previa.includes(o.id);
     const t0 = o.cuando ? cuandoDice(e, o.cuando, 0.05 + i * 0.08) : 0.05 + i * 0.08;
-    const pop = nuevo ? tramo(tl, t0, 0.4) : 1;
+    const pop = idx === 0 ? 1 : nuevo ? tramo(tl, t0, 0.4) : 1;     // en el gancho ya están todos desde el fotograma 0
     if (o.etiqueta && o.etiqueta_cuando) o.etiqueta_t = cuandoDice(e, o.etiqueta_cuando, 0.35);
     if (o.tachar_cuando) o.tachar = cuandoDice(e, o.tachar_cuando, 1.2);
     if (o.corona_cuando) o.corona = cuandoDice(e, o.corona_cuando, 0.8);
