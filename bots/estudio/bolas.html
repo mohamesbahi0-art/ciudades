@@ -1,7 +1,10 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>Bolas</title>
 <!-- «Bolas» (canal de mapas): bolas-país con su bandera, sus ojos y sus bocadillos sobre un mapa del mundo de verdad.
-     El país protagonista se borra del mapa y deja su hueco; la cámara va del mundo a la zona y a las bolas de cerca.
+     El país protagonista YA está borrado en el primer fotograma (hueco negro con el borde rojo que parpadea) y no vuelve
+     a pintarse. La toma cambia de golpe cada 2,3 s como mucho (la primera vez, en el segundo 1,25) y en cada toma se
+     mueve algo. El mapa cambia a la vista: entra el agua, el hueco crece, una bola se cae dentro, un vecino conquista
+     un trozo con su color o un objeto (un emoji) cae y lo tapa.
      Lo usa render.js: window.GUION = guion; await window.listo; window.pintar(t) para cada fotograma.
      Mapa: Natural Earth (dominio público). Banderas: flag-icons (MIT), en banderas/. -->
 <style>
@@ -46,26 +49,41 @@ function escenaEn(t) {
   for (let i = 0; i < es.length; i++) if (t < es[i].fin) return i;
   return es.length - 1;
 }
-function camara(t) {
-  const i = escenaEn(t), e = G.escenas[i], ahora = camaraDe(e.caja);
-  if (i === 0) {                                   // al empezar, un acercamiento suave desde un poco más lejos
-    const p = suave(t / 1.2);
-    return { cx: ahora.cx, cy: ahora.cy, s: ahora.s * (0.82 + 0.18 * p) };
-  }
-  const antes = camaraDe(G.escenas[i - 1].caja), p = suave((t - e.inicio) / 0.7);
-  return { cx: antes.cx + (ahora.cx - antes.cx) * p, cy: antes.cy + (ahora.cy - antes.cy) * p,
-           s: Math.exp(Math.log(antes.s) + (Math.log(ahora.s) - Math.log(antes.s)) * p) };
+function camara(t) { return camaraDe(G.escenas[escenaEn(t)].caja); }   // fija en la escena: el movimiento lo ponen las tomas
+const TOMA = 2.3, CENTRO = [VISTA.x + VISTA.w / 2, VISTA.y + VISTA.h / 2], TOMAS = {};
+function tomas(i) {                                // los segundos en los que cambia la toma (igual que bolas.cortes)
+  if (TOMAS[i]) return TOMAS[i];
+  const e = G.escenas[i], c = [e.inicio];
+  if (i === 0 && e.fin - e.inicio > 1.9) c.push(e.inicio + 1.25);
+  const ultimo = c[c.length - 1], resto = e.fin - ultimo, n = Math.max(1, Math.ceil(resto / TOMA));
+  for (let k = 1; k < n; k++) c.push(ultimo + resto * k / n);
+  return (TOMAS[i] = c);
+}
+function tomaEn(t) {
+  const i = escenaEn(t), c = tomas(i), e = G.escenas[i];
+  let j = 0; while (j + 1 < c.length && t >= c[j + 1]) j++;
+  return { i, j, a: c[j], b: j + 1 < c.length ? c[j + 1] : e.fin };
+}
+/* La toma: un zoom de toda la imagen (mapa y bolas) hacia un punto. Cambia de golpe y, dentro, se mueve despacio. */
+function vistaDe(t, pos, hueco) {
+  const tm = tomaEn(t), e = G.escenas[tm.i], d = lim((t - tm.a) / Math.max(0.4, tm.b - tm.a));
+  const orden = tm.i === 0 ? [0, 2, 1, 3] : (e.plano === "mundo" ? [0, 1, 3, 2] : [0, 1, 2, 3]), v = orden[tm.j % 4];
+  const habla = (e.voces || []).find(x => x.a != null && x.a < tm.b && x.b > tm.a);
+  const deBola = k => { const p = pos[k % Math.max(1, pos.length)]; return p ? [p.x, p.y] : null; };
+  const quien = habla ? pos.findIndex(p => p.b.pais === habla.pais) : -1;
+  const huecoVisible = e.plano !== "bolas" && hueco[0] > 60 && hueco[0] < W - 60 && hueco[1] > 380 && hueco[1] < 1380;
+  let z = 1 + 0.07 * d, p = CENTRO;
+  if (quien >= 0 && tm.j > 0) { z = 1.45 + 0.08 * d; p = deBola(quien); }                 // quien habla, de cerca
+  else if (v === 1) { z = 1.5 + 0.1 * d; p = huecoVisible ? hueco : (deBola(0) || CENTRO); }
+  else if (v === 2) { z = 0.68 - 0.05 * d; }
+  else if (v === 3) { z = 1.32 + 0.08 * d; p = deBola(1) || (huecoVisible ? hueco : CENTRO); }
+  return { z, p, toma: tm, pasa: (x, y) => [CENTRO[0] + (x - p[0]) * z, CENTRO[1] + (y - p[1]) * z] };
 }
 function aPantalla(c, x, y) {
   return [VISTA.x + VISTA.w / 2 + (x - c.cx) * c.s, VISTA.y + VISTA.h / 2 + (y - c.cy) * c.s];
 }
 
 /* ---------- el mapa ---------- */
-function momentoBorrado() {
-  if (G.borrado_desde === 0) return -10;
-  const e = G.escenas.find(x => x.accion === "desaparece");
-  return e ? e.inicio + 0.45 : Infinity;
-}
 function aclarar(hex, k) {
   const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   const f = v => Math.round(v + (255 - v) * k);
@@ -84,44 +102,96 @@ function mar(t) {
   }
   ctx.restore();
 }
-function mapa(t, c, foco) {
-  const tb = momentoBorrado(), protagonista = G.pais;
+/* Lo que le ha pasado al hueco hasta el segundo t (lo que cambia, se queda cambiado). */
+function historia() {
+  if (G._h) return G._h;
+  const h = { agua: [], crece: [], trozos: [], tapas: [] }, [hx, hy] = G.hueco.centro;
+  for (const e of G.escenas) {
+    if (e.accion === "agua") h.agua.push(e.inicio + 0.3);
+    if (e.accion === "crece") h.crece.push(e.inicio + 0.3);
+    if (e.accion === "tapa" && e.objeto) h.tapas.push({ t: e.inicio, emoji: e.objeto });
+    const b = (e.bolas || [])[0];
+    if (e.accion === "conquista" && b && G.mapa[b.pais]) {
+      const dx = b.x - hx, dy = b.y - hy, d = Math.hypot(dx, dy) || 1;
+      h.trozos.push({ t: e.inicio + 0.3, color: G.mapa[b.pais].c, ux: dx / d, uy: dy / d,
+                      veces: h.trozos.filter(x => x.pais === b.pais).length, pais: b.pais });
+    }
+  }
+  return (G._h = h);
+}
+function crecido(t) { return 1 + historia().crece.reduce((s, a) => s + 0.24 * atras((t - a) / 0.7), 0); }
+function mapa(t, c, foco, golpe) {
+  const protagonista = G.pais, h = historia();
   ctx.save();
   ctx.translate(VISTA.x + VISTA.w / 2, VISTA.y + VISTA.h / 2); ctx.scale(c.s, c.s); ctx.translate(-c.cx, -c.cy);
   ctx.lineJoin = "round";
   for (const [iso, p] of Object.entries(G.mapa)) {
-    if (iso === protagonista) continue;
+    if (iso === protagonista) continue;              // el país borrado no se pinta NUNCA
     ctx.fillStyle = iso === foco ? aclarar(p.c, 0.25) : p.c;
     ctx.fill(CAMINOS[iso]);
     ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = (iso === foco ? 4.5 : 2.2) / c.s; ctx.stroke(CAMINOS[iso]);
   }
   const camino = CAMINOS[protagonista];
   if (camino) {
-    const q = lim((t - tb) / 0.9);
-    if (q < 1) {                                       // el país todavía está (o se está borrando)
-      ctx.save();
-      if (q > 0) ctx.translate(Math.sin(t * 70) * 3 / c.s * (1 - q), Math.sin(t * 53) * 3 / c.s * (1 - q));
-      ctx.globalAlpha = 1 - q;
-      ctx.fillStyle = aclarar(G.mapa[protagonista].c, 0.3); ctx.fill(camino);
-      ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 5 / c.s; ctx.stroke(camino);
-      if (q > 0) {                                     // grietas mientras se borra
-        ctx.clip(camino); ctx.strokeStyle = "rgba(40,20,0,0.8)"; ctx.lineWidth = 3 / c.s;
-        for (let k = 0; k < 7; k++) {
-          ctx.beginPath(); let x = c.cx + (azar(k) - 0.5) * 300 / c.s, y = c.cy + (azar(k + 9) - 0.5) * 300 / c.s;
-          ctx.moveTo(x, y);
-          for (let j = 0; j < 4; j++) { x += (azar(k * 7 + j) - 0.5) * 160 / c.s * q * 2; y += (azar(k * 5 + j + 3) - 0.5) * 160 / c.s * q * 2; ctx.lineTo(x, y); }
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
+    const [x0, y0, x1, y1] = G.hueco.caja, [hx, hy] = G.hueco.centro, radio = Math.hypot(x1 - x0, y1 - y0) / 2;
+    const k = crecido(t), late = 0.5 + 0.5 * Math.sin(t * 9);                 // el borde parpadea unas 1,5 veces por segundo
+    ctx.save(); ctx.translate(hx, hy); ctx.scale(k, k); ctx.translate(-hx, -hy);
+    ctx.fillStyle = "#080B14"; ctx.fill(camino);                              // el hueco: negro
+    ctx.save(); ctx.clip(camino);
+    const fondo = ctx.createRadialGradient(hx, hy, radio * 0.05, hx, hy, radio);   // con fondo, que se note el agujero
+    fondo.addColorStop(0, "rgba(0,0,0,0.9)"); fondo.addColorStop(1, "rgba(60,20,30,0.55)");
+    ctx.fillStyle = fondo; ctx.fillRect(x0 - 5, y0 - 5, x1 - x0 + 10, y1 - y0 + 10);
+    for (const z of h.trozos) {                                               // los trozos que se quedan los vecinos
+      const q = suave((t - z.t) / 0.9); if (q <= 0) continue;
+      ctx.beginPath(); ctx.arc(hx + z.ux * radio, hy + z.uy * radio, radio * (0.95 + 0.4 * z.veces) * q, 0, Math.PI * 2);
+      ctx.fillStyle = z.color; ctx.fill();
+      const img = BANDERAS[z.pais];                                           // con su bandera: se ve de quién es el trozo
+      if (img) { ctx.save(); ctx.clip(); ctx.globalAlpha = 0.9; const l = Math.max(x1 - x0, y1 - y0) * 1.15; ctx.drawImage(img, hx - l / 2, hy - l / 2, l, l); ctx.restore(); }
+      ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 7 / c.s / k; ctx.stroke();
     }
-    if (t >= tb) {                                     // el hueco: agua más oscura y el contorno a trazos
-      ctx.save(); ctx.globalAlpha = lim((t - tb) / 0.6) * 0.35; ctx.fillStyle = "#0B3D6B"; ctx.fill(camino); ctx.restore();
-      ctx.save(); ctx.setLineDash([12 / c.s, 10 / c.s]); ctx.lineDashOffset = -t * 30 / c.s;
-      ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 4 / c.s; ctx.stroke(camino); ctx.restore();
+    const nivel = lim(h.agua.reduce((s, a) => s + 0.42 * suave((t - a) / 1.3), 0));
+    if (nivel > 0) {                                                          // el agua que ha entrado
+      const alto = y1 - y0, sup = y1 - alto * nivel, paso = (x1 - x0) / 24;
+      ctx.beginPath(); ctx.moveTo(x0 - 5, y1 + 5);
+      for (let x = x0 - 5; x <= x1 + 5 + paso; x += paso) ctx.lineTo(x, sup + Math.sin(x / paso * 1.3 + t * 6) * alto * 0.025);
+      ctx.lineTo(x1 + 5, y1 + 5); ctx.closePath();
+      ctx.fillStyle = "#2FA8E8"; ctx.fill(); ctx.strokeStyle = "#D6F1FF"; ctx.lineWidth = 6 / c.s / k; ctx.stroke();
+    }
+    ctx.strokeStyle = `rgba(255,${Math.round(30 + 60 * late)},${Math.round(30 + 30 * late)},0.55)`;   // resplandor rojo hacia dentro
+    ctx.lineWidth = (34 + 22 * late) / c.s / k; ctx.stroke(camino);
+    ctx.restore();
+    ctx.strokeStyle = late > 0.5 ? "#FF2B2B" : "#FFE23D"; ctx.lineWidth = (10 + 7 * late + 14 * golpe) / c.s / k; ctx.stroke(camino);
+    ctx.setLineDash([14 / c.s / k, 12 / c.s / k]); ctx.lineDashOffset = -t * 40 / c.s / k;
+    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 3.5 / c.s / k; ctx.stroke(camino);
+    ctx.restore();
+    if (golpe > 0) {                                                          // en cada toma, una onda sale del hueco
+      const f = 1 - golpe;
+      ctx.save(); ctx.globalAlpha = golpe * 0.9; ctx.strokeStyle = "#FF2B2B"; ctx.lineWidth = (16 * golpe + 4) / c.s;
+      ctx.beginPath(); ctx.arc(hx, hy, radio * k * (0.55 + 1.5 * suave(f)), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
   }
   ctx.restore();
+}
+function emoji(txt, x, y, tam, rot = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.font = `${Math.round(tam)}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.beginPath(); ctx.ellipse(0, tam * 0.52, tam * 0.42, tam * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#111"; ctx.fillText(txt, 0, 0); ctx.restore();
+}
+/* Los objetos (un emoji): caen del cielo sobre el hueco. El que «tapa» es gigante y se queda. */
+function objetos(t, c, e) {
+  const [hx, hy] = aPantalla(c, ...G.hueco.centro), [x0, , x1] = G.hueco.caja, h = historia();
+  const tapa = [...h.tapas].reverse().find(x => t >= x.t);
+  const caer = (desde, y) => { const f = lim((t - desde - 0.2) / 0.45); return f <= 0 ? null : -260 + (y + 260) * (f < 1 ? f * f : 1) - (f >= 1 ? Math.abs(Math.sin((t - desde - 0.65) * 9)) * 46 * Math.exp(-(t - desde - 0.65) * 3.5) : 0); };
+  if (tapa && e.plano !== "bolas") {
+    const tam = lim((x1 - x0) * crecido(t) * c.s * 1.05, 300, 860), y = caer(tapa.t, hy);
+    if (y != null) emoji(tapa.emoji, hx, y, tam, Math.sin(t * 2.2) * 0.04);
+  }
+  if (e.objeto && !(tapa && tapa.t === e.inicio && e.plano !== "bolas")) {
+    const enBolas = e.plano === "bolas", y = caer(e.inicio, enBolas ? 700 : hy);
+    if (y != null) emoji(e.objeto, enBolas ? W / 2 : hx, y, enBolas ? 330 : 250, Math.sin(t * 5) * 0.1);
+  }
 }
 
 /* ---------- las bolas ---------- */
@@ -187,7 +257,7 @@ function lagrimas(x, y, r, t) {
   }
   ctx.restore();
 }
-function bocadillo(texto, x, y, r, aparece) {
+function bocadillo(texto, x, y, r, aparece, puestos) {
   if (!texto) return;
   const q = atras(aparece / 0.3);
   if (aparece <= 0) return;
@@ -197,7 +267,11 @@ function bocadillo(texto, x, y, r, aparece) {
   if (l) lineas.push(l);
   const ancho = Math.max(...lineas.map(s => ctx.measureText(s).width)) + 56, alto = lineas.length * 52 + 34;
   let bx = lim(x - ancho / 2, 24, W - 24 - ancho), by = y - r - 40 - alto;
-  if (by < 150) by = y + r + 40;                       // si no cabe arriba, debajo
+  if (by < 340) by = y + r + 40;                       // si no cabe arriba (ahí van las letras grandes), debajo
+  by = lim(by, 340, 1470 - alto);                      // nunca encima de los subtítulos ni fuera de la pantalla
+  for (const o of puestos || [])                       // ni encima de otro bocadillo
+    if (bx < o[0] + o[2] && bx + ancho > o[0] && by < o[1] + o[3] && by + alto > o[1]) by = o[1] - alto - 34 >= 340 ? o[1] - alto - 34 : o[1] + o[3] + 34;
+  if (puestos) puestos.push([bx, by, ancho, alto]);
   const colaX = lim(x, bx + 30, bx + ancho - 30), arriba = by < y;
   ctx.translate(colaX, arriba ? by + alto : by); ctx.scale(q, q); ctx.translate(-colaX, -(arriba ? by + alto : by));
   ctx.fillStyle = "#FFFFFF"; ctx.strokeStyle = "#111"; ctx.lineWidth = 5;
@@ -237,49 +311,47 @@ function sitios(e, c, t) {
   for (const p of pos) { p.x = lim(p.x, p.r + 24, W - p.r - 24); p.y = lim(p.y, 420 + p.r, 1360 - p.r); }
   return pos;
 }
-function bolas(t, c) {
-  const i = escenaEn(t), e = G.escenas[i], dentro = t - e.inicio, tb = momentoBorrado();
-  if (e.plano === "bolas") { ctx.fillStyle = "rgba(10,20,40,0.38)"; ctx.fillRect(0, 0, W, H); }
-  const pos = sitios(e, c, t), [hx, hy] = aPantalla(c, ...(G.mapa[G.pais] ? centroDe(G.pais) : [c.cx, c.cy]));
-  if (e.accion === "celebra") confeti(t, e.inicio + 0.3);
+function bolas(t, c, pos, vista) {
+  const i = escenaEn(t), e = G.escenas[i], dentro = t - e.inicio, toma = vista.toma;
+  const [hx, hy] = aPantalla(c, ...G.hueco.centro), textos = [];
   pos.forEach((p, k) => {
-    const sale = dentro - 0.12 - 0.12 * k; if (sale <= 0) return;
-    let { x, y, r } = p, rot = 0, alfa = 1, mira = Math.sign(hx - x) || 0;
-    const escala = atras(sale / 0.35);
+    const sale = i === 0 ? 1 : dentro - 0.04 - 0.08 * k; if (sale <= 0) return;      // en el primer fotograma ya están
+    let { x, y, r } = p, rot = 0, alfa = 1, mira = Math.sign(hx - x) || 0, tam = 1;
+    const bote = toma.j > 0 ? 1 + 0.16 * Math.sin(lim((t - toma.a) / 0.3) * Math.PI) : 1;   // en cada toma, un bote
+    const escala = atras(sale / 0.3) * bote;
     const vz = (e.voces || []).find(v => v.pais === p.b.pais && v.a != null);   // cuándo habla esta bola con su voz
-    y += Math.sin(t * 3 + k) * r * 0.04;                       // respira
+    y += Math.sin(t * 3 + k) * r * 0.05;                       // respira
+    if (i === 0) { const f = 1 - suave(t / 0.9); x += (x < hx ? -1 : 1) * 70 * f; y -= Math.abs(Math.sin(t * 7 + k)) * r * 0.2; }   // se asoman
     if (vz && t >= vz.a && t <= vz.b) y -= Math.abs(Math.sin((t - vz.a) * 9)) * r * 0.12;   // bota mientras habla
     const fase = (t - e.inicio) * 2.2 + k * 0.4;
     if (e.accion === "salta" || e.accion === "celebra") y -= Math.abs(Math.sin(Math.PI * fase)) * r * 0.35;
     if (e.accion === "tiembla" || p.b.expresion === "asustado") x += Math.sin(t * 60 + k) * r * 0.05;
     if (e.accion === "rie") rot = Math.sin(t * 12 + k) * 0.16;
     if (e.accion === "corre") { const f = suave(dentro / Math.max(0.5, e.fin - e.inicio)); x += (hx - x) * f * 0.6; y += (hy - y) * f * 0.6; }
+    if (e.accion === "conquista" && k === 0 && e.plano !== "bolas") { const f = suave((dentro - 0.2) / 0.8); x += (hx - x) * f * 0.45; y += (hy - y) * f * 0.45; }
+    if (e.accion === "cae" && k === 0) {                       // se asoma demasiado… y se cae dentro del hueco
+      const f = lim((dentro - 0.5) / 1.1), ax = e.plano === "bolas" ? x : hx, ay = e.plano === "bolas" ? y + 420 : hy;
+      x += (ax - x) * suave(f * 1.4); y += (ay - y) * f * f; rot = f * 7; tam = 1 - 0.92 * f * f; alfa = f >= 1 ? 0 : 1;
+    }
     if (e.accion === "pelea" && pos.length >= 2 && k < 2) {
       const otro = pos[1 - k], f = Math.abs(Math.sin(Math.PI * fase * 0.8));
       x += (otro.x - p.x) * 0.38 * f; rot = (k ? -1 : 1) * 0.12 * f; mira = Math.sign(otro.x - p.x);
     }
-    const tbb = vz ? Math.max(tb, vz.b + 0.15) : tb;           // si tiene frase, no se va hasta que la acaba
-    if (p.b.pais === G.pais && t > tbb) {                      // la bola del país que se borra se hunde y se va
-      const f = lim((t - tbb) / 1.2); y += f * 220; alfa = 1 - f;
-    }
     if (alfa <= 0.02) return;
     const parpadeo = ((t + k * 0.7) % 3.1) < 0.09;
-    ctx.save(); ctx.translate(x, y); ctx.scale(escala, escala); ctx.translate(-x, -y);
+    ctx.save(); ctx.translate(x, y); ctx.scale(escala * tam, escala * tam); ctx.translate(-x, -y);
     bola(p.b, x, y, r, rot, alfa, mira, parpadeo);
     ctx.restore();
-    if (e.accion === "llora" || (p.b.expresion === "triste" && p.b.pais === G.pais)) lagrimas(x, y, r * escala, t);
+    if (e.accion === "llora" || p.b.expresion === "triste") lagrimas(x, y, r * escala, t);
     if (e.accion === "rie" && sale > 0.3) { ctx.save(); ctx.font = "800 40px Poppins"; ctx.fillStyle = "#FFF"; ctx.strokeStyle = "#111"; ctx.lineWidth = 6; ctx.textAlign = "center"; const jx = p.b.dice ? x - r * 1.15 : x + r * 0.9, jy = p.b.dice ? y + r * 0.1 : y - r * 0.9; ctx.strokeText("JA JA", jx, jy); ctx.fillText("JA JA", jx, jy); ctx.restore(); }
     if (e.accion === "pelea" && k === 0 && pos.length >= 2) {
       const f = Math.abs(Math.sin(Math.PI * fase * 0.8));
       if (f > 0.85) { ctx.save(); ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 4; const sx = (x + pos[1].x) / 2, sy = (y + pos[1].y) / 2 - r * 0.6; ctx.beginPath(); for (let j = 0; j < 10; j++) { const a = j * Math.PI / 5, rr = j % 2 ? 22 : 50; ctx.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
     }
-    bocadillo(p.b.dice, x, y, r * escala, vz ? t - vz.a + 0.1 : dentro - 0.3 - 0.25 * k);   // el bocadillo, cuando suena su voz
+    if (p.b.dice && !(e.accion === "cae" && k === 0 && tam < 0.6))
+      textos.push([p.b.dice, x, y, r * escala, vz ? t - vz.a + 0.1 : dentro - 0.3 - 0.25 * k]);   // el bocadillo, cuando suena su voz
   });
-}
-function centroDe(iso) {
-  const e = G.escenas.flatMap(x => x.bolas).find(b => b.pais === iso);
-  if (e) return [e.x, e.y];
-  const c = camaraDe(G.escenas[0].caja); return [c.cx, c.cy];
+  return textos;
 }
 
 /* ---------- letras ---------- */
@@ -291,7 +363,7 @@ function rotulo(txt, x, y, tam, color, alfa = 1, sombra = "#000") {
 function gancho(t) {
   const txt = String(G.texto_pantalla || "").toUpperCase();
   if (!txt || t > 2.6) return;
-  const q = lim(t / 0.18) * lim((2.6 - t) / 0.25), palabras = txt.split(/\s+/), lineas = []; let l = "";
+  const q = lim((2.6 - t) / 0.25), palabras = txt.split(/\s+/), lineas = []; let l = "";
   for (const p of palabras) { if ((l + " " + p).trim().length > 15 && l) { lineas.push(l); l = p; } else l = (l + " " + p).trim(); }
   if (l) lineas.push(l);
   lineas.forEach((s, i) => rotulo(s, W / 2, 200 + i * 96, 82, "#FFFFFF", q));
@@ -302,13 +374,6 @@ function clave(t) {
   if (!e.texto || dentro < 0.1) return;
   const q = atras((dentro - 0.1) / 0.3), sale = lim((e.fin - t) / 0.2);
   ctx.save(); ctx.translate(W / 2, 250); ctx.scale(q, q); rotulo(e.texto.toUpperCase(), 0, 0, 92, "#FFE23D", sale); ctx.restore();
-}
-function insignia() {
-  if (!(G.partes > 1)) return;
-  ctx.save(); ctx.font = "800 36px Poppins"; const txt = `PARTE ${G.parte}/${G.partes}`, w = ctx.measureText(txt).width + 40;
-  ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.roundRect(W - 36 - w, 60, w, 62, 31); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, W - 36 - w / 2, 92); ctx.restore();
 }
 function palabrasDe(e) {
   if (e.palabras && e.palabras.length) return e.palabras;
@@ -335,11 +400,12 @@ function subtitulos(t) {
   ctx.restore();
 }
 function final(t) {
-  const d = G.duracion || 1, q = lim((t - (d - 1.4)) / 0.3);
+  const d = G.duracion || 1, q = lim((t - (d - 3.2)) / 0.3);        // la pregunta, los últimos 3 segundos
   if (q <= 0) return;
-  const txt = G.parte < G.partes ? `PARTE ${G.parte + 1} MAÑANA 👉` : "¿QUÉ PAÍS AHORA? 👇";
+  const txt = G.pregunta || "¿QUIÉN SE QUEDA EL HUECO? 👇";
   ctx.save(); ctx.translate(W / 2, 1440); ctx.scale(atras(q), atras(q));     // abajo, para no tapar a las bolas
-  ctx.font = "800 70px Poppins"; const w = ctx.measureText(txt).width + 70;
+  ctx.font = "800 70px Poppins"; let w = ctx.measureText(txt).width + 70;
+  if (w > 1020) { ctx.font = `800 ${Math.floor(70 * 950 / (w - 70))}px Poppins`; w = 1020; }
   ctx.globalAlpha = q; ctx.fillStyle = "#FFD43B"; ctx.strokeStyle = "#111"; ctx.lineWidth = 7;
   ctx.beginPath(); ctx.roundRect(-w / 2, -58, w, 116, 58); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, 0, 4); ctx.restore();
@@ -347,10 +413,37 @@ function final(t) {
 
 window.pintar = function (t) {
   const c = camara(t), e = G.escenas[escenaEn(t)];
+  const pos = sitios(e, c, t), vista = vistaDe(t, pos, aPantalla(c, ...G.hueco.centro));
+  const golpe = 1 - lim((t - vista.toma.a) / 0.55);                      // lo que queda del golpe de esta toma
   mar(t);
-  mapa(t, c, e.foco);
-  bolas(t, c);
-  gancho(t); clave(t); insignia(); subtitulos(t); final(t);
+  ctx.save();                                                            // la toma: todo lo del mapa, con su zoom
+  ctx.translate(CENTRO[0], CENTRO[1]); ctx.scale(vista.z, vista.z); ctx.translate(-vista.p[0], -vista.p[1]);
+  mapa(t, c, e.foco, golpe);
+  const cerca = vista.z > 1.2;
+  if (e.plano === "bolas") { ctx.fillStyle = cerca ? "rgba(8,12,30,0.8)" : "rgba(10,20,40,0.42)"; ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5); }
+  objetos(t, c, e);
+  const textos = bolas(t, c, pos, vista);
+  ctx.restore();
+  if (cerca) {                                                           // de cerca: los bordes a oscuras y rayas de velocidad
+    const som = ctx.createRadialGradient(CENTRO[0], CENTRO[1], 330, CENTRO[0], CENTRO[1], 1050);
+    som.addColorStop(0, "rgba(5,8,25,0)"); som.addColorStop(1, "rgba(5,8,25,0.78)");
+    ctx.fillStyle = som; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineCap = "round";
+    for (let k = 0; k < 26; k++) {
+      const a = azar(k + vista.toma.j * 31) * Math.PI * 2, r0 = 560 + ((t * 900 + azar(k) * 500) % 420), r1 = r0 + 150 + azar(k + 5) * 160;
+      ctx.lineWidth = 3 + azar(k + 2) * 6; ctx.beginPath();
+      ctx.moveTo(CENTRO[0] + Math.cos(a) * r0, CENTRO[1] + Math.sin(a) * r0 * 1.3); ctx.lineTo(CENTRO[0] + Math.cos(a) * r1, CENTRO[1] + Math.sin(a) * r1 * 1.3); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (e.accion === "celebra") confeti(t, e.inicio + 0.3);
+  if (t > 0.2 && t - vista.toma.a < 0.1) { ctx.fillStyle = `rgba(255,255,255,${0.82 * (1 - (t - vista.toma.a) / 0.1)})`; ctx.fillRect(0, 0, W, H); }   // el fogonazo del corte
+  const puestos = [];
+  for (const [txt, x, y, r, aparece] of textos) {                        // los bocadillos, encima de todo y enteros
+    const [bx, by] = vista.pasa(x, y);
+    if (bx > -40 && bx < W + 40 && by > 300 && by < 1500) bocadillo(txt, bx, by, r * vista.z, aparece, puestos);
+  }
+  gancho(t); clave(t); subtitulos(t); final(t);
   const d = G.duracion || 1;
   if (t > d - 0.25) { ctx.fillStyle = `rgba(0,0,0,${lim((t - (d - 0.25)) / 0.25)})`; ctx.fillRect(0, 0, W, H); }
 };
