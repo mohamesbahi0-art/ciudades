@@ -53,7 +53,7 @@ def main(nombre, cuantos=4):
     os.makedirs(carpeta, exist_ok=True)
     datos, tmp = [], tempfile.mkdtemp()
     for n, e in enumerate(lista[:cuantos], 1):
-        u = e.get("url") or e.get("webpage_url")
+        u = (e.get("webpage_url") or e.get("url")) if e is todo else (e.get("url") or e.get("webpage_url"))
         ruta = os.path.join(tmp, f"ref-{nombre}-{n}.mp4")
         d = subprocess.run(["yt-dlp", "-f", "b[height<=720]/b", "-o", ruta, "--no-warnings", "--no-playlist", u],
                            capture_output=True, text=True, timeout=300)

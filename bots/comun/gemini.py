@@ -54,7 +54,7 @@ def apuntar_portero():
     sin_cupo = set(AGOTADOS)
     if str(anterior.get("actualizado") or "") >= vuelve.strftime("%Y-%m-%dT%H:%M:%SZ"):
         sin_cupo |= set(anterior.get("sin_cupo") or [])
-    sin_cupo -= {m for m, u in USO.items() if u.get("bien")}     # el que ha contestado bien en esta pasada, vuelve
+    sin_cupo -= {m for m, u in USO.items() if u.get("bien") and m not in AGOTADOS}   # contestó bien y no se agotó después
     privado.guardar_estado("gemini.json", {"ultimo_reparto": USO, "sin_cupo": sorted(sin_cupo),
                                            "anteriores": (anterior.get("anteriores", []) + [anterior.get("ultimo_reparto")])[-20:]
                                            if anterior.get("ultimo_reparto") else [],

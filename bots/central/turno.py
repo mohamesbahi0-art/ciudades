@@ -224,10 +224,15 @@ def _coliseo(clave, canal, g, v, paso, a, resumen):
     Si algo falla, sale con su salida de siempre: el Coliseo nunca para un vídeo aprobado."""
     if v.get("veredicto") != "aprobado":
         return g
+    if _titulo_repetido(clave, g.get("titulo")):
+        return g        # el título del Escritor ya está publicado: sin torneo, y _destino no lo sube repetido
     try:
         nuevo = coliseo.luchar(clave, canal, g, v, paso=paso, prueba=a.prueba)
     except Exception as e:
         paso("coliseo", f"no ha podido hacer el torneo ({type(e).__name__}): sale con su salida de siempre")
+        return g
+    if nuevo.get("coliseo") and _titulo_repetido(clave, nuevo.get("titulo")):
+        paso("coliseo", "el título campeón ya está publicado en el canal: sale con su salida de siempre")
         return g
     if nuevo.get("coliseo"):
         resumen.update(coliseo=nuevo["coliseo"], titulo=nuevo.get("titulo"))
@@ -481,8 +486,9 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
     except (TypeError, ValueError):
         acepta_arreglo = False
     arreglar = None if a.prueba or not acepta_arreglo else arreglo_pendiente(clave)   # lo que quedó del turno anterior
+    aplazado = None                                # el arreglo que espera mientras va primero un guion a mano
     if arreglar and a_mano.cuantos(clave):         # primero los guiones escritos a mano; el arreglo sigue apuntado
-        arreglar = None
+        aplazado, arreglar = arreglar, None
     if arreglar and int(arreglar.get("version") or 2) > versiones:
         arreglar = None
     video, sin_juez = None, False
@@ -536,7 +542,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
         if v.get("veredicto") == "sin_juicio" and not a.prueba and v.get("preaprobado") and \
                 _a_la_sala(v, paso, resumen, clave, video, g, segundos, id_guion=id_guion, intento=intento,
                            version=version, estudio=True):
-            _apuntar_arreglo(clave, None, a, acepta_arreglo)      # esa versión ya no está pendiente de arreglo
+            _apuntar_arreglo(clave, aplazado, a, acepta_arreglo)  # esa versión ya no está pendiente (el aplazado, sí)
             raise _Hecho()
         if v.get("veredicto") == "sin_juicio" and not a.prueba:
             # no hay juez ahora (ni la IA gratis ni la de pago): nada sale sin juicio y no cuenta como suspenso
@@ -557,7 +563,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                        formato=g.get("formato"), version=version)
         if v["veredicto"] == "aprobado" or a.prueba:
             arreglar = None
-            _apuntar_arreglo(clave, arreglar, a, acepta_arreglo)
+            _apuntar_arreglo(clave, aplazado, a, acepta_arreglo)
             break
         nota = v.get("total")
         anterior = ((arreglar or {}).get("veredicto") or {}).get("total")
@@ -574,7 +580,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
                      f"jueces (versión {version + 1})")
             continue
         arreglar = None
-        _apuntar_arreglo(clave, arreglar, a, acepta_arreglo)
+        _apuntar_arreglo(clave, aplazado, a, acepta_arreglo)
         consejo = (f"\n- (El Juzgado ha suspendido el intento anterior, «{g.get('titulo', '')}», con "
                    f"{v.get('total', '-')}/100: {v.get('consejo', '')} "
                    + " ".join(f"{x.get('juez')}: {str(x.get('razon'))[:200]}" for x in (v.get("votos") or [])[:3])
@@ -583,9 +589,10 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
             paso("juez_guardia", "suspendido y lejos de la nota: se tira y se hace otro distinto con lo aprendido")
     if not a.prueba and acepta_arreglo:        # lo que quede por arreglar es lo primero del siguiente turno de la cuenta
         try:
-            _guardar_arreglo(clave, arreglar)
-            if arreglar:
-                resumen["arreglo_pendiente"] = {"version": arreglar.get("version"), "titulo": arreglar.get("titulo")}
+            _guardar_arreglo(clave, arreglar or aplazado)
+            if arreglar or aplazado:
+                pend = arreglar or aplazado
+                resumen["arreglo_pendiente"] = {"version": pend.get("version"), "titulo": pend.get("titulo")}
         except Exception as e:
             paso("escritor", f"no he podido apuntar el arreglo pendiente ({type(e).__name__})")
     if sin_juez:
@@ -842,6 +849,8 @@ def main(argv=None):
     p.add_argument("--hora", help="hueco donde programarlo (ISO); si no se da, lo calcula")
     p.add_argument("--prueba", action="store_true", help="hace el vídeo pero no lo sube ni lo deja para subir")
     p.add_argument("--salida", default="trabajo")
+    p.add_argument("--solo-confirmar", action="store_true",
+                   help="el canal ya tiene vídeos de sobra: solo confirma lo que espera en la Sala, sin hacer otro")
     a = p.parse_args(argv)
     peticion = json.load(open(a.peticion, encoding="utf-8")) if a.peticion else {}
     clave = privado.resolver(a.canal or peticion["canal"])
@@ -885,6 +894,26 @@ def main(argv=None):
     try:
         if en_sala and _confirmar(clave, canal, en_sala, cuadernos, ajustes, trabajo, paso, resumen, a):
             raise _Hecho()
+        sigue_en_sala = False
+        try:
+            sigue_en_sala = bool(en_sala) and confirma and id_obra == en_sala.get("obra") and any(
+                e.get("id") == en_sala.get("id") for e in sala_espera._vivos(clave))
+        except Exception:
+            pass
+        if sigue_en_sala:      # el juez de primera no ha contestado: la tarjeta de ese vídeo vuelve a «en la Sala»
+            obras.apuntar(id_obra, clave, titulo=(en_sala.get("guion") or {}).get("titulo"), robot="juez_guardia",
+                          paso="juzgado", estado="esperando", en_sala=True,
+                          detalle=f"el juez suplente lo da por bueno ({en_sala.get('nota', '-')}/100): espera en la "
+                                  "Sala de espera a que lo confirme un juez de primera")
+        if getattr(a, "solo_confirmar", False):
+            paso("turno", "este canal ya tiene vídeos para más días de los que pidió el dueño: solo venía a confirmar "
+                 "la Sala de espera, no hace vídeo nuevo", "solo venía a confirmar la Sala de espera")
+            resumen.update(destino_resultado="espera_juez", resultado="hecho", sin_video_nuevo=True)
+            raise _Hecho()
+        if sigue_en_sala:      # el vídeo nuevo de este turno lleva su propia tarjeta
+            id_obra = obras.retomar(clave) or \
+                f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')}-{privado.alias(clave)}".replace(".", "-")
+            resumen["obra"] = id_obra
         clip = None if canal.get("estudio") == "animacion" else clips.listo_para(clave)
         if clip and not a.prueba and not ia.hay_de_primera("juez"):
             # el clip que grabó el dueño no se juzga con suplentes: espera a un juez de primera
@@ -892,7 +921,7 @@ def main(argv=None):
                 # un canal que SOLO trabaja con clips de juego no hace otra cosa mientras (antes inventaba historias)
                 paso("juez_guardia", "el clip del dueño espera a que haya juez de primera; el canal solo hace vídeos "
                      "con clips, así que espera")
-                resumen.update(destino_resultado="espera_juez", resultado="hecho")
+                resumen.update(destino_resultado="espera_juez", resultado="hecho", clip_sin_juez=True)
                 raise _Hecho()
             paso("juez_guardia", "el clip del dueño espera a que haya juez de primera; mientras, la cuenta hace su vídeo")
             clip = None
@@ -962,6 +991,7 @@ def main(argv=None):
             except Exception as e:      # sin Sala de Ideas, el Escritor sigue solo
                 paso("escritor", f"sin Sala de Ideas hoy ({type(e).__name__})")
         aviso_juez = ""
+        v = None                         # el veredicto del intento anterior (puede no haberlo si no había fotos)
         for intento in (1, 2):           # si el Juez lo suspende, una segunda oportunidad con su consejo
             if intento == 2:
                 a.mano_sin_juzgar = None     # el guion a mano ya se juzgó (o no había fotos de esa persona)
@@ -1060,8 +1090,14 @@ def main(argv=None):
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                                 os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
-            if v.get("veredicto") == "sin_juicio" and v.get("preaprobado") and not a.prueba \
-                    and not _titulo_repetido(clave, g.get("titulo")) and not _en_la_sala(clave, g.get("titulo")):
+            if v.get("veredicto") == "sin_juicio" and v.get("preaprobado") and not a.prueba and \
+                    (_titulo_repetido(clave, g.get("titulo")) or _en_la_sala(clave, g.get("titulo"))):
+                paso("subidor", f"«{g.get('titulo')}» ya está publicado o esperando en la Sala: no se guarda repetido",
+                     "el título ya está publicado o esperando: no se guarda repetido")
+                resumen.update(titulo=g.get("titulo"), destino_resultado="suspendido", motivo="título repetido",
+                               resultado="hecho")
+                raise _Hecho()
+            if v.get("veredicto") == "sin_juicio" and v.get("preaprobado") and not a.prueba:
                 video = _voz_buena(clave, canal, g, imagenes, trabajo, video, paso)   # a la Sala, ya con la voz buena
                 segundos = montador.duracion(video)
             _sin_juez(v, a, paso, sala=dict(resumen=resumen, clave=clave, video=video, g=g, segundos=segundos,
@@ -1132,6 +1168,13 @@ def main(argv=None):
                                         else "el servicio gratis de dibujos no contesta ahora")
                                        + ": lo vuelve a intentar en la siguiente ronda") if fuera else
                               "se ha atascado aquí: lo miran los Mecánicos")
+            elif fin == "espera_juez" and resumen.get("sin_video_nuevo"):
+                pass                             # solo venía a confirmar: la tarjeta del vídeo de la Sala ya está puesta
+            elif fin == "espera_juez" and resumen.get("clip_sin_juez"):
+                # el clip no se ha juzgado ni está en ninguna Sala: espera a un juez de primera
+                obras.apuntar(id_obra, clave, robot="juez_guardia", paso="juzgado", estado="esperando",
+                              detalle="el clip espera a que haya un juez de primera (los suplentes no juzgan clips): "
+                                      "lo intenta en la siguiente ronda")
             elif fin == "espera_juez":           # un suplente lo dio por bueno: espera en la sala al juez de primera
                 obras.apuntar(id_obra, clave, titulo=resumen.get("titulo"), robot="juez_guardia", paso="juzgado",
                               estado="esperando", en_sala=True,

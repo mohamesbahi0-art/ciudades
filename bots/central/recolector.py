@@ -149,7 +149,7 @@ def buscar(paginas=2):
                     docs.append(d)
             if len(lote) < 100:
                 break
-    return [d for d in docs if licencia(d.get("licenseurl")) and not FUERA.search(str(d.get("title") or ""))
+    return [d for d in docs if licencia(d.get("licenseurl")) and not FUERA.search(f"{d.get('title') or ''} {d.get('identifier') or ''}")
             and re.search(r"\bGTA|grand theft auto", str(d.get("title") or ""), re.I)]
 
 
@@ -192,6 +192,14 @@ def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
     if not 4 <= hasta - desde <= 35:
         return None
     nuevo = _siguiente_id(estado)
+    # si el vídeo de origen dice claramente de qué juego es (título o identificador), eso manda sobre lo que diga la IA
+    # en cada toma: la IA etiquetó 11 tomas de GTA 6 como GTA 5 y el versus comparaba GTA 6 contra GTA 6 (26 nov)
+    claro = _juego_claro(f"{origen.get('titulo', '')} {origen.get('fuente', '')}")
+    dice_ia = x.get("juego") if x.get("juego") in videoteca.JUEGOS else None
+    if claro and dice_ia and claro != dice_ia:
+        # el título y la IA no dicen lo mismo (p. ej. un título gancho «GTA 6» con imágenes de GTA 5): mejor sin toma
+        _portero("descarta", {"motivo": "el título y lo que se ve no dicen el mismo juego", "origen": "archive.org"})
+        return None
     crudo = _cortar(url, inicio + desde, hasta - desde, os.path.join(tmp, f"{nuevo}-crudo.mp4"))
     franjas = clips.bandas(crudo)
     quieto = clips.marcas(crudo, previo=f"crop={franjas}," if franjas else "")   # logos o marcas de agua del autor
@@ -205,10 +213,7 @@ def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
     _portero("limpia", {"toma": nuevo, "bandas_negras": bool(franjas), "marcas_del_autor": bool(quieto),
                         "recortado": bool(recorte), "voz_del_autor_quitada": not rev["sonido"], "origen": "archive.org"})
     almacen.guardar(videoteca.ESTANTERIA, limpio, f"{nuevo}.mp4")
-    # si el vídeo de origen dice claramente de qué juego es (título o identificador), eso manda sobre lo que diga la IA
-    # en cada toma: la IA etiquetó 11 tomas de GTA 6 como GTA 5 y el versus comparaba GTA 6 contra GTA 6 (26 nov)
-    juego = _juego_claro(f"{origen.get('titulo', '')} {origen.get('fuente', '')}") or \
-        (x.get("juego") if x.get("juego") in videoteca.JUEGOS else origen["juego"])
+    juego = claro or dice_ia or origen["juego"]
     que = str(x.get("que_se_ve") or x.get("que_pasa") or "")[:300]
     toma = {"id": nuevo, "archivo": f"{nuevo}.mp4", "juego": juego,
             "etiquetas": videoteca.etiquetas_de({"etiquetas": x.get("etiquetas") or [], "que_se_ve": que}),
@@ -245,6 +250,8 @@ def recoger_video(doc, estado, tmp, paso=print):
     if not lic:
         return {"resultado": "licencia que no vale"}
     titulo = str(info.get("title") or doc.get("title") or "")[:150]
+    if FUERA.search(f"{titulo} {ident}"):                 # la ficha completa también: fuera tráileres, filtraciones…
+        return {"resultado": "fuera"}
     origen = {"creador": str(creador)[:80], "licencia": lic, "titulo": titulo,
               "enlace": info.get("originalurl") or f"https://archive.org/details/{ident}",
               "fuente": f"https://archive.org/details/{ident}",

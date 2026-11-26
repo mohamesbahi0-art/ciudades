@@ -18,7 +18,9 @@ def main(registro, maximo=40):
     lista = json.load(open(registro, encoding="utf-8"))
     # «aviso_ia_quitado» (no el viejo «sin_aviso_ia»): la primera versión dio por hechos 20 vídeos sin cambiar ninguno,
     # porque YouTube no siempre devuelve containsSyntheticMedia al leer el vídeo.
-    pendientes = [r for r in lista if r.get("id") and not r.get("aviso_ia_quitado") and r.get("ia") is not False]
+    # Solo las filas viejas sin el campo «ia» (subidas cuando el aviso iba siempre puesto). Las que lo llevan dicen lo
+    # que se pidió al subir: False ya va sin aviso y True es un aviso puesto a propósito (contenido realista).
+    pendientes = [r for r in lista if r.get("id") and not r.get("aviso_ia_quitado") and r.get("ia") is None]
     pendientes.sort(key=lambda r: str(r.get("publica") or ""))
     clientes, hechos, por_canal = {}, 0, {}
     for r in pendientes:
@@ -53,7 +55,7 @@ def main(registro, maximo=40):
             if "quota" in msg.lower():
                 break
     json.dump(lista, open(registro, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    quedan = len([r for r in lista if r.get("id") and not r.get("aviso_ia_quitado") and r.get("ia") is not False])
+    quedan = len([r for r in lista if r.get("id") and not r.get("aviso_ia_quitado") and r.get("ia") is None])
     print(f"aviso de IA quitado a {hechos} vídeos {por_canal}; quedan por mirar {quedan}")
     return 0
 

@@ -26,6 +26,7 @@ SIN_HACER = {}                   # tipos de canal que todavía no se pueden hace
 SOLO_CON_CLIP = ("clips",)       # canales que solo trabajan cuando el dueño ha grabado un clip para ellos
 ESPERA_DUENO = 30 * 60           # «Juzga mi vídeo» va primero: como mucho media hora de pausa por vídeo del dueño
 YA_ESPERADOS = set()
+SOLO_CONFIRMAR = set()            # canales con más días de vídeos que el tope que solo van a confirmar su Sala de espera
 
 
 def revisiones(cfg):
@@ -65,6 +66,7 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
     cola_llena = len(cola) >= ajustes["cola_maxima"]
     orden = {k: i for i, k in enumerate(ajustes.get("prioridad", []))}
     candidatos, esperan = [], {}
+    SOLO_CONFIRMAR.clear()
     hoy = ahora.strftime("%Y-%m-%d")
     fallidos = {}
     for r in (privado.leer(os.path.join("estado", fichero(linea)), {}) or {}).get("rondas", []):
@@ -166,6 +168,11 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
                       or c.get("hipnotico_cada") or 0) == 1          # el Cerebro la ha pasado al formato sin dibujos
         if descansa(clave, dibuja=c.get("estudio") != "animacion" and not c.get("solo_clips") and not animado):
             continue
+        if (c.get("tipo") in SOLO_CON_CLIP or clave in SOLO_CON_CLIP or c.get("solo_con_clip")) \
+                and clave in con_clip and not hay_juez_de_primera():
+            # los clips solo los juzga un juez de primera: sin él, el turno no haría nada (y ocuparía un hueco)
+            esperan[clave] = "tiene un clip listo, pero los clips solo los juzga un juez de primera: espera a que lo haya"
+            continue
         if (c.get("tipo") in SOLO_CON_CLIP or clave in SOLO_CON_CLIP) and clave not in con_clip:
             esperan[clave] = "esperando a que grabes un clip (la lista está en la app)"
             continue
@@ -192,9 +199,16 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
         # El dueño (26 nov): «los que ya tienen vídeos hasta enero no hagan tantos; céntrate en los que no tienen».
         tope_colchon = float(c.get("colchon_maximo_dias") or ajustes.get("colchon_maximo_dias") or 0)
         if tope_colchon and huecos.colchon(ocupadas, ahora) > tope_colchon and not (solo and clave in solo):
-            esperan[clave] = (f"ya tiene vídeos programados para más de {int(tope_colchon)} días: "
-                              "la fábrica se centra en los canales que tienen menos")
-            continue
+            try:
+                from bots.juzgado import espera as sala_espera
+                en_sala = sala_espera.cuantos(clave)
+            except Exception:
+                en_sala = 0
+            if not (en_sala and hay_juez_de_primera()):
+                esperan[clave] = (f"ya tiene vídeos programados para más de {int(tope_colchon)} días: "
+                                  "la fábrica se centra en los canales que tienen menos")
+                continue
+            SOLO_CONFIRMAR.add(clave)   # tiene vídeos ya hechos esperando juez: va solo a confirmarlos, no hace otro
         if insiste(clave):
             candidatos.append((not pendiente(clave), clave not in con_clip, huecos.colchon(ocupadas, ahora),
                                orden.get(clave, 99), clave, hora))
@@ -474,7 +488,8 @@ def main():
             respiro = int(ajustes.get("respiro_ia_segundos", 180))
             print(f"la IA no contestaba: espero {respiro // 60} min antes del siguiente turno", flush=True)
             time.sleep(respiro)
-        args = ["--canal", clave, "--salida", trabajo] + (["--hora", huecos.iso(hora)] if hora else [])
+        args = ["--canal", clave, "--salida", trabajo] + (["--hora", huecos.iso(hora)] if hora else []) \
+            + (["--solo-confirmar"] if clave in SOLO_CONFIRMAR else [])
         if a.prueba:
             args.append("--prueba")
         codigo = turno.main(args)

@@ -52,12 +52,16 @@ def tomar(clave):
         return None
 
 
-def devolver(clave, guion, veredicto=None, maximo=1):
-    """El guion a mano suspendió por poco y no queda IA para la segunda oportunidad: vuelve a la mesa (al final, con lo
-    que dijo el juez) en vez de perderse. Como mucho `maximo` vueltas. Devuelve True si ha vuelto."""
+def devolver(clave, guion, veredicto=None, maximo=1, nota_minima=72):
+    """El guion a mano suspendió POR POCO (nota_minima o más) y no queda IA para la segunda oportunidad: vuelve a la mesa
+    (al final, con lo que dijo el juez) en vez de perderse. Si suspendió lejos, no vuelve (saldría igual de mal). Como
+    mucho `maximo` vueltas. Devuelve True si ha vuelto."""
     try:
         vueltas = int(guion.get("vueltas") or 0)
         if vueltas >= maximo:
+            return False
+        nota = (veredicto or {}).get("total")
+        if isinstance(nota, (int, float)) and nota < nota_minima:
             return False
         d = privado.leer(_ruta(clave), {}) or {}
         guiones = [g for g in d.get("guiones") or [] if isinstance(g, dict)]
@@ -74,15 +78,19 @@ def devolver(clave, guion, veredicto=None, maximo=1):
         return False
 
 
-def reponer(clave, guion):
+def reponer(clave, guion, maximo=3):
     """Se cogió pero el turno no llegó a juzgarlo (no había juez, o la IA se cayó): vuelve el PRIMERO de la mesa, sin
-    gastar ninguna vuelta. Si ya está en la mesa, no se duplica. Devuelve True si ha vuelto."""
+    gastar vuelta. Como mucho `maximo` veces (si no, un guion que siempre se queda sin juez se repetiría sin fin). Si ya
+    está en la mesa, no se duplica. Devuelve True si ha vuelto."""
     try:
+        if int(guion.get("reposiciones") or 0) >= maximo:
+            return False
         d = privado.leer(_ruta(clave), {}) or {}
         guiones = [g for g in d.get("guiones") or [] if isinstance(g, dict)]
         g = {k: v for k, v in guion.items() if not (k == "cerebro" and v == "claude (a mano)")}
         if any(x.get("titulo") == g.get("titulo") and x.get("escenas") == g.get("escenas") for x in guiones):
             return False
+        g["reposiciones"] = int(guion.get("reposiciones") or 0) + 1
         d["guiones"] = [g] + guiones
         d["actualizado"] = privado.ahora()
         privado.escribir(_ruta(clave), d)
