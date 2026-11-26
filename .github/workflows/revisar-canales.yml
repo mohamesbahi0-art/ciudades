@@ -56,6 +56,30 @@ jobs:
           YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
           YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
         run: python bots/policia/programados.py
+      - name: Quitar el aviso de IA de los vídeos ya subidos (no son IA realista)
+        continue-on-error: true
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_GTA: ${{ secrets.YT_REFRESH_GTA }}
+          YT_ID_GTA: ${{ secrets.YT_ID_GTA }}
+          YT_REFRESH_CLIPS: ${{ secrets.YT_REFRESH_CLIPS }}
+          YT_ID_CLIPS: ${{ secrets.YT_ID_CLIPS }}
+          YT_REFRESH_CURIOS: ${{ secrets.YT_REFRESH_CURIOS }}
+          YT_ID_CURIOS: ${{ secrets.YT_ID_CURIOS }}
+          YT_REFRESH_VERSUS: ${{ secrets.YT_REFRESH_VERSUS }}
+          YT_ID_VERSUS: ${{ secrets.YT_ID_VERSUS }}
+          YT_REFRESH_MAPAS: ${{ secrets.YT_REFRESH_MAPAS }}
+          YT_ID_MAPAS: ${{ secrets.YT_ID_MAPAS }}
+          YT_REFRESH_TERROR: ${{ secrets.YT_REFRESH_TERROR }}
+          YT_ID_TERROR: ${{ secrets.YT_ID_TERROR }}
+          YT_REFRESH_SOBSHORTS: ${{ secrets.YT_REFRESH_SOBSHORTS }}
+          YT_ID_SOBSHORTS: ${{ secrets.YT_ID_SOBSHORTS }}
+          YT_REFRESH_NIVSHORTS: ${{ secrets.YT_REFRESH_NIVSHORTS }}
+          YT_ID_NIVSHORTS: ${{ secrets.YT_ID_NIVSHORTS }}
+        run: python herramientas/quitar_aviso_ia.py privado/registro/subidas.json 40
       - name: La Jefa de máquinas mira que cada turno pase a su hora
         if: always()
         env:

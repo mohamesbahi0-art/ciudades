@@ -78,7 +78,7 @@ def subir(clave, canal, video, guion, hora, prueba=False):
     codigo, mensaje, vid = herramienta.subir(
         clave, video, guion["titulo"], huecos.iso(hora), os.path.join(privado.carpeta(), REGISTRO),
         descripcion=descripcion(guion), etiquetas=[h.lstrip("#") for h in guion.get("hashtags", [])][:10],
-        categoria=canal.get("categoria", "24"), ia=canal.get("aviso_ia", True), prueba=prueba,
+        categoria=canal.get("categoria", "24"), ia=canal.get("aviso_ia", False), prueba=prueba,
         idioma=canal.get("idioma", "es")[:2])
     if prueba:
         return {"resultado": "prueba", "codigo": codigo, "mensaje": mensaje, "hora": huecos.iso(hora)}
