@@ -44,12 +44,56 @@ def caras(escenas):
     return escenas
 
 
+def montar_de_nuevo(cuenta, canal, g, nombre):
+    """Fotos, voz y montaje con lo que tenga ahora la cuenta (voz, muñeco, color). Devuelve (ruta, segundos)."""
+    trabajo = tempfile.mkdtemp(prefix="rehacer-")
+    g["escenas"] = caras(g["escenas"])
+    union = " … " if canal.get("narrador") == "show" else " "       # en el Show, una pausa entre frase y frase
+    g["narracion"] = union.join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
+    print(f"{cuenta}: rehaciendo su último vídeo ({len(g['escenas'])} escenas)", flush=True)
+    imagenes, origen = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "fotos"), persona=str(g.get("persona") or ""))
+    print(f"{cuenta}: {len(imagenes) - imagenes.count(None)}/{len(imagenes)} escenas con foto libre", flush=True)
+    asyncio.run(locutor.generar(g["narracion"], canal.get("voz"), canal.get("velocidad", "+0%"), "+0Hz", trabajo))
+    print(f"{cuenta}: voz con {locutor.MOTOR.get('motor')}", flush=True)
+    locutor.apretar(trabajo, hueco_max=0.9) if canal.get("narrador") == "show" else locutor.apretar(trabajo)
+    g["narrador"] = canal.get("narrador") or False
+    salida = os.path.join(trabajo, f"{nombre}.mp4")
+    montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"), salida)
+    segundos = montador.duracion(salida)
+    return salida, segundos
+
+
+def desde_sala(cuenta, clave, canal, cuantos):
+    """Lo pidió el dueño (26 nov): los vídeos que esperan en la Sala de espera (aprobados por el juez de reserva) pasan
+    a «Para subir» ya, montados otra vez con lo que tenga ahora la cuenta. Es su decisión: no esperan al juez principal."""
+    from bots.central import parasubir
+    from bots.juzgado import espera
+    fichas = espera._vivos(clave)[:cuantos]
+    if not fichas:
+        print(f"{cuenta}: no hay vídeos en la Sala de espera")
+        return 1
+    for ficha in fichas:
+        g = json.loads(json.dumps(ficha["guion"]))
+        nombre = f"sala-{ficha['id']}"
+        salida, segundos = montar_de_nuevo(cuenta, canal, g, nombre)
+        g["voz_motor"] = locutor.MOTOR.get("motor")
+        juicio = {"total": ficha.get("nota"), "cerebro": "suplente (lo pasó el dueño)"}
+        ids = parasubir.dejar(clave, canal, salida, g, segundos, juicio)
+        privado.apuntar_titulo(clave, g.get("titulo", ""))
+        espera.quitar(clave, ficha)
+        print(f"{cuenta}: de la Sala de espera a «Para subir» ({len(ids)} redes, {segundos:.0f} s)", flush=True)
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--cuenta", required=True, help="alias de la cuenta (barrio-N)")
+    p.add_argument("--sala", type=int, default=0, help="pasar N vídeos de la Sala de espera a «Para subir»")
     a = p.parse_args(argv)
     clave = privado.resolver(a.cuenta)
     canal = privado.canal(clave)
+    if a.sala:
+        return desde_sala(a.cuenta, clave, canal, a.sala)
     docs = []
     for f in glob.glob(os.path.join(privado.carpeta(), "parasubir", "*.json")):
         d = json.load(open(f, encoding="utf-8"))
@@ -64,20 +108,7 @@ def main(argv=None):
     if not g:
         print(f"{a.cuenta}: falta el guion guardado")
         return 1
-    trabajo = tempfile.mkdtemp(prefix="rehacer-")
-    g["escenas"] = caras(g["escenas"])
-    union = " … " if canal.get("narrador") == "show" else " "       # en el Show, una pausa entre frase y frase
-    g["narracion"] = union.join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
-    print(f"{a.cuenta}: rehaciendo su último vídeo ({len(g['escenas'])} escenas)", flush=True)
-    imagenes, origen = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "fotos"), persona=str(g.get("persona") or ""))
-    print(f"{a.cuenta}: {len(imagenes) - imagenes.count(None)}/{len(imagenes)} escenas con foto libre", flush=True)
-    asyncio.run(locutor.generar(g["narracion"], canal.get("voz"), canal.get("velocidad", "+0%"), "+0Hz", trabajo))
-    print(f"{a.cuenta}: voz con {locutor.MOTOR.get('motor')}", flush=True)
-    locutor.apretar(trabajo, hueco_max=0.9) if canal.get("narrador") == "show" else locutor.apretar(trabajo)
-    g["narrador"] = canal.get("narrador") or False
-    salida = os.path.join(trabajo, f"{guion_id}.mp4")
-    montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"), salida)
-    segundos = montador.duracion(salida)
+    salida, segundos = montar_de_nuevo(a.cuenta, canal, g, guion_id)
     enlace = almacen.guardar("para-subir", salida, f"{guion_id}.mp4")
     for _, f, d in docs:
         if d.get("guion_id") == guion_id:
