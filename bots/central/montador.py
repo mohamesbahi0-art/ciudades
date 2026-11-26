@@ -141,8 +141,15 @@ def show(guion, imagenes, palabras_voz, durs, total, carpeta):
                        "accion": e.get("accion") if e.get("accion") in ACCIONES_SHOW else accion or
                        ("senala" if _emocion(e) == "serio" and n % 2 else None), "foto": n,
                        "fondo": e.get("fondo") if e.get("fondo") in FONDOS_SHOW else fondo,
-                       "pop": str(e.get("pop"))[:8] if e.get("pop") else None})
+                       "pop": str(e.get("pop"))[:8] if e.get("pop") else None,
+                       "leccion": str(e.get("leccion"))[:70] if e.get("leccion") else None,
+                       "titulo_leccion": str(e.get("titulo_leccion") or "")[:8] or None})
         t += d
+    k = 0
+    for tr in tramos:
+        if tr["leccion"] and not tr["titulo_leccion"]:
+            k += 1
+            tr["titulo_leccion"] = f"LES {k}" if str(guion.get("idioma", "nl")).startswith("nl") else f"LECCIÓN {k}"
     datos = os.path.join(carpeta, "show.json")
     with open(datos, "w", encoding="utf-8") as f:
         json.dump({"duracion": total, "tramos": tramos, "fotos": [os.path.abspath(i) for i in imagenes],

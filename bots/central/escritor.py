@@ -53,7 +53,11 @@ REGLAS_TIPO["biografias"] = (
     "\"emocion\" (serio, enfadado, sorprendido, contento, triste o pensativo), \"accion\" si la frase la pide (fumar, "
     "balon, trofeo, dinero, telefono, correr o senala), \"fondo\" (habitacion, oficina, estadio, calle, banco, hospital "
     "o plato) y, en los momentos fuertes, \"pop\": un texto de 1-6 caracteres que salta en grande (x20, 3x, STOP!, "
-    "35M). Que actúe lo que se dice (si fuma 20 cigarros al día, sale fumando como una chimenea) y que cambie a menudo.")
+    "35M). Que actúe lo que se dice (si fuma 20 cigarros al día, sale fumando como una chimenea) y que cambie a menudo.\n"
+    "- LO MÁS IMPORTANTE: el vídeo deja 2 o 3 LECCIONES que el espectador puede aplicar a su vida (lo que se aprende de "
+    "esta persona). Van después de la historia y antes de la pregunta final, cada una en su escena: la voz la dice como "
+    "un consejo directo («Les één: …») y la escena lleva \"leccion\": la lección en 3-6 palabras para la pizarra "
+    "(«Elk nadeel heeft een voordeel», «Stop als het slecht voor je is»).")
 
 IDIOMAS = {"es": "español de España", "nl": "neerlandés (de los Países Bajos)", "en": "inglés"}
 

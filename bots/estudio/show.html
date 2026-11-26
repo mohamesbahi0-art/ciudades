@@ -41,6 +41,7 @@
   <g id="camara">
     <g id="decorado"></g>
     <g id="tarjeta"></g>
+    <g id="pizarra"></g>
     <g id="actor"></g>
     <g id="delante"></g>
   </g>
@@ -385,15 +386,38 @@ function efectos(accion, t, dt, cabeza, mano) {
   return s;
 }
 
+function partir(texto, ancho) {
+  const lineas = [], palabras = String(texto).toUpperCase().split(/\s+/);
+  let l = "";
+  for (const p of palabras) { if (l && (l + " " + p).length > ancho) { lineas.push(l); l = p; } else l = (l + " " + p).trim(); }
+  if (l) lineas.push(l);
+  return lineas.slice(0, 4);
+}
+function pizarra(x, dt) {          // «LES 1»: lo que se aprende de esta persona, en una pizarra que el chico señala
+  const q = salida(lim(dt / 0.4, 0, 1));
+  const lineas = partir(x.leccion, 17);
+  let s = `<g transform="translate(540 560) scale(${f(0.6 + 0.4 * q)}) rotate(${f(-2 * q)})">`;
+  s += `<rect x="-470" y="-360" width="940" height="720" rx="20" fill="#8B5A2B" stroke="${OUT}" stroke-width="10"/>`;
+  s += `<rect x="-440" y="-330" width="880" height="660" rx="10" fill="#1F3B2D"/>`;
+  s += `<rect x="-200" y="-300" width="400" height="110" rx="55" fill="#FFE14D" stroke="${OUT}" stroke-width="8"/>`;
+  s += `<text x="0" y="-222" text-anchor="middle" font-size="76" font-weight="900" font-family="${FUENTE}" fill="${OUT}">${String(x.titulo_leccion || "LES").replace(/[<&]/g, "")}</text>`;
+  lineas.forEach((l, k) => {
+    const v = lim((dt - 0.25 - k * 0.25) / 0.3, 0, 1);
+    s += `<text x="0" y="${-70 + k * 105}" text-anchor="middle" font-size="84" font-weight="900" font-family="${FUENTE}" fill="#FFFFFF" opacity="${f(v)}">${l.replace(/[<&]/g, "")}</text>`;
+  });
+  s += `<path d="M-300 ${f(-70 + lineas.length * 105 - 40)} q300 ${f(30 * q)} 600 0" stroke="#FFE14D" stroke-width="10" fill="none" stroke-linecap="round" opacity="${f(lim((dt - 0.9) / 0.3, 0, 1))}"/>`;
+  return s + `</g>`;
+}
+
 window.pintar = function (t) {
   const { i, x } = tramo(t);
-  let accion = x.accion || x.emocion || "serio";
+  let accion = x.leccion ? "senala" : (x.accion || x.emocion || "serio");
   const pausa = enPausa(t);
   if (pausa && !["fumar", "trofeo", "balon", "dinero", "correr"].includes(accion)) accion = pausa;
   const dt = t - x.desde;
   const b = boca(t);
   // decorado de la escena
-  const fondo = DECORADOS[x.fondo] ? x.fondo : (DE_ACCION[accion] || DE_EMOCION[x.emocion] || "habitacion");
+  const fondo = x.leccion ? "oficina" : DECORADOS[x.fondo] ? x.fondo : (DE_ACCION[accion] || DE_EMOCION[x.emocion] || "habitacion");
   const dec = DECORADOS[fondo](t);
   document.getElementById("decorado").innerHTML = dec.s;
   document.getElementById("delante").innerHTML = dec.delante || "";
@@ -402,8 +426,9 @@ window.pintar = function (t) {
   const fuerte = accion === "enfadado" ? 6 : 0;
   document.getElementById("camara").setAttribute("transform",
     `translate(${f(540 + Math.sin(t * 47) * fuerte)} ${f(960 + Math.cos(t * 39) * fuerte)}) scale(${f(golpe)}) translate(-540 -960)`);
-  // la foto, dentro del decorado
-  const n = FOTOS.length ? ((x.foto != null ? x.foto : i) % FOTOS.length) : -1;
+  // la foto, dentro del decorado (si la escena es una lección, va la pizarra en su lugar)
+  const n = x.leccion ? -1 : FOTOS.length ? ((x.foto != null ? x.foto : i) % FOTOS.length) : -1;
+  document.getElementById("pizarra").innerHTML = x.leccion ? pizarra(x, dt) : "";
   FOTOS.forEach((ft, k) => ft.caja.setAttribute("visibility", k === n ? "visible" : "hidden"));
   if (n >= 0) {
     const ft = FOTOS[n];
