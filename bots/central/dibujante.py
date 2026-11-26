@@ -116,7 +116,17 @@ def dibujar(escenas, modelo, carpeta, espera_maxima=1800, sin_avance=420, repeti
                 pendientes[i] = {"id": pedir(escenas[i]["dibujo"], modelo), "repetida": 0}
                 por_pedir.remove(i)
             except (urllib.error.URLError, KeyError, OSError, ValueError) as err:
-                print(f"  escena {i + 1}: todavía no se puede pedir ({type(err).__name__})")
+                # el código y el motivo que da AI Horde (nunca el texto del dibujo), para saber por qué falla
+                codigo = getattr(err, "code", "")
+                motivo = ""
+                if isinstance(err, urllib.error.HTTPError):
+                    try:
+                        motivo = str(json.loads(err.read().decode("utf-8", "ignore")).get("message", ""))[:120]
+                    except Exception:
+                        motivo = ""
+                print(f"  escena {i + 1}: todavía no se puede pedir ({type(err).__name__} {codigo} {motivo})".rstrip())
+                if codigo in (400, 401, 403):       # no es un límite de pedidos: insistir no sirve de nada
+                    raise RuntimeError(f"faltan {len(escenas)} dibujos de {len(escenas)}: AI Horde dice {codigo}")
                 break
         time.sleep(20)
         for i, p in list(pendientes.items()):
