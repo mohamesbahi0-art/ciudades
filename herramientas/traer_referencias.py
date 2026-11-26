@@ -27,9 +27,10 @@ def transcribir(ruta):
     from faster_whisper import WhisperModel
     if not _MODELO:
         _MODELO.append(WhisperModel("small", device="cpu", compute_type="int8"))
-    audio = ruta + ".wav"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta, "-vn", "-ac", "1", "-ar", "16000", audio], check=True)
-    segs, _ = _MODELO[0].transcribe(audio, vad_filter=True)
+    import numpy as np                  # el audio ya decodificado (así no hace falta la librería av, que choca de versión)
+    crudo = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", ruta, "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"],
+                           capture_output=True, check=True).stdout
+    segs, _ = _MODELO[0].transcribe(np.frombuffer(crudo, dtype=np.float32), vad_filter=True)
     return " ".join(x.text.strip() for x in segs)
 
 
