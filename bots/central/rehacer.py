@@ -66,13 +66,14 @@ def main(argv=None):
         return 1
     trabajo = tempfile.mkdtemp(prefix="rehacer-")
     g["escenas"] = caras(g["escenas"])
-    g["narracion"] = " ".join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
+    union = " … " if canal.get("narrador") == "show" else " "       # en el Show, una pausa entre frase y frase
+    g["narracion"] = union.join(e.get("voz") or e.get("texto", "") for e in g["escenas"])
     print(f"{a.cuenta}: rehaciendo su último vídeo ({len(g['escenas'])} escenas)", flush=True)
     imagenes, origen = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "fotos"), persona=str(g.get("persona") or ""))
     print(f"{a.cuenta}: {len(imagenes) - imagenes.count(None)}/{len(imagenes)} escenas con foto libre", flush=True)
     asyncio.run(locutor.generar(g["narracion"], canal.get("voz"), canal.get("velocidad", "+0%"), "+0Hz", trabajo))
     print(f"{a.cuenta}: voz con {locutor.MOTOR.get('motor')}", flush=True)
-    locutor.apretar(trabajo)
+    locutor.apretar(trabajo, hueco_max=0.9) if canal.get("narrador") == "show" else locutor.apretar(trabajo)
     g["narrador"] = canal.get("narrador") or False
     salida = os.path.join(trabajo, f"{guion_id}.mp4")
     montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"), salida)

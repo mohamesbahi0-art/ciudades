@@ -80,7 +80,7 @@ const DECORADOS = {
       for (let y = 1120 - h + 20; y < 1100; y += 50) s += `<rect x="${78 + n * 112}" y="${y}" width="22" height="26" fill="#FFF4B0" opacity="${azar(n * 7 + y) > 0.5 ? 0.9 : 0.25}"/><rect x="${116 + n * 112}" y="${y}" width="22" height="26" fill="#FFF4B0" opacity="${azar(n * 3 + y) > 0.5 ? 0.9 : 0.25}"/>`; }
     s += `<rect x="40" y="120" width="1000" height="1000" fill="none" stroke="#2D3646" stroke-width="22"/><line x1="540" y1="120" x2="540" y2="1120" stroke="#2D3646" stroke-width="14"/>`;
     s += `<rect y="${SUELO}" width="1080" height="${1920 - SUELO}" fill="#3B4555"/>`;
-    return { s, foto: [540, 560, 0.74, "tele"], delante: `<rect x="-40" y="1600" width="1160" height="60" rx="10" fill="#6B4226" stroke="${OUT}" stroke-width="8"/><rect x="0" y="1655" width="1080" height="265" fill="#5A361E"/>` };
+    return { s, foto: [540, 560, 0.74, "tele"], delante: `<rect x="-40" y="1760" width="1160" height="50" rx="10" fill="#6B4226" stroke="${OUT}" stroke-width="8"/><rect x="0" y="1805" width="1080" height="115" fill="#5A361E"/>` };
   },
   estadio(t) {
     let s = `<rect width="1080" height="1920" fill="#0B1630"/>`;
@@ -171,6 +171,19 @@ function boca(t) {
   return 0;
 }
 
+// Cuando la voz hace una pausa, el chico reacciona como una persona: da un sorbo al café, levanta una ceja mirando a
+// cámara o se encoge de hombros (va rotando).
+function enPausa(t) {
+  const p = (window.GUION && GUION.palabras) || [];
+  for (let k = 0; k + 1 < p.length; k++) {
+    const fin = p[k].f, sig = p[k + 1].i;
+    if (t > fin + 0.06 && t < sig - 0.04 && sig - fin >= 0.45) return ["ceja", "beber", "hombros"][k % 3];
+    if (p[k].i > t) break;
+  }
+  if (p.length && t > p[p.length - 1].f + 0.1) return "ceja";
+  return null;
+}
+
 function brazo(sx, sy, tx, ty, lado) {
   const L1 = 150, L2 = 140;
   let dx = tx - sx, dy = ty - sy, d = Math.hypot(dx, dy);
@@ -202,6 +215,9 @@ function manos(accion, t, dt, habla) {
     case "telefono": return [[-180, -250 + o * 6], [175, -650]];
     case "balon": return [[-230, -380 + o * 20], [230, -380 - o * 20]];
     case "correr": return [[-200 + o2 * 80, -330], [200 - o2 * 80, -330]];
+    case "beber": return [[-180, -250], (t % 1.6) < 0.9 ? [60, -560] : [170, -430]];
+    case "ceja": return [[-170, -230], [180, -260]];
+    case "hombros": return [[-270, -470 - Math.abs(o) * 20], [270, -470 - Math.abs(o) * 20]];
     default: return [[-180, -250 + o * 8 * habla], [230 + o * 30 * habla, -430 + Math.sin(t * 5.3) * 60 * habla]];
   }
 }
@@ -209,7 +225,7 @@ function manos(accion, t, dt, habla) {
 const CARAS = {
   serio: [8, 10, 1, 0.1], senala: [0, 4, 1, 0.45], enfadado: [16, 26, 0.85, -0.7], sorprendido: [-26, -8, 1.3, 0],
   contento: [-8, -6, 1.05, 1], triste: [-6, -22, 0.95, -0.8], pensativo: [-6, 14, 1, -0.2], dinero: [-6, -4, 1.05, 1],
-  fumar: [4, 8, 0.8, 0.3], trofeo: [-10, -8, 1.05, 1], telefono: [0, 6, 1, 0.3], balon: [-6, -4, 1.05, 0.7], correr: [6, 12, 0.95, -0.2],
+  fumar: [4, 8, 0.8, 0.3], beber: [-6, -4, 0.9, 0.2], ceja: [0, 0, 1, 0.55], hombros: [-14, -10, 1.05, -0.3], trofeo: [-10, -8, 1.05, 1], telefono: [0, 6, 1, 0.3], balon: [-6, -4, 1.05, 0.7], correr: [6, 12, 0.95, -0.2],
 };
 
 function personaje(t, accion, emocion, dt, b) {
@@ -222,6 +238,8 @@ function personaje(t, accion, emocion, dt, b) {
   if (accion === "enfadado") { const p = Math.abs(Math.sin(t * 9)); sy = 1 - p * 0.03; sx = 1 + p * 0.03; }
   if (accion === "triste") { sy = 0.97; giro = -4; }
   if (accion === "pensativo") giro = 5;
+  if (accion === "ceja") giro = -7;
+  if (accion === "hombros") { salto = -Math.abs(Math.sin(lim(dt, 0, 9) * 0)) ; sy = 1.02; }
   if (accion === "correr") giro = 6;
   let tos = 0;
   if (accion === "fumar") { const q = t % 2.6; if (q > 1.9 && q < 2.4) { tos = Math.sin((q - 1.9) * 40) * 8; } }
@@ -256,7 +274,7 @@ function personaje(t, accion, emocion, dt, b) {
   c += `<path d="M-70 ${cy - 200} Q10 ${cy - 245} 90 ${cy - 210}" fill="none" stroke="#FFF3C4" stroke-width="12" stroke-linecap="round" opacity="0.8"/>`;
   c += `<ellipse cx="-112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/><ellipse cx="112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/>`;
   const abre = (t % 3.4 > 3.28 || tos ? 0.1 : 1) * ojo;
-  const mira = accion === "senala" ? [14, -14] : accion === "pensativo" ? [-6, -14] : [0, 0];
+  const mira = accion === "ceja" ? [0, 4] : accion === "senala" ? [14, -14] : accion === "pensativo" ? [-6, -14] : [0, 0];
   for (const lado of [-1, 1]) {
     const ox = lado * 70, oy = cy - 2;
     c += `<ellipse cx="${ox}" cy="${oy}" rx="${f(40 * ojo)}" ry="${f(50 * abre)}" fill="#fff" stroke="${OUT}" stroke-width="7"/>`;
@@ -265,7 +283,7 @@ function personaje(t, accion, emocion, dt, b) {
       c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(11 * ojo)}" fill="#0B0B0B"/>`;
       c += `<circle cx="${ox + mira[0] + 8}" cy="${oy - 4 + mira[1]}" r="7" fill="#fff"/>`;
     }
-    const g = -cejaGiro * lado, ey = oy - 78 + cejaY;
+    const g = -cejaGiro * lado, ey = oy - 78 + cejaY - (accion === "ceja" && lado === 1 ? 46 : 0);
     c += `<rect x="${ox - 44}" y="${ey}" width="88" height="24" rx="12" fill="${CEJA}" stroke="${OUT}" stroke-width="5" transform="rotate(${g} ${ox} ${ey + 12})"/>`;
   }
   c += `<path d="M-6 ${cy + 40} Q14 ${cy + 52} -4 ${cy + 64}" fill="none" stroke="${OUT}" stroke-width="6" stroke-linecap="round"/>`;
@@ -279,7 +297,8 @@ function personaje(t, accion, emocion, dt, b) {
     c += `<ellipse cx="0" cy="${my + 8}" rx="24" ry="30" fill="#5C1A1F" stroke="${OUT}" stroke-width="7"/>`;
   } else {
     const cur = sonrisa * 30;
-    c += `<path d="M-52 ${my} Q0 ${my + cur} 52 ${my}" fill="none" stroke="${OUT}" stroke-width="9" stroke-linecap="round"/>`;
+    if (accion === "ceja") c += `<path d="M-50 ${my + 6} Q10 ${my + 22} 56 ${my - 14}" fill="none" stroke="${OUT}" stroke-width="9" stroke-linecap="round"/>`;
+    else c += `<path d="M-52 ${my} Q0 ${my + cur} 52 ${my}" fill="none" stroke="${OUT}" stroke-width="9" stroke-linecap="round"/>`;
   }
   // el cigarro en la boca (o en la mano cuando no da una calada)
   if (accion === "fumar" && !tos) {
@@ -293,6 +312,7 @@ function personaje(t, accion, emocion, dt, b) {
   let mano = "";
   if (accion === "fumar" && (t % 2.6) >= 1.1) mano += `<g transform="translate(${f(md[0])} ${f(md[1] - 10)}) rotate(-30)"><rect x="0" y="-9" width="110" height="18" rx="5" fill="#fff" stroke="${OUT}" stroke-width="4"/><rect x="0" y="-9" width="28" height="18" fill="#E0A35A"/><rect x="102" y="-9" width="12" height="18" rx="3" fill="#FF5A1F"/></g>`;
   if (accion === "trofeo") mano += `<g transform="translate(0 ${f(md[1] - 120)})"><path d="M-80 -120 L80 -120 L60 0 L-60 0 Z" fill="url(#oro)" stroke="${OUT}" stroke-width="7"/><path d="M-80 -110 Q-140 -100 -110 -40 Q-90 -20 -64 -30" fill="none" stroke="${OUT}" stroke-width="16"/><path d="M80 -110 Q140 -100 110 -40 Q90 -20 64 -30" fill="none" stroke="${OUT}" stroke-width="16"/><path d="M-80 -110 Q-140 -100 -110 -40 Q-90 -20 -64 -30 M80 -110 Q140 -100 110 -40 Q90 -20 64 -30" fill="none" stroke="#F2B705" stroke-width="8"/><rect x="-18" y="0" width="36" height="60" fill="url(#oro)" stroke="${OUT}" stroke-width="6"/><rect x="-60" y="60" width="120" height="34" rx="6" fill="#5A3A1A" stroke="${OUT}" stroke-width="6"/></g>`;
+  if (accion === "beber") mano += `<g transform="translate(${f(md[0] - 10)} ${f(md[1] - 20)})"><rect x="-40" y="-55" width="80" height="95" rx="12" fill="#fff" stroke="${OUT}" stroke-width="7"/><path d="M40 -35 Q78 -30 72 0 Q66 20 40 18" fill="none" stroke="${OUT}" stroke-width="9"/><rect x="-40" y="-20" width="80" height="22" fill="#D7263D"/>${(t % 1.6) < 0.9 ? "" : `<path d="M-14 -70 q10 -20 0 -40 M14 -70 q10 -20 0 -40" stroke="#ddd" stroke-width="6" fill="none" opacity="0.7"/>`}</g>`;
   if (accion === "telefono") mano += `<rect x="${f(md[0] - 28)}" y="${f(md[1] - 70)}" width="56" height="110" rx="12" fill="#222" stroke="${OUT}" stroke-width="6"/>`;
   if (accion === "sorprendido" || accion === "pensativo") s += c + bi.s + bd.s + mano;
   else s += bi.s + bd.s + c + mano;
@@ -359,13 +379,17 @@ function efectos(accion, t, dt, cabeza, mano) {
           <ellipse cx="0" cy="0" rx="120" ry="90" fill="#fff" stroke="${OUT}" stroke-width="6"/>
           <text x="0" y="40" font-size="120" font-weight="900" text-anchor="middle" fill="#2B6CB0" font-family="${FUENTE}" transform="rotate(${f(Math.sin(t * 3) * 10)} 0 0)">?</text></g>`;
   }
+  if (accion === "hombros") for (const lado of [-1, 1]) s += `<text x="${lado * 330}" y="${f(cabeza - 60 - Math.abs(Math.sin(t * 5)) * 30)}" font-size="90" font-weight="900" text-anchor="middle" fill="#fff" stroke="${OUT}" stroke-width="8" paint-order="stroke" font-family="${FUENTE}">?</text>`;
+  if (accion === "ceja") s += `<text x="250" y="${f(cabeza - 170)}" font-size="80" font-weight="900" text-anchor="middle" fill="#FFE14D" stroke="${OUT}" stroke-width="8" paint-order="stroke" font-family="${FUENTE}" transform="rotate(12 250 ${f(cabeza - 170)})">hm…</text>`;
   if (accion === "correr") for (let n = 0; n < 5; n++) s += `<line x1="${-300 - n * 20}" y1="${-500 + n * 90}" x2="${-450 - n * 30}" y2="${-500 + n * 90}" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity="${f(0.5 + 0.5 * Math.sin(t * 20 + n))}"/>`;
   return s;
 }
 
 window.pintar = function (t) {
   const { i, x } = tramo(t);
-  const accion = x.accion || x.emocion || "serio";
+  let accion = x.accion || x.emocion || "serio";
+  const pausa = enPausa(t);
+  if (pausa && !["fumar", "trofeo", "balon", "dinero", "correr"].includes(accion)) accion = pausa;
   const dt = t - x.desde;
   const b = boca(t);
   // decorado de la escena

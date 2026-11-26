@@ -932,7 +932,8 @@ def main(argv=None):
             paso("locutor", f"grabando la voz ({canal.get('voz')})", "grabando la voz")
             asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
                                         "+0Hz", trabajo))
-            quitado = locutor.apretar(trabajo)
+            quitado = locutor.apretar(trabajo, hueco_max=0.9) if canal.get("narrador") == "show" \
+                else locutor.apretar(trabajo)       # en el Show se dejan las pausas: el chico reacciona en ellas
             _voz_de_pago(g, canal)
             cuadernos["locutor"].apuntar("voz", {"canal": clave, "guion": id_guion, "silencio_quitado": quitado})
             paso("locutor", f"voz lista ({quitado} s de silencios quitados)")
