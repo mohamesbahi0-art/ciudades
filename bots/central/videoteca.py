@@ -251,16 +251,34 @@ def archivar(paso=print, maximo=6):
     return hechos
 
 
-def repasar_marcas(paso=print):
+# Creadores con un logo y rótulos fijos que el detector no siempre ve: se quita siempre esa franja (lo que se queda).
+# Video Pump: logo «VP / VIDEOPUMP» arriba a la derecha y el título del capítulo arriba a la izquierda (26 nov: los
+# jueces lo daban como fallo grave en 12 de 40 juicios).
+LOGOS_FIJOS = {"Video Pump": {"x": 0.0, "y": 0.19, "ancho": 1.0, "alto": 0.81}}
+
+
+def repasar_marcas(paso=print, maximo=12):
     """Las tomas guardadas antes del detector de logos: se bajan, se les quita lo que esté quieto en una esquina (logo o
-    marca de agua del autor) y se vuelven a guardar. Solo las que no lo tienen hecho; sin IA."""
-    lista, hechas = tomas(), 0
+    marca de agua del autor) y se vuelven a guardar. Solo las que no lo tienen hecho; sin IA. Las de un creador con logo
+    fijo (LOGOS_FIJOS) se recortan siempre por su franja. Como mucho `maximo` por pasada, para no frenar la ronda."""
+    lista, hechas, vistas = tomas(), 0, 0
     for t in lista:
-        if t.get("marcas"):
+        fijo = LOGOS_FIJOS.get(t.get("creador"))
+        if t.get("marcas") and not (fijo and t.get("marcas") != "fijo"):
             continue
+        if vistas >= maximo:
+            break
+        vistas += 1
         tmp = tempfile.mkdtemp(prefix="repaso-")
         try:
             ruta = almacen.bajar(ESTANTERIA, t["archivo"], tmp)
+            if fijo:
+                limpio = limpiar(ruta, {"recorte": fijo, "sonido": t.get("sonido")}, os.path.join(tmp, "limpio.mp4"))
+                almacen.guardar(ESTANTERIA, limpio, t["archivo"])
+                t["marcas"] = "fijo"
+                hechas += 1
+                paso(f"videoteca: {t['id']} sin el logo ni los rótulos del autor")
+                continue
             quieto = clips._recorte_valido(clips.marcas(ruta))
             if quieto:
                 limpio = limpiar(ruta, {"recorte": quieto, "sonido": t.get("sonido")}, os.path.join(tmp, "limpio.mp4"))
