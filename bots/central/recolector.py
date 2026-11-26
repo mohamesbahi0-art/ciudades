@@ -67,6 +67,19 @@ Devuelve SOLO un JSON: {{"juego_principal": "gta5|gta6|otro",
 
 
 
+PLATAFORMAS = re.compile(r"\b(microsoft|xbox|sony|playstation|windows|nintendo|steam|pc)\b", re.I)
+ANONIMO = "un usuario de Internet Archive"
+
+
+def _creador_publico(nombre):
+    """El nombre que va en el crédito público. Si en la ficha de origen pone un correo o una consola/plataforma (no
+    una persona), se pone «un usuario de Internet Archive» (el enlace y la licencia van al lado): nunca un correo."""
+    n = str(nombre or "").strip()
+    if not n or n == "?" or "@" in n or PLATAFORMAS.search(n):
+        return ANONIMO
+    return n[:80]
+
+
 def _juego_claro(texto):
     """«gta6» o «gta5» si el texto lo dice sin dudas (y no nombra los dos); si no, None."""
     t = str(texto).upper()
@@ -227,7 +240,7 @@ def recoger_video(doc, estado, tmp, paso=print):
         return {"resultado": "demasiado corto"}
     info = meta.get("metadata") or {}
     creador = info.get("creator") or doc.get("creator") or info.get("uploader") or "?"
-    creador = creador[0] if isinstance(creador, list) else creador
+    creador = _creador_publico(creador[0] if isinstance(creador, list) else creador)
     lic = licencia(info.get("licenseurl") or doc.get("licenseurl"))
     if not lic:
         return {"resultado": "licencia que no vale"}
