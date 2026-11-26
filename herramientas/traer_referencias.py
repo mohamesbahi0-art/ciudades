@@ -19,6 +19,20 @@ sys.path.insert(0, RAIZ)
 from bots.comun import almacen, privado  # noqa: E402
 
 
+_MODELO = []
+
+
+def transcribir(ruta):
+    """Lo que se dice en el vídeo, con faster-whisper (gratis, en la máquina de GitHub)."""
+    from faster_whisper import WhisperModel
+    if not _MODELO:
+        _MODELO.append(WhisperModel("small", device="cpu", compute_type="int8"))
+    audio = ruta + ".wav"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta, "-vn", "-ac", "1", "-ar", "16000", audio], check=True)
+    segs, _ = _MODELO[0].transcribe(audio, vad_filter=True)
+    return " ".join(x.text.strip() for x in segs)
+
+
 def main(nombre, cuantos=4):
     pedidas = privado.leer(os.path.join("referencias", "pedidas.json"), {}) or {}
     url = pedidas.get(nombre)
@@ -55,13 +69,11 @@ def main(nombre, cuantos=4):
         texto = ""
         if os.environ.get("TRANSCRIBIR"):          # lo que dice en voz (para fijarse en lo que transmite)
             try:
-                from faster_whisper import WhisperModel
-                global _MODELO
-                _MODELO = globals().get("_MODELO") or WhisperModel("small", device="cpu", compute_type="int8")
-                segs, _ = _MODELO.transcribe(ruta, vad_filter=True)
-                texto = " ".join(x.text.strip() for x in segs)
+                texto = transcribir(ruta)
             except Exception as ex:
-                texto = f"(no se pudo transcribir: {type(ex).__name__})"
+                import traceback
+                traceback.print_exc()
+                texto = f"(no se pudo transcribir: {type(ex).__name__}: {str(ex)[:200]})"
         datos.append({"n": n, "url": u, "titulo": e.get("title"), "descripcion": e.get("description"),
                       "visitas": e.get("view_count"), "segundos": round(dur, 1), "texto": texto})
     json.dump({"url": url, "videos": datos}, open(os.path.join(carpeta, "datos.json"), "w", encoding="utf-8"),
