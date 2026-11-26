@@ -90,6 +90,14 @@ def _gancho(texto, ancho_max=15):
     return "\n".join(lineas + [actual])
 
 
+def _repite_voz(rotulo, palabras_voz, segundos=2.5):
+    """¿El rótulo de arriba repite lo que dice la voz en esos mismos segundos? Entonces sobra (sale el texto dos veces)."""
+    norm = lambda t: re.sub(r"[^\w]", "", str(t).lower())
+    del_rotulo = {norm(w) for w in str(rotulo).split() if len(norm(w)) > 2}
+    dichas = {norm(w["t"]) for w in palabras_voz if w["i"] < segundos}
+    return bool(del_rotulo) and len(del_rotulo & dichas) * 2 >= len(del_rotulo)
+
+
 def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
     tmp = tempfile.mkdtemp()
     try:
@@ -129,7 +137,10 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
         # Una línea por drawtext: con varias líneas en un mismo texto, el ffmpeg nuevo pinta un cuadradito en el salto.
         fuente = f":fontfile={FUENTE}" if os.path.exists(FUENTE) else ""
         filtro = "[0:v]ass=s.ass"
-        for n, linea in enumerate(_gancho(guion.get("texto_pantalla") or guion["titulo"]).split("\n")):
+        rotulo = _gancho(guion.get("texto_pantalla") or guion["titulo"])
+        if _repite_voz(rotulo, palabras_voz):     # el rótulo diría lo mismo que el subtítulo a la vez: los jueces lo ven doble
+            rotulo = ""
+        for n, linea in enumerate(rotulo.split("\n") if rotulo else []):
             with open(os.path.join(tmp, f"gancho{n}.txt"), "w", encoding="utf-8") as f:
                 f.write(linea)
             filtro += (f",drawtext=textfile=gancho{n}.txt" + fuente +
