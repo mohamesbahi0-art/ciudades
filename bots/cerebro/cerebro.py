@@ -244,9 +244,13 @@ class Cerebro:
             if not {k for k in cambios if not k.startswith("_")}:
                 self.ajustes["canales"].pop(clave, None)
         for clave, c in self.cuentas():
+            if (c.get("tipo") == "clips" or c.get("solo_con_clip")) and \
+                    (self.ajustes["canales"].get(clave) or {}).get("hipnotico_cada"):
+                self.ajustes["canales"].pop(clave, None)   # el canal de clips solo hace vídeos con clips de juego
             if c.get("destino") != "youtube" or c.get("estudio") == "animacion" or c.get("solo_clips") or \
-                    c.get("fotos") or c.get("videoteca"):
-                continue                      # solo las cuentas que dependen del servicio gratis de dibujos
+                    c.get("fotos") or c.get("videoteca") or c.get("tipo") == "clips" or c.get("solo_con_clip"):
+                continue                      # solo las cuentas que dependen del servicio gratis de dibujos (el canal
+                                              # de clips de juego nunca pasa a otro formato)
             if (self.ajustes["canales"].get(clave) or {}).get("hipnotico_cada") == 1:
                 continue
             turnos = (privado.leer(os.path.join("estado", "central", f"{clave}.json"), {}) or {}).get("turnos") or []

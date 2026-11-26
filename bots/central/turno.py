@@ -17,6 +17,7 @@ import asyncio
 import datetime as dt
 import inspect
 import json
+import re
 import os
 import shutil
 import sys
@@ -201,6 +202,22 @@ def _coliseo(clave, canal, g, v, paso, a, resumen):
     return nuevo
 
 
+def _titulo_repetido(clave, titulo):
+    """¿Ese título (sin emojis, #shorts ni mayúsculas) ya está hecho en el canal?"""
+    def norma(x):
+        x = re.sub(r"#\w+", "", str(x or "").lower())
+        return " ".join(re.sub(r"[^\w\s]", " ", x).split())
+    n = norma(titulo)
+    if not n:
+        return False
+    try:
+        hechos = set(privado.titulos_recientes(clave, 200))
+        hechos |= {r.get("titulo") for r in (privado.leer(subidor.REGISTRO, []) or []) if r.get("canal") == clave}
+        return any(norma(h) == n for h in hechos if h)
+    except Exception:
+        return False
+
+
 def _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen):
     """Lo que pasa con un vídeo ya juzgado: prueba, suspendido, bandeja «Para subir» o subida a YouTube (o la cola)."""
     if a.prueba:
@@ -211,6 +228,11 @@ def _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, 
     elif v["veredicto"] != "aprobado":
         paso("subidor", f"no llega a la nota que pide el dueño ({v.get('total', '-')}/100): no se sube")
         resumen["destino_resultado"] = "suspendido"
+    elif _titulo_repetido(clave, g.get("titulo")):
+        # el Escritor a veces repite un título ya publicado: un duplicado no se sube (26 nov, en la Sala de gta)
+        paso("subidor", f"«{g.get('titulo')}» ya está publicado en el canal: no se sube un vídeo repetido",
+             "el título ya está publicado en el canal: no se sube repetido")
+        resumen.update(destino_resultado="suspendido", motivo="título repetido")
     elif canal["destino"] == "parasubir":
         ids = parasubir.dejar(clave, canal, video, g, segundos, v)
         cuadernos["publicador"].apuntar("para_subir", {"barrio": clave, "documentos": ids, "guion": id_guion})
@@ -819,7 +841,13 @@ def main(argv=None):
             raise _Hecho()
         clip = None if canal.get("estudio") == "animacion" else clips.listo_para(clave)
         if clip and not a.prueba and not ia.hay_de_primera("juez"):
-            # el clip que grabó el dueño no se juzga con suplentes: espera a un juez de primera; mientras, lo de siempre
+            # el clip que grabó el dueño no se juzga con suplentes: espera a un juez de primera
+            if canal.get("tipo") == "clips" or canal.get("solo_con_clip"):
+                # un canal que SOLO trabaja con clips de juego no hace otra cosa mientras (antes inventaba historias)
+                paso("juez_guardia", "el clip del dueño espera a que haya juez de primera; el canal solo hace vídeos "
+                     "con clips, así que espera")
+                resumen.update(destino_resultado="espera_juez", resultado="hecho")
+                raise _Hecho()
             paso("juez_guardia", "el clip del dueño espera a que haya juez de primera; mientras, la cuenta hace su vídeo")
             clip = None
         if clip:                    # el dueño ha grabado un clip para este canal: va antes que nada
@@ -895,8 +923,15 @@ def main(argv=None):
                 g, vale = mano, True
             else:
                 paso("escritor", "escribiendo el guion")
-                g = escritor.escribir(canal, lecciones_escritor + aviso_juez,
-                                      privado.titulos_recientes(clave), fuentes, idea=idea)
+                try:
+                    g = escritor.escribir(canal, lecciones_escritor + aviso_juez,
+                                          privado.titulos_recientes(clave), fuentes, idea=idea)
+                except ia.SinIA:
+                    # el guion a mano suspendió y no queda IA para reescribirlo: vuelve a la mesa, no se pierde
+                    if mano and intento == 2 and not a.prueba and a_mano.devolver(clave, mano, v):
+                        paso("escritor", "no queda IA para la segunda oportunidad: el guion a mano vuelve a la mesa "
+                             "para otro turno", "el guion a mano vuelve a la mesa para otro turno")
+                    raise
                 g = _ensayo(clave, canal, g, paso, a, lambda extra: escritor.escribir(
                     canal, lecciones_escritor + aviso_juez + extra, privado.titulos_recientes(clave), fuentes, idea=idea))
                 g, vale = _jurado_guion(clave, canal, g, paso, a, alegatos=_alegatos_idea(id_idea),

@@ -166,7 +166,11 @@ def presupuesto(e=None, a=None):
     except (TypeError, ValueError, AttributeError):
         pass
     tope_ahora = _tope_ahora(tope_hoy, a)
-    return {"hoy_usd": round(gastado_hoy, 4), "tope_hoy_usd": round(tope_hoy, 4), "tope_ahora_usd": round(tope_ahora, 4),
+    # lo que gastan los papeles con hucha propia (la Élite) no se come el reparto de la fábrica (26 nov: la hucha de
+    # la Élite contaba en el día y la fábrica se quedaba antes sin Claude)
+    fuera = sum(gastado_hoy_papel(p, e) for p in (a.get("aparte") or {}))
+    return {"hoy_usd": round(gastado_hoy, 4), "fabrica_hoy_usd": round(max(0.0, gastado_hoy - fuera), 4),
+            "tope_hoy_usd": round(tope_hoy, 4), "tope_ahora_usd": round(tope_ahora, 4),
             "mes_usd": round(en_el_mes, 4), "tope_mes_usd": mes, "dias_para_creditos_nuevos": quedan}
 
 
@@ -195,11 +199,15 @@ def cuando_puede(papel="guionista"):
         return None
     ahora = dt.datetime.now(dt.timezone.utc)
     for hora in range(ahora.hour, 24):
-        if p["hoy_usd"] + MARGEN <= _tope_ahora(p["tope_hoy_usd"], a, papel, hora):
+        if p["fabrica_hoy_usd"] + MARGEN <= _tope_ahora(p["tope_hoy_usd"], a, papel, hora):
             cuando = ahora.replace(hour=hora, minute=0, second=0, microsecond=0)
             return max(cuando, ahora.replace(microsecond=0)).strftime("%Y-%m-%dT%H:%M:%SZ")
     manana = (ahora + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return manana.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def gastado_hoy_papel(papel, e=None):
+    return gastado_hoy(papel, e)
 
 
 def gastado_hoy(papel, e=None):
@@ -244,7 +252,7 @@ def puede(papel, a_su_hora=False):
     # no esperan a su hora (un vídeo ya hecho no se queda sin juicio) y el modelo pequeño cuesta céntimos.
     con_ritmo = (primero(papel, a) or a_su_hora) and not modelo_de(papel, a).startswith("claude-haiku")
     tope = _tope_ahora(p["tope_hoy_usd"], a, papel) if con_ritmo else p["tope_hoy_usd"]
-    return p["hoy_usd"] + MARGEN <= tope and p["mes_usd"] + MARGEN <= p["tope_mes_usd"]
+    return p["fabrica_hoy_usd"] + MARGEN <= tope and p["mes_usd"] + MARGEN <= p["tope_mes_usd"]
 
 
 def coste(modelo, entrada, salida, leido=0, escrito=0):

@@ -45,7 +45,17 @@ def apuntar_portero():
     except Exception:
         pass
     anterior = privado.leer("estado/gemini.json", {}) or {}
-    privado.guardar_estado("gemini.json", {"ultimo_reparto": USO, "sin_cupo": sorted(AGOTADOS),
+    # Se UNEN los agotados de esta pasada con los que ya estaban apuntados desde que volvió el cupo (08:00 UTC): antes
+    # cada robot pisaba la lista con lo suyo y, si no había probado los de primera, la fábrica creía que había juez.
+    ahora = dt.datetime.now(dt.timezone.utc)
+    vuelve = ahora.replace(hour=8, minute=0, second=0, microsecond=0)
+    if ahora < vuelve:
+        vuelve -= dt.timedelta(days=1)
+    sin_cupo = set(AGOTADOS)
+    if str(anterior.get("actualizado") or "") >= vuelve.strftime("%Y-%m-%dT%H:%M:%SZ"):
+        sin_cupo |= set(anterior.get("sin_cupo") or [])
+    sin_cupo -= {m for m, u in USO.items() if u.get("bien")}     # el que ha contestado bien en esta pasada, vuelve
+    privado.guardar_estado("gemini.json", {"ultimo_reparto": USO, "sin_cupo": sorted(sin_cupo),
                                            "anteriores": (anterior.get("anteriores", []) + [anterior.get("ultimo_reparto")])[-20:]
                                            if anterior.get("ultimo_reparto") else [],
                                            "ve_videos": VE_VIDEOS or anterior.get("ve_videos")})

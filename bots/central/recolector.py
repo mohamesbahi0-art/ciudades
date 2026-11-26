@@ -66,6 +66,18 @@ Devuelve SOLO un JSON: {{"juego_principal": "gta5|gta6|otro",
 (calidad de 0 a 100: lo bien que se ve y lo claro que enseña su etiqueta; nota de 0 a 100: cuánto se haría viral)"""
 
 
+
+def _juego_claro(texto):
+    """«gta6» o «gta5» si el texto lo dice sin dudas (y no nombra los dos); si no, None."""
+    t = str(texto).upper()
+    seis = re.search(r"GTA[\s_-]*(6|VI)\b", t)
+    cinco = re.search(r"GTA[\s_-]*(5|V)\b", t)
+    if seis and not cinco:
+        return "gta6"
+    if cinco and not seis:
+        return "gta5"
+    return None
+
 def _pedir(url, espera=60):
     req = urllib.request.Request(url, headers=AGENTE)
     with urllib.request.urlopen(req, timeout=espera) as r:
@@ -180,7 +192,10 @@ def _guardar(estado, url, inicio, x, origen, tmp, momento=False):
     _portero("limpia", {"toma": nuevo, "bandas_negras": bool(franjas), "marcas_del_autor": bool(quieto),
                         "recortado": bool(recorte), "voz_del_autor_quitada": not rev["sonido"], "origen": "archive.org"})
     almacen.guardar(videoteca.ESTANTERIA, limpio, f"{nuevo}.mp4")
-    juego = x.get("juego") if x.get("juego") in videoteca.JUEGOS else origen["juego"]
+    # si el vídeo de origen dice claramente de qué juego es (título o identificador), eso manda sobre lo que diga la IA
+    # en cada toma: la IA etiquetó 11 tomas de GTA 6 como GTA 5 y el versus comparaba GTA 6 contra GTA 6 (26 nov)
+    juego = _juego_claro(f"{origen.get('titulo', '')} {origen.get('fuente', '')}") or \
+        (x.get("juego") if x.get("juego") in videoteca.JUEGOS else origen["juego"])
     que = str(x.get("que_se_ve") or x.get("que_pasa") or "")[:300]
     toma = {"id": nuevo, "archivo": f"{nuevo}.mp4", "juego": juego,
             "etiquetas": videoteca.etiquetas_de({"etiquetas": x.get("etiquetas") or [], "que_se_ve": que}),

@@ -116,7 +116,7 @@ def subir(canal, video, titulo, hora, registro, descripcion="", etiquetas="", ca
         except HttpError as e:
             aviso = f" (la portada no se pudo poner: {motivo(e) or e.resp.status})"
     lista = leer_registro(registro)
-    lista.append({"canal": canal, "archivo": os.path.basename(video), "id": vid, "titulo": titulo,
+    lista.append({"canal": canal, "archivo": os.path.basename(video), "id": vid, "titulo": titulo, "ia": bool(ia),
                   "publica": cuerpo["status"]["publishAt"],
                   "subido": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
     os.makedirs(os.path.dirname(os.path.abspath(registro)), exist_ok=True)

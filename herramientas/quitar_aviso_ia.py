@@ -16,7 +16,9 @@ def main(registro, maximo=40):
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
     lista = json.load(open(registro, encoding="utf-8"))
-    pendientes = [r for r in lista if r.get("id") and not r.get("sin_aviso_ia")]
+    # «aviso_ia_quitado» (no el viejo «sin_aviso_ia»): la primera versión dio por hechos 20 vídeos sin cambiar ninguno,
+    # porque YouTube no siempre devuelve containsSyntheticMedia al leer el vídeo.
+    pendientes = [r for r in lista if r.get("id") and not r.get("aviso_ia_quitado") and r.get("ia") is not False]
     pendientes.sort(key=lambda r: str(r.get("publica") or ""))
     clientes, hechos, por_canal = {}, 0, {}
     for r in pendientes:
@@ -34,24 +36,24 @@ def main(registro, maximo=40):
         try:
             items = yt.videos().list(part="status", id=r["id"]).execute().get("items", [])
             if not items:
-                r["sin_aviso_ia"] = "no está"
+                r["aviso_ia_quitado"] = "no está"
                 continue
             st = items[0]["status"]
-            if st.get("containsSyntheticMedia"):
+            if st.get("containsSyntheticMedia") is not False:     # marcado, o YouTube no lo dice: se quita igual
                 nuevo = {k: st[k] for k in ("privacyStatus", "publishAt", "selfDeclaredMadeForKids", "license",
                                             "embeddable", "publicStatsViewable") if k in st}
                 nuevo["containsSyntheticMedia"] = False
                 yt.videos().update(part="status", body={"id": r["id"], "status": nuevo}).execute()
                 hechos += 1
                 por_canal[canal] = por_canal.get(canal, 0) + 1
-            r["sin_aviso_ia"] = True
+            r["aviso_ia_quitado"] = True
         except Exception as e:
             msg = str(e)
             print(f"{canal}: no se ha podido ({type(e).__name__})")
             if "quota" in msg.lower():
                 break
     json.dump(lista, open(registro, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    quedan = len([r for r in lista if r.get("id") and not r.get("sin_aviso_ia")])
+    quedan = len([r for r in lista if r.get("id") and not r.get("aviso_ia_quitado") and r.get("ia") is not False])
     print(f"aviso de IA quitado a {hechos} vídeos {por_canal}; quedan por mirar {quedan}")
     return 0
 
