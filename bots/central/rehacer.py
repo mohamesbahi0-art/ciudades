@@ -53,7 +53,8 @@ def montar_de_nuevo(cuenta, canal, g, nombre):
     print(f"{cuenta}: rehaciendo su último vídeo ({len(g['escenas'])} escenas)", flush=True)
     imagenes, origen = fotografo.fotografiar(g["escenas"], os.path.join(trabajo, "fotos"), persona=str(g.get("persona") or ""))
     print(f"{cuenta}: {len(imagenes) - imagenes.count(None)}/{len(imagenes)} escenas con foto libre", flush=True)
-    asyncio.run(locutor.generar(g["narracion"], canal.get("voz"), canal.get("velocidad", "+0%"), "+0Hz", trabajo))
+    asyncio.run(locutor.generar(g["narracion"], canal.get("voz"), canal.get("velocidad", "+0%"), "+0Hz", trabajo,
+                                modelo=canal.get("voz_modelo")))      # el modelo que eligió la cuenta (el rápido, a mitad)
     print(f"{cuenta}: voz con {locutor.MOTOR.get('motor')}", flush=True)
     locutor.apretar(trabajo, hueco_max=0.9) if canal.get("narrador") == "show" else locutor.apretar(trabajo)
     g["narrador"] = canal.get("narrador") or False

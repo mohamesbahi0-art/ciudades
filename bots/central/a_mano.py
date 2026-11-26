@@ -73,3 +73,20 @@ def devolver(clave, guion, veredicto=None, maximo=1):
     except Exception:
         return False
 
+
+def reponer(clave, guion):
+    """Se cogió pero el turno no llegó a juzgarlo (no había juez, o la IA se cayó): vuelve el PRIMERO de la mesa, sin
+    gastar ninguna vuelta. Si ya está en la mesa, no se duplica. Devuelve True si ha vuelto."""
+    try:
+        d = privado.leer(_ruta(clave), {}) or {}
+        guiones = [g for g in d.get("guiones") or [] if isinstance(g, dict)]
+        g = {k: v for k, v in guion.items() if not (k == "cerebro" and v == "claude (a mano)")}
+        if any(x.get("titulo") == g.get("titulo") and x.get("escenas") == g.get("escenas") for x in guiones):
+            return False
+        d["guiones"] = [g] + guiones
+        d["actualizado"] = privado.ahora()
+        privado.escribir(_ruta(clave), d)
+        return True
+    except Exception:
+        return False
+

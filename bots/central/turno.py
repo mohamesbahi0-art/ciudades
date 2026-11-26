@@ -14,6 +14,7 @@ Uso:  python bots/central/turno.py --canal terror [--hora 2026-12-01T20:00:00Z] 
 """
 import argparse
 import asyncio
+import copy
 import datetime as dt
 import inspect
 import json
@@ -249,6 +250,14 @@ def _titulo_repetido(clave, titulo):
         return False
 
 
+def _en_la_sala(clave, titulo):
+    """¿Ya espera en la Sala de espera un vídeo de esta cuenta con ese título?"""
+    try:
+        return bool(titulo) and any((e.get("guion") or {}).get("titulo") == titulo for e in sala_espera._vivos(clave))
+    except Exception:
+        return False
+
+
 def _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen):
     """Lo que pasa con un vídeo ya juzgado: prueba, suspendido, bandeja «Para subir» o subida a YouTube (o la cola)."""
     if a.prueba:
@@ -401,7 +410,10 @@ def _guion_a_mano(clave, a):
     («a_mano»: true en la petición) solo se mira, para hacer una muestra sin gastarlo."""
     if a.prueba:
         return a_mano.mirar(clave) if getattr(a, "con_mano", False) else None
-    return a_mano.tomar(clave)
+    g = a_mano.tomar(clave)
+    if g:     # copia intacta: si el turno se para antes de juzgarlo, el guion vuelve a la mesa (no se pierde)
+        a.mano_sin_juzgar = copy.deepcopy(g)
+    return g
 
 
 def _ruta_arreglo(clave):
@@ -531,6 +543,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
             paso("juez_guardia", "no hay juez ahora (la IA no contesta): el vídeo no se puede juzgar; la cuenta espera")
             sin_juez = True
             break
+        a.mano_sin_juzgar = None                # ya tiene veredicto: el guion a mano no vuelve a la mesa
         v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
         v["version"] = version                  # y «versión corregida» cuando es el mismo vídeo arreglado
         id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
@@ -834,6 +847,7 @@ def main(argv=None):
     clave = privado.resolver(a.canal or peticion["canal"])
     a.con_mano = bool(peticion.get("a_mano"))      # prueba con el siguiente guion a mano (sin quitarlo de la lista)
     a.voz_buena = bool(peticion.get("voz_buena"))  # prueba que se monta al final con la voz buena aunque no apruebe
+    a.mano_sin_juzgar = None                       # el guion a mano cogido en este turno, mientras no tenga veredicto
     canal = privado.canal(clave)
     ajustes = privado.ajustes()
     hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
@@ -950,6 +964,7 @@ def main(argv=None):
         aviso_juez = ""
         for intento in (1, 2):           # si el Juez lo suspende, una segunda oportunidad con su consejo
             if intento == 2:
+                a.mano_sin_juzgar = None     # el guion a mano ya se juzgó (o no había fotos de esa persona)
                 paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
             if mano and intento == 1:      # el guion a mano va tal cual (sin ensayo ni Jurado, que lo reescribirían)
                 g, vale = mano, True
@@ -1045,11 +1060,13 @@ def main(argv=None):
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                                 os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
-            if v.get("veredicto") == "sin_juicio" and v.get("preaprobado") and not a.prueba:
+            if v.get("veredicto") == "sin_juicio" and v.get("preaprobado") and not a.prueba \
+                    and not _titulo_repetido(clave, g.get("titulo")) and not _en_la_sala(clave, g.get("titulo")):
                 video = _voz_buena(clave, canal, g, imagenes, trabajo, video, paso)   # a la Sala, ya con la voz buena
                 segundos = montador.duracion(video)
             _sin_juez(v, a, paso, sala=dict(resumen=resumen, clave=clave, video=video, g=g, segundos=segundos,
                                             id_guion=id_guion, intento=intento))
+            a.mano_sin_juzgar = None                # ya tiene veredicto: el guion a mano no vuelve a la mesa
             v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
             id_tribunal = tribunal.guardar_juicio(clave, g, v, prueba=a.prueba)
             id_juicio = cuadernos["juez_guardia"].apuntar("juicio", {"canal": clave, "guion": id_guion,
@@ -1069,10 +1086,11 @@ def main(argv=None):
                                      for x in (v.get("votos") or [])[:3])
                           + " Escribe un guion que corrija justo eso.)")
 
-        if v["veredicto"] == "aprobado" or (a.prueba and getattr(a, "voz_buena", False)):
+        g = _coliseo(clave, canal, g, v, paso, a, resumen)   # el Coliseo solo usa el texto: va antes que la voz
+        if (v["veredicto"] == "aprobado" and not _titulo_repetido(clave, g.get("titulo"))) \
+                or (a.prueba and getattr(a, "voz_buena", False)):    # la voz buena, solo si el vídeo va a salir
             video = _voz_buena(clave, canal, g, imagenes, trabajo, video, paso)
             segundos = montador.duracion(video)
-        g = _coliseo(clave, canal, g, v, paso, a, resumen)
         _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
         resumen["resultado"] = "hecho"
     except _Hecho:
@@ -1084,6 +1102,14 @@ def main(argv=None):
         else:
             cuadernos[en_curso["robot"]].apuntar("error", {"canal": clave, "error": f"{type(e).__name__}: {str(e)[:300]}"})
         paso("turno", f"ERROR {type(e).__name__}: {e}", f"ERROR {type(e).__name__}")
+        if getattr(a, "mano_sin_juzgar", None) and not a.prueba:
+            # el guion a mano no llegó a juzgarse: sin juez o IA caída → vuelve el primero, sin gastar vuelta;
+            # una avería → una sola vuelta, al final (para que un guion que rompe el montaje no bloquee la cuenta)
+            vuelve = (a_mano.reponer(clave, a.mano_sin_juzgar) if de_fuera(resumen["error"])
+                      else a_mano.devolver(clave, a.mano_sin_juzgar))
+            if vuelve:
+                paso("escritor", "el guion a mano no ha llegado a juzgarse: vuelve a la mesa",
+                     "el guion a mano vuelve a la mesa")
         detalle = traceback.format_exc()
         with open(os.path.join(trabajo, "fallo.txt"), "w", encoding="utf-8") as f:
             f.write(detalle)

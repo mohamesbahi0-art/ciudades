@@ -28,7 +28,7 @@ ANCLAS = {"fumar": {"brasa": (41, 567)}, "dinero": {"billetes": (228, 632)}}
 # Ojos que el buscador automático no encuentra bien (ojos entornados o una taza blanca al lado): centro de cada ojo
 # y ancho medio, medidos a mano en el dibujo original.
 OJOS_A_MANO = {
-    "dinero": [(477, 570, 93), (620, 595, 97)],
+    "dinero": [(477, 570, 93, 101), (620, 595, 97, 58)],     # el izquierdo, abierto; el derecho, entornado
     "fumar": [(378, 435, 102), (548, 437, 132)],
     "beber": [(395, 466, 110), (571, 473, 134)],
 }
@@ -66,7 +66,7 @@ def ojos(im):
 
 def medidas(nombre, im):
     if nombre in OJOS_A_MANO:
-        return [(x, y, w, w * 0.6) for x, y, w in OJOS_A_MANO[nombre]], False
+        return [(e[0], e[1], e[2], e[3] if len(e) > 3 else e[2] * 0.6) for e in OJOS_A_MANO[nombre]], False
     o = ojos(im)
     if not o:
         raise SystemExit(f"{nombre}: no encuentro los ojos")
