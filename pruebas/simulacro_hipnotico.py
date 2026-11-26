@@ -112,7 +112,8 @@ video, g = estudio.hacer(CANAL, carpeta=os.path.join(TMP, "video"), guion=GUION,
 dur = float(numero(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video]) or 0)
 comprobar(18 <= dur <= 45 and abs(dur - g["duracion"]) < 0.5, f"el vídeo dura {dur:.1f} s")
 tam = numero(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", video])
-comprobar(tam == "1080,1920", "es vertical (1080×1920)")
+comprobar([x for x in str(tam).replace("x", ",").split(",") if x.strip()][:2] == ["1080", "1920"],
+          f"es vertical (1080×1920; sale «{tam}»)")    # algunas versiones de ffprobe añaden una coma al final
 vol = numero(["ffmpeg", "-hide_banner", "-nostats", "-i", os.path.join(TMP, "video", "voz.mp3"), "-af", "volumedetect", "-f", "null", "-"])
 media = float(vol.split("mean_volume:")[1].split("dB")[0]) if "mean_volume:" in vol else -99
 comprobar(media > -40 and all(e.get("palabras") for e in g["escenas"]), "hay voz, y cada palabra tiene su momento")

@@ -132,7 +132,8 @@ def etiquetas_de(m):
 
 def disponibles(canal):
     juegos = canal.get("videoteca_juegos") or (["gta5", "gta6"] if canal.get("tipo") == "versus" else ["gta6"])
-    return [t for t in tomas() if t.get("juego") in juegos]
+    fuera = perdidas()                                  # las que ya se sabe que no están en la estantería
+    return [t for t in tomas() if t.get("juego") in juegos and t.get("id") not in fuera]
 
 
 def parejas(lista):
@@ -409,16 +410,51 @@ def guionizar(canal, lista, lecciones="", titulos=(), fuentes=None, idea=None):
 
 # ---------- el montaje ----------
 
+PERDIDAS = os.path.join("estado", "clips", "perdidas.json")    # tomas apuntadas cuyo archivo no está en la estantería
+
+
+def perdidas():
+    return set((privado.leer(PERDIDAS, {}) or {}).get("ids") or [])
+
+
+def _apuntar_perdida(i):
+    try:
+        d = privado.leer(PERDIDAS, {}) or {}
+        d["ids"] = sorted(set(d.get("ids") or []) | {i})
+        d["actualizado"] = privado.ahora()
+        privado.escribir(PERDIDAS, d)
+    except Exception:
+        pass
+
+
 def bajar(ids, carpeta):
+    """Baja las tomas del montaje. Una toma cuyo archivo ya no está en la estantería no rompe el turno: se apunta como
+    perdida (no se vuelve a elegir) y el vídeo sigue con las demás. Solo falla si no queda ninguna."""
     os.makedirs(carpeta, exist_ok=True)
     por_id, rutas = {t["id"]: t for t in tomas()}, {}
     for i in sorted(set(ids)):
+        if i not in por_id:
+            continue
         nombre = por_id[i]["archivo"]
-        almacen.bajar(ESTANTERIA, nombre, carpeta)
+        try:
+            almacen.bajar(ESTANTERIA, nombre, carpeta)
+        except Exception:
+            pass
         ruta = os.path.join(carpeta, nombre)
         if not os.path.exists(ruta) or clips._segundos(ruta) < 1:
-            raise RuntimeError(f"la toma {i} no está en la videoteca")
+            print(f"videoteca: la toma {i} no está en la estantería: se aparta y se sigue con las demás", flush=True)
+            _apuntar_perdida(i)
+            continue
         rutas[i] = ruta
+    if not rutas:
+        raise RuntimeError("ninguna de las tomas elegidas está en la videoteca")
+    # la que falta se cubre con otra que sí está, del mismo juego si puede ser (en versus, cada mitad es de su juego)
+    for i in sorted(set(ids)):
+        if i in rutas:
+            continue
+        juego = (por_id.get(i) or {}).get("juego")
+        mismas = [r for j, r in rutas.items() if (por_id.get(j) or {}).get("juego") == juego]
+        rutas[i] = (mismas or list(rutas.values()))[0]
     return rutas
 
 
