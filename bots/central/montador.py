@@ -180,7 +180,7 @@ def narrador(guion, palabras_voz, durs, total, carpeta):
 def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
     tmp = tempfile.mkdtemp()
     try:
-        palabras_voz = subtitulos.cargar(palabras_json)
+        palabras_voz = [w for w in subtitulos.cargar(palabras_json) if re.search(r"\w", w["t"])]   # sin «…» sueltos
         total = duracion(voz) + 0.4
         imagenes = rellenar(imagenes)
         durs = duraciones_escenas(guion["escenas"], [{"inicio": w["i"]} for w in palabras_voz], total)
