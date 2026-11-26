@@ -250,6 +250,9 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
             entradas += ["-i", pista]
             filtro += ";[2:a]volume=0.35[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
             audio = "[a]"
+        # volumen de TikTok/Instagram (unos -14 LUFS): sin esto, la voz salía a -25 y los jueces la oían floja
+        filtro += f";{audio if audio.startswith('[') else '[' + audio + ']'}loudnorm=I=-14:TP=-1.5:LRA=11[voz]"
+        audio = "[voz]"
         if mov:                                      # el muñeco va como última entrada
             filtro = filtro.replace("[N:v]", f"[{len(entradas) // 2}:v]", 1)
             entradas += ["-i", mov]
