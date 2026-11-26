@@ -104,6 +104,13 @@ def validar(g, canal=None):
     n = len(palabras(g.get("narracion", "")))
     if not int(m["pal_min"] * 0.85) <= n <= int(m["pal_max"] * 1.15):
         problemas.append(f"la narración tiene {n} palabras y debe tener entre {m['pal_min']} y {m['pal_max']}")
+    final = str(g.get("narracion", "")).strip().rstrip("\"'»”)] ")
+    if final and final[-1] not in ".!?…":          # el vídeo no puede acabar colgado («… als geen ander:»)
+        problemas.append("la narración termina a medias: la última frase tiene que cerrarse con su remate y un punto")
+    largas = sorted({p for p in palabras(g.get("narracion", "")) if len(p) > 22})
+    if largas:                                     # en el subtítulo no caben: se salen de la pantalla
+        problemas.append(f"palabras demasiado largas para el subtítulo ({', '.join(largas[:3])}): escribe las cifras "
+                         "y los años con números (2022, 5.000 millones), no en letras")
     escenas = g.get("escenas", [])
     if not m["esc_min"] - 1 <= len(escenas) <= m["esc_max"] + 1:
         problemas.append(f"hay {len(escenas)} escenas y deben ser entre {m['esc_min']} y {m['esc_max']}")

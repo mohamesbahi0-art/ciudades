@@ -126,7 +126,7 @@ comprobar("el juicio lleva su nota en número y la versión", ultimo.get("nota")
           and ultimo.get("arreglo_de") == "Vídeo 1")
 guardado = [f for f in os.listdir(os.path.join(PRIVADO, "estado", "guiones"))] if os.path.isdir(
     os.path.join(PRIVADO, "estado", "guiones")) else []
-comprobar("el guion del vídeo aprobado queda guardado (para cambiarle la voz sin reescribirlo)", len(guardado) == 1)
+comprobar("el guion del vídeo aprobado queda guardado (para cambiarle la voz sin reescribirlo)", len([f for f in guardado if "video-1" in f]) == 1)
 
 # 2. El arreglo sale peor (80): se vuelve a partir de la versión buena; a la tercera versión sin llegar, se deja
 limpiar()

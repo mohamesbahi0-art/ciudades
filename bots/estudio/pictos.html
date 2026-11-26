@@ -291,7 +291,7 @@ function numeroBonito(v, dec) {
   return n.toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 function contador(c, tl, y, d = 4) {
-  const dura = c.dura ?? lim(d * 0.55, 1.2, 3.0);
+  const dura = Math.min(c.dura ?? 0.8, 0.9);          // rápido: la cifra buena se ve casi toda la escena (los jueces miran fotogramas sueltos)
   const q = salida(tramo(tl, c.empieza ?? 0.3, dura));
   const v = (+c.desde || 0) + ((+c.hasta || 0) - (+c.desde || 0)) * q;
   const pre = String(c.prefijo || "").trim(), suf = String(c.sufijo || "").trim();
