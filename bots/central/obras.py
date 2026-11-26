@@ -62,6 +62,23 @@ def reanudar():
         print(f"obras: no se ha podido quitar la pausa ({type(e).__name__})", flush=True)
 
 
+def _obras_en_sala():
+    """Las fichas de «Ahora en la fábrica» que tienen de verdad un vídeo en alguna Sala de espera (None si no se sabe)."""
+    try:
+        carpeta = os.path.join(privado.carpeta(), "estado", "espera")
+        if not os.path.isdir(carpeta):
+            return set()
+        usadas = set()
+        for f in os.listdir(carpeta):
+            if f.endswith(".json"):
+                for e in (privado.leer(os.path.join("estado", "espera", f), {}) or {}).get("videos") or []:
+                    if isinstance(e, dict) and e.get("obra"):
+                        usadas.add(e["obra"])
+        return usadas
+    except Exception:
+        return None
+
+
 def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_marcha", paso=None, en_sala=False):
     """Pone al día un vídeo en marcha. Devuelve el documento (o None si algo falla)."""
     try:
@@ -85,7 +102,13 @@ def apuntar(id_obra, canal, robot=None, detalle=None, titulo=None, estado="en_ma
             o.pop("en_sala", None)
         limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=GUARDA_HORAS)
         espera = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=ESPERA_HORAS)
+        en_salas = _obras_en_sala()
+        hace_rato = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=40)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for k in [k for k, v in obras.items() if k != id_obra and (
+                # «esperando en la Sala» pero su vídeo ya no está en ninguna Sala (confirmado, pasado a la bandeja o
+                # quitado a mano): la ficha sobra (antes se quedaba en la app hasta que caducaba)
+                (v.get("en_sala") and en_salas is not None and k not in en_salas
+                 and str(v.get("actualizado", "")) < hace_rato) or
                 (v.get("estado") in ("terminado", "descartado", "atasco")
                  and str(v.get("actualizado", "")) < limite.strftime("%Y-%m-%dT%H:%M:%SZ")) or
                 (v.get("estado") == "esperando"                  # una espera vieja ya no dice nada: fuera
