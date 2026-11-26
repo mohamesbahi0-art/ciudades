@@ -89,6 +89,7 @@ def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--cuenta", required=True, help="alias de la cuenta (barrio-N)")
     p.add_argument("--sala", type=int, default=0, help="pasar N vídeos de la Sala de espera a «Para subir»")
+    p.add_argument("--cuantos", type=int, default=1, help="rehacer los N últimos vídeos pendientes de la cuenta")
     a = p.parse_args(argv)
     clave = privado.resolver(a.cuenta)
     canal = privado.canal(clave)
@@ -103,19 +104,25 @@ def main(argv=None):
         print(f"{a.cuenta}: no hay ningún vídeo pendiente con su guion guardado")
         return 1
     docs.sort()
-    guion_id = docs[-1][2]["guion_id"]
+    hechos = 0
+    for guion_id in list(dict.fromkeys(d[2]["guion_id"] for d in reversed(docs)))[:max(1, a.cuantos)]:
+        hechos += rehacer_uno(a.cuenta, clave, canal, guion_id, docs) == 0
+    return 0 if hechos else 1
+
+
+def rehacer_uno(cuenta, clave, canal, guion_id, docs):
     g = (privado.leer(os.path.join("estado", "guiones", f"{guion_id}.json"), {}) or {}).get("guion")
     if not g:
-        print(f"{a.cuenta}: falta el guion guardado")
+        print(f"{cuenta}: falta el guion guardado")
         return 1
-    salida, segundos = montar_de_nuevo(a.cuenta, canal, g, guion_id)
+    salida, segundos = montar_de_nuevo(cuenta, canal, g, guion_id)
     enlace = almacen.guardar("para-subir", salida, f"{guion_id}.mp4")
     for _, f, d in docs:
         if d.get("guion_id") == guion_id:
             d.update(video=enlace, duracion=round(segundos, 1), voz=locutor.MOTOR.get("motor"), narrador=g["narrador"],
                      rehecho=privado.ahora())
             json.dump(d, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print(f"{a.cuenta}: listo, vídeo de {segundos:.1f} s cambiado en la bandeja", flush=True)
+    print(f"{cuenta}: listo, vídeo de {segundos:.1f} s cambiado en la bandeja", flush=True)
     return 0
 
 

@@ -152,7 +152,8 @@ def show(guion, imagenes, palabras_voz, durs, total, carpeta):
             tr["titulo_leccion"] = f"LES {k}" if str(guion.get("idioma", "nl")).startswith("nl") else f"LECCIÓN {k}"
     datos = os.path.join(carpeta, "show.json")
     with open(datos, "w", encoding="utf-8") as f:
-        json.dump({"duracion": total, "tramos": tramos, "fotos": [os.path.abspath(i) for i in imagenes],
+        json.dump({"duracion": total, "tramos": tramos, "fotos": [os.path.abspath(i.replace(".jpg", "-orig.jpg") if os.path.exists(i.replace(".jpg", "-orig.jpg")) else i)
+                              for i in imagenes],   # la foto original entera: la vertical cortaba las cabezas
                    "palabras": [{"i": w["i"], "f": w["f"]} for w in palabras_voz]}, f)
     salida = os.path.join(carpeta, "imagen.mp4")
     subprocess.run(["node", os.path.join(RAIZ, "bots", "estudio", "show.js"), datos, salida, "30"], check=True, timeout=3000)

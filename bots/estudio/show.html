@@ -36,7 +36,8 @@
     <linearGradient id="sombraSuelo" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="recorte"><rect x="-430" y="-330" width="860" height="660" rx="10"/></clipPath>
+    <clipPath id="recorte"><rect x="-330" y="-440" width="660" height="880" rx="10"/></clipPath>
+    <filter id="difuso"><feGaussianBlur stdDeviation="22"/><feComponentTransfer><feFuncR type="linear" slope="0.7"/><feFuncG type="linear" slope="0.7"/><feFuncB type="linear" slope="0.7"/></feComponentTransfer></filter>
     <!-- Probado el cine negro (26 nov) y el dueño prefiere color: queda el filtro «bn» por si algún día se quiere. -->
     <filter id="bn" color-interpolation-filters="sRGB">
       <feColorMatrix type="saturate" values="0"/>
@@ -93,7 +94,7 @@ const DECORADOS = {
     s += `<ellipse cx="67" cy="1060" rx="130" ry="60" fill="#FFF3C4" opacity="${f(0.18 + 0.04 * Math.sin(t * 3))}"/>`;
     s += `<path d="M930 ${SUELO} L960 1400 L1040 1400 L1070 ${SUELO} Z" fill="#B5563A" stroke="${OUT}" stroke-width="6"/>`;
     for (let n = 0; n < 6; n++) s += `<ellipse cx="${1000 + Math.cos(n) * 40}" cy="${1330 - n * 25}" rx="22" ry="60" fill="#3E8E4F" stroke="${OUT}" stroke-width="4" transform="rotate(${(n - 2.5) * 22} 1000 1400)"/>`;
-    return { s, foto: [540, 560, 0.78, "madera"] };
+    return { s, foto: [540, 560, 0.86, "madera"] };
   },
   oficina(t) {
     let s = `<rect width="1080" height="${SUELO}" fill="#5B6B82"/>`;
@@ -102,7 +103,7 @@ const DECORADOS = {
       for (let y = 1120 - h + 20; y < 1100; y += 50) s += `<rect x="${78 + n * 112}" y="${y}" width="22" height="26" fill="#FFF4B0" opacity="${azar(n * 7 + y) > 0.5 ? 0.9 : 0.25}"/><rect x="${116 + n * 112}" y="${y}" width="22" height="26" fill="#FFF4B0" opacity="${azar(n * 3 + y) > 0.5 ? 0.9 : 0.25}"/>`; }
     s += `<rect x="40" y="120" width="1000" height="1000" fill="none" stroke="#2D3646" stroke-width="22"/><line x1="540" y1="120" x2="540" y2="1120" stroke="#2D3646" stroke-width="14"/>`;
     s += `<rect y="${SUELO}" width="1080" height="${1920 - SUELO}" fill="#3B4555"/>`;
-    return { s, foto: [540, 560, 0.74, "tele"], delante: `<rect x="-40" y="1760" width="1160" height="50" rx="10" fill="#6B4226" stroke="${OUT}" stroke-width="8"/><rect x="0" y="1805" width="1080" height="115" fill="#5A361E"/>` };
+    return { s, foto: [540, 560, 0.86, "tele"], delante: `<rect x="-40" y="1760" width="1160" height="50" rx="10" fill="#6B4226" stroke="${OUT}" stroke-width="8"/><rect x="0" y="1805" width="1080" height="115" fill="#5A361E"/>` };
   },
   estadio(t) {
     let s = `<rect width="1080" height="1920" fill="#0B1630"/>`;
@@ -112,7 +113,7 @@ const DECORADOS = {
     s += `<rect y="1280" width="1080" height="640" fill="#2E8B3A"/>`;
     for (let y = 1280; y < 1920; y += 80) s += `<rect y="${y}" width="1080" height="40" fill="#34983F"/>`;
     s += `<line x1="0" y1="1700" x2="1080" y2="1700" stroke="#fff" stroke-width="8" opacity="0.8"/>`;
-    return { s, foto: [540, 460, 0.7, "pantalla"] };
+    return { s, foto: [540, 540, 0.84, "pantalla"] };
   },
   calle(t) {
     let s = `<rect width="1080" height="1920" fill="#FFB36B"/><circle cx="880" cy="300" r="110" fill="#FFE08A"/>`;
@@ -120,7 +121,7 @@ const DECORADOS = {
     for (const [c, x] of casas) { const h = 700 + (x % 300); s += `<rect x="${x}" y="${SUELO - h}" width="220" height="${h}" fill="${c}" stroke="${OUT}" stroke-width="6"/>`;
       for (let y = SUELO - h + 40; y < SUELO - 120; y += 120) s += `<rect x="${x + 30}" y="${y}" width="60" height="80" fill="#FFF7D6" stroke="${OUT}" stroke-width="4"/><rect x="${x + 130}" y="${y}" width="60" height="80" fill="#FFF7D6" stroke="${OUT}" stroke-width="4"/>`; }
     s += `<rect y="${SUELO}" width="1080" height="${1920 - SUELO}" fill="#8A8F99"/><rect y="${SUELO}" width="1080" height="20" fill="#C9CCD2"/>`;
-    return { s, foto: [540, 520, 0.8, "valla"] };
+    return { s, foto: [540, 560, 0.86, "valla"] };
   },
   banco(t) {
     let s = `<rect width="1080" height="${SUELO}" fill="#2D3A2F"/>`;
@@ -129,7 +130,7 @@ const DECORADOS = {
     s += `<rect y="${SUELO}" width="1080" height="${1920 - SUELO}" fill="#1D261F"/>`;
     for (let n = 0; n < 9; n++) s += `<path d="M${40 + (n % 3) * 70 + (n > 5 ? 35 : 0)} ${SUELO - (Math.floor(n / 3)) * 40} l60 0 l-12 -40 l-36 0 z" fill="url(#oro)" stroke="${OUT}" stroke-width="4"/>`;
     for (let n = 0; n < 9; n++) s += `<path d="M${830 + (n % 3) * 70 + (n > 5 ? 35 : 0)} ${SUELO - (Math.floor(n / 3)) * 40} l60 0 l-12 -40 l-36 0 z" fill="url(#oro)" stroke="${OUT}" stroke-width="4"/>`;
-    return { s, foto: [540, 560, 0.66, "oro"] };
+    return { s, foto: [540, 560, 0.84, "oro"] };
   },
   hospital(t) {
     let s = `<rect width="1080" height="${SUELO}" fill="#DDEFF5"/><rect y="${SUELO - 300}" width="1080" height="300" fill="#BFDDE8"/>`;
@@ -138,14 +139,14 @@ const DECORADOS = {
     s += `<path d="${d}" stroke="#3CFF7A" stroke-width="6" fill="none"/>`;
     s += `<rect x="60" y="300" width="120" height="120" fill="#fff" stroke="#E63946" stroke-width="0"/><rect x="100" y="320" width="40" height="80" fill="#E63946"/><rect x="80" y="340" width="80" height="40" fill="#E63946"/>`;
     s += `<rect y="${SUELO}" width="1080" height="${1920 - SUELO}" fill="#9FC3CF"/>`;
-    return { s, foto: [540, 560, 0.74, "blanco"] };
+    return { s, foto: [540, 560, 0.86, "blanco"] };
   },
   plato(t) {
     let s = `<rect width="1080" height="1920" fill="#1A0710"/>`;
     for (const lado of [-1, 1]) for (let n = 0; n < 5; n++) s += `<rect x="${lado < 0 ? n * 36 : 1080 - (n + 1) * 36}" y="0" width="40" height="${SUELO}" fill="${n % 2 ? "#9E1B32" : "#B52240"}"/>`;
     s += `<path d="M540 0 L200 ${SUELO} L880 ${SUELO} Z" fill="#FFF6D0" opacity="${f(0.1 + 0.03 * Math.sin(t * 4))}"/>`;
     s += `<rect y="${SUELO}" width="1080" height="${1920 - SUELO}" fill="#3A1F12"/>`;
-    return { s, foto: [540, 520, 0.8, "pantalla"] };
+    return { s, foto: [540, 560, 0.86, "pantalla"] };
   },
 };
 const MARCOS = { madera: ["#8B5A2B", 34], tele: ["#111", 30], pantalla: ["#1F1F1F", 26], valla: ["#F4F4F4", 24], oro: ["url(#oro)", 34], blanco: ["#FFFFFF", 22] };
@@ -161,15 +162,19 @@ window.preparar = async function () {
     const caja = document.createElementNS(NS, "g");
     caja.setAttribute("visibility", "hidden");
     const marco = document.createElementNS(NS, "rect");
-    for (const [k, v] of Object.entries({ x: -462, y: -362, width: 924, height: 724, rx: 18 })) marco.setAttribute(k, v);
+    for (const [k, v] of Object.entries({ x: -362, y: -472, width: 724, height: 944, rx: 18 })) marco.setAttribute(k, v);
     const dentro = document.createElementNS(NS, "g");
     dentro.setAttribute("clip-path", "url(#recorte)");
+    const fondo = document.createElementNS(NS, "image");
+    for (const [k, v] of Object.entries({ x: -360, y: -470, width: 720, height: 940, preserveAspectRatio: "xMidYMid slice", filter: "url(#difuso)" })) fondo.setAttribute(k, v);
+    fondo.setAttribute("href", "file://" + ruta);
+    dentro.appendChild(fondo);
     const img = document.createElementNS(NS, "image");
-    for (const [k, v] of Object.entries({ x: -430, y: -330, width: 860, height: 660, preserveAspectRatio: "xMidYMid slice" })) img.setAttribute(k, v);
+    for (const [k, v] of Object.entries({ x: -330, y: -440, width: 660, height: 880, preserveAspectRatio: "xMidYMid meet" })) img.setAttribute(k, v);
     cargas.push(new Promise(ok => { img.addEventListener("load", ok); img.addEventListener("error", ok); }));
     img.setAttribute("href", "file://" + ruta);
     const brillo = document.createElementNS(NS, "path");
-    brillo.setAttribute("d", "M-430 -330 L-120 -330 L-330 330 L-430 330 Z"); brillo.setAttribute("fill", "#fff"); brillo.setAttribute("opacity", "0.06");
+    brillo.setAttribute("d", "M-330 -440 L-90 -440 L-250 440 L-330 440 Z"); brillo.setAttribute("fill", "#fff"); brillo.setAttribute("opacity", "0.06");
     dentro.append(img, brillo);
     caja.append(marco, dentro);
     cont.appendChild(caja);

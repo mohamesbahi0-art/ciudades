@@ -96,6 +96,9 @@ def fotografiar(escenas, carpeta, persona=""):
                         with urllib.request.urlopen(req, timeout=60) as r, open(cruda, "wb") as out:
                             out.write(r.read(25_000_000))
                         _vertical(cruda, lista)
+                        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", cruda, "-vf",     # la foto entera, sin
+                                        "scale='min(1600,iw)':-2", "-frames:v", "1", "-q:v", "2",     # recortar (El Show)
+                                        lista.replace(".jpg", "-orig.jpg")], check=False)
                     except (urllib.error.URLError, OSError, ValueError, subprocess.CalledProcessError):
                         usos[f["url"]] = USOS_POR_FOTO          # esa foto no se puede usar: no se vuelve a probar
                         continue

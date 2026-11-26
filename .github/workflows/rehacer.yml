@@ -37,7 +37,8 @@ jobs:
         run: |
           cuenta=$(python -c "import json;print(json.load(open('peticiones/rehacer.json')).get('cuenta',''))")
           sala=$(python -c "import json;print(int(json.load(open('peticiones/rehacer.json')).get('sala',0)))")
-          python bots/central/rehacer.py --cuenta "$cuenta" --sala "$sala"
+          cuantos=$(python -c "import json;print(int(json.load(open('peticiones/rehacer.json')).get('cuantos',1)))")
+          python bots/central/rehacer.py --cuenta "$cuenta" --sala "$sala" --cuantos "$cuantos"
       - name: Guardar en el repositorio privado
         if: always()
         env:
