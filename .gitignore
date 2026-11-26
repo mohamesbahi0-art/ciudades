@@ -17,3 +17,9 @@ __pycache__/
 # Node (el estudio de animación instala playwright al vuelo)
 node_modules/
 package-lock.json
+# Grabaciones y programas de reverse-api-engineer: llevan cookies y llaves (nunca al repositorio público)
+*.har
+*.har.tmp
+rae-run.*
+.reverse-api/
+/scripts/
