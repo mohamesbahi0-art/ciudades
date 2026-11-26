@@ -25,6 +25,7 @@ import traceback
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
+from bots.central import a_mano  # noqa: E402
 from bots.central import clips, dibujante, escritor, fotografo, huecos, montador, parasubir, reportero, subidor, videoteca  # noqa: E402
 from bots.comun import ia, privado  # noqa: E402
 from bots.juzgado import espera as sala_espera  # noqa: E402
@@ -421,6 +422,9 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
             g0.update(cerebro=ia.quien().get("motor", "gemini"), version=version, arreglo_de=arreglar.get("titulo"))
             if arreglar.get("jurado"):             # el Jurado ya votó ese guion: no se reúne otra vez por un arreglo
                 g0["jurado"] = arreglar["jurado"]
+        elif not a.prueba and (mano := a_mano.tomar(clave)):      # un guion que Claude ha escrito a mano para esta cuenta
+            paso("escritor", f"guion escrito a mano por Claude: «{mano.get('titulo', '')}»", "guion escrito a mano por Claude")
+            g0 = mano
         else:
             paso("escritor", "escribiendo el guion del estudio")
             g0 = formato.guionizar(canal, lecciones + consejo)
@@ -837,7 +841,10 @@ def main(argv=None):
         idea, id_idea = None, None
         sin_fotos = []
         con_fotos = canal.get("fotos") == "commons"
-        if ajustes.get("sala_ideas", True) or con_fotos:     # la Sala de Ideas elige la mejor de 3 antes de gastar
+        mano = None if a.prueba else a_mano.tomar(clave)    # un guion que Claude ha escrito a mano para esta cuenta
+        if mano:
+            paso("escritor", f"guion escrito a mano por Claude: «{mano.get('titulo', '')}»", "guion escrito a mano por Claude")
+        if not mano and (ajustes.get("sala_ideas", True) or con_fotos):     # la Sala de Ideas elige la mejor de 3 antes de gastar
             paso("escritor", "proponiendo ideas a la Sala de Ideas")
             try:
                 propuestas = escritor.ideas(canal, lecciones_escritor, privado.titulos_recientes(clave), fuentes)
@@ -872,15 +879,18 @@ def main(argv=None):
         for intento in (1, 2):           # si el Juez lo suspende, una segunda oportunidad con su consejo
             if intento == 2:
                 paso("escritor", "segunda oportunidad: lo reescribe con el consejo del Juez")
-            paso("escritor", "escribiendo el guion")
-            g = escritor.escribir(canal, lecciones_escritor + aviso_juez,
-                                 privado.titulos_recientes(clave), fuentes, idea=idea)
-            g = _ensayo(clave, canal, g, paso, a, lambda extra: escritor.escribir(
-                canal, lecciones_escritor + aviso_juez + extra, privado.titulos_recientes(clave), fuentes, idea=idea))
-            g, vale = _jurado_guion(clave, canal, g, paso, a, alegatos=_alegatos_idea(id_idea),
-                                    reescribir=lambda extra: escritor.escribir(
-                                        canal, lecciones_escritor + aviso_juez + extra, privado.titulos_recientes(clave),
-                                        fuentes, idea=idea))
+            if mano and intento == 1:      # el guion a mano va tal cual (sin ensayo ni Jurado, que lo reescribirían)
+                g, vale = mano, True
+            else:
+                paso("escritor", "escribiendo el guion")
+                g = escritor.escribir(canal, lecciones_escritor + aviso_juez,
+                                      privado.titulos_recientes(clave), fuentes, idea=idea)
+                g = _ensayo(clave, canal, g, paso, a, lambda extra: escritor.escribir(
+                    canal, lecciones_escritor + aviso_juez + extra, privado.titulos_recientes(clave), fuentes, idea=idea))
+                g, vale = _jurado_guion(clave, canal, g, paso, a, alegatos=_alegatos_idea(id_idea),
+                                        reescribir=lambda extra: escritor.escribir(
+                                            canal, lecciones_escritor + aviso_juez + extra,
+                                            privado.titulos_recientes(clave), fuentes, idea=idea))
             if not vale:
                 paso("subidor", "el jurado popular no se convence con el guion: no se graba (se ahorran voz y dibujos)")
                 resumen.update(titulo=g.get("titulo"), destino_resultado="suspendido",
