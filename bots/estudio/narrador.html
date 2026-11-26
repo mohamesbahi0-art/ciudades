@@ -14,8 +14,8 @@
 <svg id="s" width="460" height="580" viewBox="0 0 460 580" xmlns="http://www.w3.org/2000/svg"></svg>
 <script>
 const W = 460, H = 580;
-const PIEL = "#E8B48C", PIEL_SOMBRA = "#C98E66", PELO = "#16110D", SUDADERA = "#2A2E38", SUDADERA_OSC = "#171A21",
-      CAMISA = "#F4F4F4", CORBATA = "#C8102E", BARBA = "#3A2A20",
+const PIEL = "#E8B48C", PIEL_SOMBRA = "#C98E66", PELO = "#E2B64A", PELO_OSC = "#B8892A", SUDADERA = "#2A2E38", SUDADERA_OSC = "#171A21",
+      CAMISA = "#F4F4F4", CORBATA = "#C8102E", BARBA = "#B8892A",
       CONTORNO = "#1A1A1A";
 const lim = (x, a, b) => Math.max(a, Math.min(b, x));
 const mezcla = (a, b, k) => a + (b - a) * k;
@@ -98,7 +98,7 @@ window.pintar = function (t) {
   // pelo
   s += `<path d="M${cx - 122} ${cy - 35} Q${cx - 128} ${cy - 160} ${cx + 5} ${cy - 158} Q${cx + 132} ${cy - 155} ${cx + 122} ${cy - 35}
         Q${cx + 112} ${cy - 95} ${cx + 40} ${cy - 100} Q${cx - 60} ${cy - 104} ${cx - 122} ${cy - 35} Z" fill="${PELO}" stroke="${CONTORNO}" stroke-width="6"/>`;
-  s += `<path d="M${cx - 70} ${cy - 128} Q${cx} ${cy - 150} ${cx + 80} ${cy - 122}" fill="none" stroke="#4A3A2E" stroke-width="5" stroke-linecap="round"/>`;
+  s += `<path d="M${cx - 70} ${cy - 128} Q${cx} ${cy - 150} ${cx + 80} ${cy - 122}" fill="none" stroke="#F6D77E" stroke-width="7" stroke-linecap="round"/>`;
   // mejillas
   if (c.mejillas) {
     const rojo = c === CARAS.enfadado ? "#E5484D" : "#FF8A80";
@@ -114,7 +114,7 @@ window.pintar = function (t) {
     // cejas
     const giro = -(c.una && lado === -1 ? 0 : c.cejaGiro) * lado;
     const ey = oy - 46 + c.cejaY + (c.una && lado === 1 ? -10 : 0);
-    s += `<rect x="${ox - 30}" y="${ey}" width="66" height="19" rx="7" fill="${PELO}" transform="rotate(${giro} ${ox} ${ey + 6})"/>`;
+    s += `<rect x="${ox - 30}" y="${ey}" width="66" height="19" rx="7" fill="${PELO_OSC}" transform="rotate(${giro} ${ox} ${ey + 6})"/>`;
   }
   // boca
   const my = cy + 62;
