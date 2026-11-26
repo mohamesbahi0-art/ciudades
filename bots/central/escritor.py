@@ -49,9 +49,11 @@ REGLAS_TIPO["biografias"] = (
     "políticos de esa época), figuras históricas anteriores a 1950 y personas con fotos oficiales del gobierno de "
     "Estados Unidos o de la NASA. De famosos de hoy casi nunca hay.\n"
     "- Añade al JSON (también en cada idea) \"persona\": \"nombre y apellidos\".\n"
-    "- Un muñeco cuenta la historia y pone caras: añade a cada escena \"emocion\": una de serio, enfadado, sorprendido, "
-    "contento, triste o pensativo, la que pida esa frase (enfadado en las injusticias y los golpes, sorprendido en las "
-    "cifras locas, contento en los triunfos). Que cambie a menudo: es lo que da vida al vídeo.")
+    "- La historia la ACTÚA un chico de dibujos (rubio, con traje) en un decorado, con gracia: añade a cada escena "
+    "\"emocion\" (serio, enfadado, sorprendido, contento, triste o pensativo), \"accion\" si la frase la pide (fumar, "
+    "balon, trofeo, dinero, telefono, correr o senala), \"fondo\" (habitacion, oficina, estadio, calle, banco, hospital "
+    "o plato) y, en los momentos fuertes, \"pop\": un texto de 1-6 caracteres que salta en grande (x20, 3x, STOP!, "
+    "35M). Que actúe lo que se dice (si fuma 20 cigarros al día, sale fumando como una chimenea) y que cambie a menudo.")
 
 IDIOMAS = {"es": "español de España", "nl": "neerlandés (de los Países Bajos)", "en": "inglés"}
 

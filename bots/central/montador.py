@@ -109,14 +109,39 @@ def _emocion(escena):
     return "sorprendido" if "!" in t else "pensativo" if "?" in t else "serio"
 
 
+PISTAS_SHOW = [   # si el guion no dice qué hace el chico, se adivina por lo que cuenta la frase (neerlandés y español)
+    (("sigaret", "rook", "roken", "cigarr", "fuma", "tabaco"), "fumar", "habitacion"),
+    (("voetbal", "ajax", "wk ", " wk", "doelpunt", "scoor", "fútbol", "futbol", "gol", "balón", "stadion", "estadio"), "balon", "estadio"),
+    (("won", "wint", "kampioen", "beker", "goud", "cup", "medaille", "ganó", "campe", "trofeo", "oro"), "trofeo", "plato"),
+    (("miljoen", "miljard", "gulden", " euro", "dollar", "geld", "rijk", "record", "betaald", "millon", "millón", "dinero", "€", "$"), "dinero", "banco"),
+    (("operatie", "ziek", "hart", "ziekenhuis", "hospital", "enferm", "corazón"), None, "hospital"),
+    (("bel", "telefoon", "llam", "teléfono"), "telefono", "oficina"),
+    (("rende", "rennen", "sprint", "snel", "corri", "carrera"), "correr", "calle"),
+    (("bedrijf", "kantoor", "baas", "directeur", "empresa", "oficina", "jefe"), None, "oficina"),
+]
+
+
+def _pista(texto):
+    t = f" {str(texto).lower()} "
+    for palabras, accion, fondo in PISTAS_SHOW:
+        if any(p in t for p in palabras):
+            return accion, fondo
+    return None, None
+
+
 def show(guion, imagenes, palabras_voz, durs, total, carpeta):
     """El Show: el chico de traje es el protagonista y la foto sale en una tarjeta (bots/estudio/show.html).
     Devuelve el vídeo mudo (sin voz ni subtítulos)."""
     tramos, t = [], 0.0
     for n, (e, d) in enumerate(zip(guion["escenas"], durs)):
+        accion, fondo = _pista(e.get("texto"))
+        if e.get("emocion") in ("enfadado", "triste", "sorprendido") and accion not in ("fumar",):
+            accion = None                          # la cara manda: se enfada, llora o se sorprende
         tramos.append({"desde": round(t, 2), "hasta": round(t + d, 2), "emocion": _emocion(e),
-                       "accion": e.get("accion") if e.get("accion") in ACCIONES_SHOW else
-                       ("senala" if _emocion(e) == "serio" and n % 2 else None), "foto": n})
+                       "accion": e.get("accion") if e.get("accion") in ACCIONES_SHOW else accion or
+                       ("senala" if _emocion(e) == "serio" and n % 2 else None), "foto": n,
+                       "fondo": e.get("fondo") if e.get("fondo") in FONDOS_SHOW else fondo,
+                       "pop": str(e.get("pop"))[:8] if e.get("pop") else None})
         t += d
     datos = os.path.join(carpeta, "show.json")
     with open(datos, "w", encoding="utf-8") as f:
@@ -127,7 +152,8 @@ def show(guion, imagenes, palabras_voz, durs, total, carpeta):
     return salida
 
 
-ACCIONES_SHOW = ("senala", "dinero")
+ACCIONES_SHOW = ("senala", "dinero", "fumar", "trofeo", "telefono", "balon", "correr")
+FONDOS_SHOW = ("habitacion", "oficina", "estadio", "calle", "banco", "hospital", "plato")
 
 
 def narrador(guion, palabras_voz, durs, total, carpeta):
