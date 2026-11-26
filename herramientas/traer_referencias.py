@@ -45,7 +45,8 @@ def main(nombre, cuantos=4):
     if r.returncode != 0:
         print(f"la red no deja ver la cuenta ahora (código {r.returncode}); no se insiste")
         return 1
-    lista = (json.loads(r.stdout) or {}).get("entries") or []
+    todo = json.loads(r.stdout) or {}
+    lista = todo.get("entries") or ([todo] if todo.get("id") else [])   # un vídeo suelto también vale
     print(f"vídeos vistos: {len(lista)}")
     lista.sort(key=lambda e: e.get("view_count") or 0, reverse=True)
     carpeta = os.path.join(privado.carpeta(), "referencias", nombre)
