@@ -4,7 +4,7 @@
 name: Recolector de clips
 on:
   schedule:
-    - cron: "3 8 * * *"
+    - cron: "3 11 * * *"
     - cron: "33 14 * * *"
     - cron: "33 20 * * *"
     - cron: "33 2 * * *"

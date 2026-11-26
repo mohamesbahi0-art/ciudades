@@ -9,7 +9,7 @@
 name: Radar de nichos
 on:
   schedule:
-    - cron: "23 8 * * *"
+    - cron: "23 12 * * *"
   push:
     paths:
       - "peticiones/radar.json"

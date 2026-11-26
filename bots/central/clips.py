@@ -378,7 +378,7 @@ def revisar(clip, carpeta, m=None):
         try:
             r = gemini.preguntar(PORTERO.format(que_ves="el clip entero, con su sonido",
                                                 habla="true si se oye la voz del creador comentando (no las voces del juego)"),
-                                 video=muestra, temperatura=0.2)
+                                 video=muestra, temperatura=0.2, ligero_primero=True)  # los buenos, para los jueces
             quien, oido = "gemini", True
         except gemini.SinIA:
             r = None

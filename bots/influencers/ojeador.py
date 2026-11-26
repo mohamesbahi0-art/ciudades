@@ -447,7 +447,7 @@ def main(argv=None):
                             tema=perfil["tema"], visitas=v.get("visitas"), dias=v.get("dias"),
                             por_dia=v.get("visitas_dia"), likes=v.get("likes"), comentarios=v.get("comentarios"),
                             idioma=IDIOMAS.get(perfil["idioma"], perfil["idioma"])) + lecciones,
-                            video=archivo, solo_bueno=True, temperatura=0.4)
+                            video=archivo, ligero_primero=True, temperatura=0.4)   # los buenos, para los jueces
                         if isinstance(analisis, list) and analisis:
                             analisis = analisis[0]
                         if isinstance(analisis, dict):

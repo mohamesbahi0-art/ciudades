@@ -262,7 +262,8 @@ def recoger_video(doc, estado, tmp, paso=print):
         if r.returncode != 0 or not os.path.exists(muestra) or os.path.getsize(muestra) > gemini.VIDEO_MAXIMO:
             continue
         v = gemini.preguntar(VER.format(segundos=round(dur), licencia=lic, titulo=titulo,
-                                        etiquetas=", ".join(videoteca.ETIQUETAS)), video=muestra, temperatura=0.3)
+                                        etiquetas=", ".join(videoteca.ETIQUETAS)), video=muestra, temperatura=0.3,
+                                 ligero_primero=True)   # los modelos buenos quedan para los jueces (GA-04, 26 nov)
         if not isinstance(v, dict):
             continue
         if v.get("juego_principal") == "otro":
