@@ -19,13 +19,13 @@
      xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <linearGradient id="traje" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2F3A55"/><stop offset="1" stop-color="#1A2236"/>
+      <stop offset="0" stop-color="#2B2B2E"/><stop offset="1" stop-color="#0C0C0E"/>
     </linearGradient>
     <radialGradient id="cara" cx="0.42" cy="0.38" r="0.75">
       <stop offset="0" stop-color="#FFD9B8"/><stop offset="1" stop-color="#EDB48A"/>
     </radialGradient>
     <linearGradient id="pelo" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFE38A"/><stop offset="1" stop-color="#E0A93A"/>
+      <stop offset="0" stop-color="#C9A55A"/><stop offset="1" stop-color="#6E5220"/>
     </linearGradient>
     <linearGradient id="oro" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#FFE680"/><stop offset="0.5" stop-color="#F2B705"/><stop offset="1" stop-color="#B07800"/>
@@ -37,20 +37,42 @@
       <stop offset="0" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
     </linearGradient>
     <clipPath id="recorte"><rect x="-430" y="-330" width="860" height="660" rx="10"/></clipPath>
+    <!-- Cine negro (26 nov, lo pidió el dueño): todo en blanco y negro con contraste, grano y viñeta; solo la corbata
+         va en rojo. -->
+    <filter id="bn" color-interpolation-filters="sRGB">
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncR type="linear" slope="1.28" intercept="-0.1"/><feFuncG type="linear" slope="1.28" intercept="-0.1"/><feFuncB type="linear" slope="1.28" intercept="-0.1"/></feComponentTransfer>
+    </filter>
+    <filter id="grano" x="0" y="0" width="100%" height="100%">
+      <feTurbulence id="ruido" type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="1"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <radialGradient id="vineta" cx="0.5" cy="0.55" r="0.75">
+      <stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.82"/>
+    </radialGradient>
+    <linearGradient id="haz" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
   </defs>
   <g id="camara">
-    <g id="decorado"></g>
-    <g id="tarjeta"></g>
-    <g id="pizarra"></g>
-    <g id="actor"></g>
-    <g id="delante"></g>
+    <g filter="url(#bn)">
+      <g id="decorado"></g>
+      <g id="tarjeta"></g>
+      <g id="pizarra"></g>
+      <path id="foco" d="M440 0 L640 0 L900 1920 L180 1920 Z" fill="url(#haz)"/>
+      <g id="actor"></g>
+      <g id="delante"></g>
+    </g>
+    <g id="acento"></g>
   </g>
+  <rect width="1080" height="1920" fill="url(#vineta)"/>
+  <rect id="granoCapa" width="1080" height="1920" filter="url(#grano)" opacity="0.09"/>
   <g id="pop"></g>
 </svg>
 <script>
 const NS = "http://www.w3.org/2000/svg";
 const OUT = "#14171F";
-const PIEL = "#F6C9A4", TRAJE = "url(#traje)", CAMISA = "#FFFFFF", CORBATA = "#D7263D", CEJA = "#B98221";
+const PIEL = "#E9C2A2", TRAJE = "url(#traje)", CAMISA = "#FFFFFF", CORBATA = "#C8102E", CEJA = "#2A2A2A";
 const FUENTE = "Inter, DejaVu Sans, sans-serif";
 const lim = (x, a, b) => Math.max(a, Math.min(b, x));
 const f = n => Math.round(n * 10) / 10;
@@ -248,7 +270,8 @@ function personaje(t, accion, emocion, dt, b) {
   const bote = Math.sin(t * 9) * 6 * habla + tos;
 
   let s = `<ellipse cx="0" cy="8" rx="${f(220 - salto * 0.6)}" ry="34" fill="#000" opacity="0.35"/>`;
-  s += `<g transform="translate(0 ${f(salto)}) rotate(${giro} 0 -200) scale(${f(sx)} ${f(sy * respira)})">`;
+  const postura = `translate(0 ${f(salto)}) rotate(${giro} 0 -200) scale(${f(sx)} ${f(sy * respira)})`;
+  s += `<g transform="${postura}">`;
   for (const lado of [-1, 1]) {
     const paso = accion === "correr" ? Math.sin(t * 14 + (lado > 0 ? Math.PI : 0)) * 40 : 0;
     const px = lado * 62;
@@ -267,12 +290,16 @@ function personaje(t, accion, emocion, dt, b) {
   c += `<rect x="-38" y="${cy + 120}" width="76" height="80" fill="#E5AE85" stroke="${OUT}" stroke-width="7"/>`;
   for (const lado of [-1, 1]) c += `<ellipse cx="${lado * 178}" cy="${cy + 10}" rx="34" ry="46" fill="${PIEL}" stroke="${OUT}" stroke-width="8"/>`;
   c += `<ellipse cx="0" cy="${cy}" rx="182" ry="172" fill="url(#cara)" stroke="${OUT}" stroke-width="9"/>`;
+  c += `<path d="M60 ${cy - 160} Q200 ${cy - 60} 150 ${cy + 90} Q100 ${cy + 160} 10 ${cy + 170} Q150 ${cy + 60} 60 ${cy - 160} Z" fill="#000" opacity="0.13"/>`;
+  c += `<ellipse cx="-10" cy="${cy - 105}" rx="160" ry="40" fill="#000" opacity="0.10"/>`;
+  c += `<path d="M-120 ${cy - 120} Q-150 ${cy - 40} -130 ${cy + 40}" stroke="#fff" stroke-width="10" fill="none" opacity="0.35" stroke-linecap="round"/>`;
   if (accion === "enfadado") c += `<ellipse cx="0" cy="${cy + 20}" rx="176" ry="150" fill="#E5223A" opacity="${f(0.18 + 0.08 * Math.sin(t * 6))}"/>`;
   if (tos) c += `<ellipse cx="0" cy="${cy + 20}" rx="176" ry="150" fill="#7BC043" opacity="0.18"/>`;
   c += `<path d="M-178 ${cy - 10} Q-200 ${cy - 170} -80 ${cy - 205} Q-30 ${cy - 270} 70 ${cy - 245} Q190 ${cy - 220} 182 ${cy - 30}
         Q150 ${cy - 120} 60 ${cy - 140} Q-40 ${cy - 155} -120 ${cy - 95} Q-160 ${cy - 60} -178 ${cy - 10} Z"
         fill="url(#pelo)" stroke="${OUT}" stroke-width="9" stroke-linejoin="round"/>`;
   c += `<path d="M-70 ${cy - 200} Q10 ${cy - 245} 90 ${cy - 210}" fill="none" stroke="#FFF3C4" stroke-width="12" stroke-linecap="round" opacity="0.8"/>`;
+  c += `<path d="M-130 ${cy - 120} Q-60 ${cy - 190} 30 ${cy - 175} M-40 ${cy - 140} Q40 ${cy - 200} 140 ${cy - 150}" fill="none" stroke="#3A2A10" stroke-width="6" stroke-linecap="round" opacity="0.7"/>`;
   c += `<ellipse cx="-112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/><ellipse cx="112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/>`;
   const abre = (t % 3.4 > 3.28 || tos ? 0.1 : 1) * ojo;
   const mira = accion === "ceja" ? [0, 4] : accion === "senala" ? [14, -14] : accion === "pensativo" ? [-6, -14] : [0, 0];
@@ -283,6 +310,14 @@ function personaje(t, accion, emocion, dt, b) {
       c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(22 * ojo)}" fill="#3B2412"/>`;
       c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(11 * ojo)}" fill="#0B0B0B"/>`;
       c += `<circle cx="${ox + mira[0] + 8}" cy="${oy - 4 + mira[1]}" r="7" fill="#fff"/>`;
+      // párpados: la mirada dice más que la boca
+      const rx = 40 * ojo, ry = 50 * abre;
+      if (accion === "enfadado" || accion === "serio" || accion === "fumar" || accion === "correr")
+        c += `<path d="M${f(ox - rx - 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry * (lado < 0 ? 0.15 : 0.55))} L${f(ox - rx - 6)} ${f(oy - ry * (lado < 0 ? 0.55 : 0.15))} Z" fill="${PIEL}" stroke="${OUT}" stroke-width="6" stroke-linejoin="round"/>`;
+      if (accion === "triste")
+        c += `<path d="M${f(ox - rx - 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry * (lado < 0 ? 0.6 : 0.05))} L${f(ox - rx - 6)} ${f(oy - ry * (lado < 0 ? 0.05 : 0.6))} Z" fill="${PIEL}" stroke="${OUT}" stroke-width="6" stroke-linejoin="round"/>`;
+      if (accion === "contento" || accion === "trofeo" || accion === "dinero")
+        c += `<path d="M${f(ox - rx - 6)} ${f(oy + ry + 8)} L${f(ox - rx - 6)} ${f(oy + ry * 0.35)} Q${ox} ${f(oy - ry * 0.1)} ${f(ox + rx + 6)} ${f(oy + ry * 0.35)} L${f(ox + rx + 6)} ${f(oy + ry + 8)} Z" fill="${PIEL}" stroke="${OUT}" stroke-width="6" stroke-linejoin="round"/>`;
     }
     const g = -cejaGiro * lado, ey = oy - 78 + cejaY - (accion === "ceja" && lado === 1 ? 46 : 0);
     c += `<rect x="${ox - 44}" y="${ey}" width="88" height="24" rx="12" fill="${CEJA}" stroke="${OUT}" stroke-width="5" transform="rotate(${g} ${ox} ${ey + 12})"/>`;
@@ -323,7 +358,7 @@ function personaje(t, accion, emocion, dt, b) {
     s += `<g transform="translate(${f(bx)} ${f(by)}) rotate(${f(t * 400)})"><circle r="62" fill="#fff" stroke="${OUT}" stroke-width="7"/><path d="M0 -22 L21 -7 L13 18 L-13 18 L-21 -7 Z" fill="${OUT}"/><path d="M0 -62 L0 -22 M21 -7 L58 -20 M13 18 L36 50 M-13 18 L-36 50 M-21 -7 L-58 -20" stroke="${OUT}" stroke-width="6"/></g>`;
   }
   s += `</g>`;
-  return { s, cabeza: cy + salto, mano: [md[0], md[1] + salto] };
+  return { s, cabeza: cy + salto, mano: [md[0], md[1] + salto], postura };
 }
 
 function efectos(accion, t, dt, cabeza, mano) {
@@ -447,11 +482,15 @@ window.pintar = function (t) {
   const p = personaje(t, accion, x.emocion, dt, b);
   document.getElementById("actor").innerHTML =
     `<g transform="translate(540 ${SUELO + 330}) scale(0.95)">${p.s}${efectos(accion, t, dt, p.cabeza, p.mano)}</g>`;
+  document.getElementById("acento").innerHTML =        // la corbata, lo único en color
+    `<g transform="translate(540 ${SUELO + 330}) scale(0.95)"><g transform="${p.postura}"><path d="M-14 -438 L14 -438 L24 -330 L0 -292 L-24 -330 Z" fill="${CORBATA}" stroke="${OUT}" stroke-width="5"/><path d="M-10 -438 L10 -438 L6 -412 L-6 -412 Z" fill="#8E0B20"/></g></g>`;
+  document.getElementById("ruido").setAttribute("seed", String(Math.floor(t * 24) % 97 + 1));
+  document.getElementById("foco").setAttribute("opacity", f(0.85 + 0.15 * Math.sin(t * 7) * Math.sin(t * 3.1)));
   // el texto que salta (p. ej. «x20»)
   let pop = "";
   if (x.pop) {
     const q = lim(dt / 0.35, 0, 1), k = salida(q) * (1 + Math.sin(q * Math.PI) * 0.25);
-    pop = `<g transform="translate(830 1180) rotate(-8) scale(${f(k * 100) / 100})"><text x="0" y="0" text-anchor="middle" font-size="150" font-weight="900" font-family="${FUENTE}" fill="#FFE14D" stroke="${OUT}" stroke-width="16" paint-order="stroke">${String(x.pop).replace(/[<&]/g, "")}</text></g>`;
+    pop = `<g transform="translate(830 1180) rotate(-8) scale(${f(k * 100) / 100})"><text x="0" y="0" text-anchor="middle" font-size="150" font-weight="900" font-family="${FUENTE}" fill="#C8102E" transform="translate(10 10)">${String(x.pop).replace(/[<&]/g, "")}</text><text x="0" y="0" text-anchor="middle" font-size="150" font-weight="900" font-family="${FUENTE}" fill="#FFFFFF" stroke="${OUT}" stroke-width="16" paint-order="stroke">${String(x.pop).replace(/[<&]/g, "")}</text></g>`;
   }
   document.getElementById("pop").innerHTML = pop;
 };

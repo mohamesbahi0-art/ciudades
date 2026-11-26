@@ -56,7 +56,7 @@ def tiempo(s):
     return f"{int(h)}:{int(m):02d}:{r:05.2f}"
 
 
-def escribir_ass(palabras, ruta, maximo=3, mayus=False, fuente="DejaVu Sans", tamano=92, altura=560):
+def escribir_ass(palabras, ruta, maximo=3, mayus=False, fuente="DejaVu Sans", tamano=92, altura=560, resalte=None):
     cab = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -85,7 +85,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             trozos = []
             for x, v in enumerate(g):
                 t = v["t"].upper() if mayus else v["t"]
-                trozos.append("{\\c" + AMARILLO + "\\fscx112\\fscy112}" + t + "{\\r}" if x == j else t)
+                trozos.append("{\\c" + (resalte or AMARILLO) + "\\fscx112\\fscy112}" + t + "{\\r}" if x == j else t)
             lineas.append(f"Dialogue: 0,{tiempo(ini)},{tiempo(fin)},Viral,,0,0,0,,{' '.join(trozos)}")
     with open(ruta, "w", encoding="utf-8") as f:
         f.write(cab + "\n".join(lineas) + "\n")
