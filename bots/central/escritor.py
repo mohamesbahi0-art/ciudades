@@ -34,7 +34,8 @@ REGLAS_TIPO = {
 }
 
 REGLAS_TIPO["biografias"] = (
-    "- UNA persona real por vídeo, conocida por el público de la cuenta (de su país, o mundial). No repitas persona. "
+    "- UNA persona real por vídeo, FAMOSA EN TODO EL MUNDO (no solo en el país de la cuenta), con un carácter fuerte: "
+    "empresarios, inventores, deportistas, artistas, líderes… No repitas persona. "
     "El público quiere EMPRENDER: el vídeo es «personalidades de las que deberías aprender si eres emprendedor».\n"
     "- Estructura fija (así lo hace el creador al que copia el dueño, contado a nuestra manera):\n"
     "  1) Gancho: 3 o 4 datos locos y concretos de su vida, uno detrás de otro, sin decir aún quién es.\n"
@@ -53,9 +54,10 @@ REGLAS_TIPO["biografias"] = (
     "escena: de 1 a 4 palabras con el nombre real de la persona, la empresa, el lugar o el objeto (por ejemplo «Freddy "
     "Heineken», «Heineken brewery Amsterdam», «Wall Street»). La primera escena, siempre la persona.\n"
     "- Solo se pueden usar fotos de dominio público (sin créditos): elige personas de las que las haya. Lo más seguro: "
-    "neerlandeses y flamencos fotografiados por la prensa entre 1945 y 1989 (deportistas, empresarios, artistas y "
-    "políticos de esa época), figuras históricas anteriores a 1950 y personas con fotos oficiales del gobierno de "
-    "Estados Unidos o de la NASA. De famosos de hoy casi nunca hay.\n"
+    "grandes figuras mundiales anteriores a 1960 (Henry Ford, Thomas Edison, Nikola Tesla, John D. Rockefeller, Andrew "
+    "Carnegie, Walt Disney, Coco Chanel, Charlie Chaplin, Al Capone…), personas con fotos oficiales del gobierno de "
+    "Estados Unidos o de la NASA (presidentes, astronautas, militares) y estrellas mundiales que visitaron Países Bajos "
+    "entre 1945 y 1989 y salieron en la prensa (Muhammad Ali, los Beatles, Pelé…). De famosos de hoy casi nunca hay.\n"
     "- Añade al JSON (también en cada idea) \"persona\": \"nombre y apellidos\".\n"
     "- La historia la ACTÚA un chico de dibujos (rubio, con traje) en un decorado, con gracia: añade a cada escena "
     "\"emocion\" (serio, enfadado, sorprendido, contento, triste o pensativo), \"accion\" si la frase la pide (fumar, "
