@@ -430,7 +430,7 @@ function partir(texto, ancho) {
 function pizarra(x, dt) {          // «LES 1»: lo que se aprende de esta persona, en una pizarra que el chico señala
   const q = salida(lim(dt / 0.4, 0, 1));
   const lineas = partir(x.leccion, 17);
-  let s = `<g transform="translate(540 520) scale(${f((0.6 + 0.4 * q) * 0.9)}) rotate(${f(-2 * q)})">`;
+  let s = `<g transform="translate(540 470) scale(${f((0.6 + 0.4 * q) * 0.82)}) rotate(${f(-2 * q)})">`;
   s += `<rect x="-470" y="-360" width="940" height="720" rx="20" fill="#8B5A2B" stroke="${OUT}" stroke-width="10"/>`;
   s += `<rect x="-440" y="-330" width="880" height="660" rx="10" fill="#1F3B2D"/>`;
   s += `<rect x="-200" y="-300" width="400" height="110" rx="55" fill="#FFE14D" stroke="${OUT}" stroke-width="8"/>`;
@@ -443,7 +443,7 @@ function pizarra(x, dt) {          // «LES 1»: lo que se aprende de esta perso
   return s + `</g>`;
 }
 
-const FOTO_Y = 500, FOTO_K = 0.78;       // la foto arriba, encima de los subtítulos y de la cabeza del chico
+const FOTO_Y = 450, FOTO_K = 0.7;      // la foto acaba en ~790: los subtítulos (hasta 3 líneas) caben debajo       // la foto arriba, encima de los subtítulos y de la cabeza del chico
 
 window.pintar = function (t) {
   const { i, x } = tramo(t);
