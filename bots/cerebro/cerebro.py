@@ -403,6 +403,56 @@ class Cerebro:
             self.digo("plan nuevo", f"Media {plan['media_antes']}, mejor {plan['mejor_antes']}. {plan['diagnostico']} "
                       f"Para el próximo vídeo: {plan['reglas'][0]}", clave)
 
+    # ---------------- mirar a todos (todas las ciudades) ----------------
+    def vigilar(self):
+        """El Cerebro aprende de TODOS, no solo de los vídeos: la salud de cada robot (Derechos Sociales), los partes de
+        los Mecánicos, los casos de la Policía y las obras de la Élite. Apunta cómo está cada uno, celebra al que se
+        recupera y, lo que es un fallo del programa repetido, se lo pasa a Claude (una vez) para que lo arregle."""
+        salud = (privado.leer(os.path.join("estado", "derechos", "salud.json"), {}) or {}).get("robots") or {}
+        taller = privado.leer(os.path.join("estado", "mecanicos", "taller.json"), {}) or {}
+        casos = privado.leer(os.path.join("estado", "casos.json"), []) or []
+        casos = casos.get("casos", []) if isinstance(casos, dict) else casos
+        obras = (privado.leer(os.path.join("estado", "elite", "elite.json"), {}) or {}).get("obras") or []
+        v = self.m.setdefault("vigilancia", {"salud": {}, "avisados": []})
+        antes = v.get("salud") or {}
+        ahora = {rid: r.get("salud") for rid, r in salud.items()}
+        recuperados = [rid for rid, e in ahora.items() if e == "buena" and antes.get(rid) in ("mala", "regular")]
+        empeoran = [rid for rid, e in ahora.items() if e == "mala" and antes.get(rid) not in (None, "mala")]
+        for rid in recuperados:
+            self.digo("ayudo a todos", f"{salud[rid].get('nombre', rid)} vuelve a estar bien de salud.", None)
+        for rid in empeoran:
+            r = salud[rid]
+            self.digo("ayudo a todos", f"{r.get('nombre', rid)} está mal: {r.get('nota', '')[:160]}", None)
+        # lo que ellos no pueden arreglar solos y es del programa: a Claude, una vez por problema
+        pendientes = []
+        for rid, r in salud.items():
+            if r.get("salud") == "mala":
+                for tipo, veces in (r.get("fallos_por_tipo") or {}).items():
+                    if veces >= 2:
+                        pendientes.append((f"salud:{rid}:{tipo}", f"{r.get('nombre', rid)} falla una y otra vez ({tipo}, {veces} veces esta semana)."))
+        for p in taller.get("partes") or []:
+            if p.get("estado") == "para_claude":
+                pendientes.append((f"taller:{p.get('canal')}:{str(p.get('error'))[:40]}",
+                                   f"Los Mecánicos no saben arreglarlo: {str(p.get('error'))[:160]}"))
+        for o in obras:
+            if o.get("estado") == "para_claude":
+                pendientes.append((f"obra:{o.get('id')}", f"La Élite pide una obra: {str(o.get('que'))[:160]}"))
+        nuevos = [(k, t) for k, t in pendientes if k not in v["avisados"]]
+        for k, t in nuevos[:5]:
+            self.m.setdefault("para_claude", []).append({"fecha": _iso(), "texto": t, "de": "vigilancia", "estado": "para_claude"})
+            v["avisados"].append(k)
+            self.digo("ayudo a todos", f"Esto no lo puede arreglar nadie de la fábrica solo; se lo paso a Claude: {t}")
+        v["avisados"] = v["avisados"][-200:]
+        v["salud"] = ahora
+        abiertos = [c for c in casos if c.get("estado") not in ("arreglado", "cerrado")]
+        cuenta = {}
+        for e in ahora.values():
+            cuenta[e] = cuenta.get(e, 0) + 1
+        v["resumen"] = {"robots": len(ahora), "salud": cuenta, "casos_abiertos": len(abiertos),
+                        "partes_para_claude": sum(1 for p in taller.get("partes") or [] if p.get("estado") == "para_claude"),
+                        "en_cuarentena": len(taller.get("cuarentena") or {}), "recuperados": len(recuperados)}
+        self.recuperados = recuperados
+
     # ---------------- hablar con el dueño ----------------
     def hablar(self):
         """Contesta lo que el dueño le ha escrito desde la app y hace lo que le pide (dentro de sus límites). Lo que no
@@ -529,6 +579,7 @@ class Cerebro:
                                    "cuentas": resumen, "saber": self.m["saber"][:12],
                                    "ordenes_del_dueno": self.m.get("ordenes_del_dueno", [])[-ORDENES_GUARDA:],
                                    "nivel": {k: v for k, v in (self.m.get("nivel") or {}).items() if k != "historial"},
+                                   "todos": (self.m.get("vigilancia") or {}).get("resumen"),
                                    "progreso": ((self.m.get("nivel") or {}).get("historial") or [])[-48:],
                                    "para_claude": [x for x in self.m.get("para_claude", []) if x.get("estado") == "para_claude"][-10:],
                                    "averias_hoy": sum(1 for a in self.m["averias"] if str(a.get("fecha"))[:10] == _iso()[:10]
@@ -600,6 +651,9 @@ class Cerebro:
                 xp += 3
             elif p["que"] == "hablo con el dueño":
                 xp += 5
+        for rid in getattr(self, "recuperados", []) or []:     # un robot que vuelve a estar sano
+            xp += 15
+            mejoras.append(f"Un robot se ha recuperado: {rid}")
         planes = sum(1 for p in hechos if p["que"] == "plan nuevo")
         if planes:
             mejoras.append(f"He preparado {planes} plan(es) nuevo(s) para los próximos vídeos")
@@ -624,6 +678,7 @@ class Cerebro:
         self.digo("empiezo", "Miro cómo va cada cuenta, arreglo lo que la frena y preparo su plan para el próximo vídeo.")
         self.paso("hablar", self.hablar)       # lo del dueño, lo primero
         self.paso("reparar", self.reparar)
+        self.paso("mirar a todos", self.vigilar)
         self.paso("aprender", self.aprender)
         self.paso("medir", self.medir)
         self.paso("pensar", self.pensar)

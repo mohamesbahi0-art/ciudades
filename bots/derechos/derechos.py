@@ -84,9 +84,17 @@ def doctora(lista, casos, hace7, hace3):
         c = cuaderno_de(rid)
         diario = (c or {}).get("diario") or []
         semana = [e for e in diario if (_fecha(e.get("fecha")) or hace7) > hace7]
-        errores = [e for e in semana if e.get("accion") == "error"]
-        mios = [x for x in casos if x.get("robot") == rid and ((_fecha(x.get("fecha")) or hace7) > hace7
-                                                             or x.get("estado") != "arreglado")]
+        semana_trabajo = [e for e in semana if e.get("accion") not in ("error", "espera_ia")]
+        # Esperar a la IA (sin cupo) o al servicio gratis de dibujos no es un fallo del robot: se cuenta aparte.
+        def de_fuera(texto):
+            t = str(texto or "")
+            return t.startswith(("SinIA", "gemini")) or ("faltan" in t and "dibujos" in t) or "no hay juez" in t
+        esperas = [e for e in semana if e.get("accion") == "espera_ia" or
+                   (e.get("accion") == "error" and de_fuera((e.get("detalle") or {}).get("error")))]
+        errores = [e for e in semana if e.get("accion") == "error" and e not in esperas]
+        # un caso ya arreglado deja de pesar a los 3 días (antes pesaba toda la semana y el robot seguía «malo»)
+        mios = [x for x in casos if x.get("robot") == rid and not de_fuera(_tipo_caso(x.get("clave"))) and (
+            x.get("estado") != "arreglado" or (_fecha(x.get("fecha")) or hace7) > hace3)]
         abiertos = [x for x in mios if x.get("estado") != "arreglado"]
         ultima = max((e.get("fecha") for e in diario if e.get("fecha")), default=None)
         reciente = ultima and (_fecha(ultima) or hace7) > hace3
@@ -101,8 +109,8 @@ def doctora(lista, casos, hace7, hace3):
             estado = "buena"
         tipos = collections.Counter(_tipo_caso(x.get("clave")) for x in mios)
         tipos.update(str((e.get("detalle") or {}).get("error") or "error").split(":")[0][:30] for e in errores)
-        salud[rid] = {"nombre": r["nombre"], "ciudad": r["ciudad"], "salud": estado, "trabajo_7d": len(semana) - len(errores),
-                      "fallos_7d": fallos, "casos_abiertos": len(abiertos), "ultima": ultima,
+        salud[rid] = {"nombre": r["nombre"], "ciudad": r["ciudad"], "salud": estado, "trabajo_7d": len(semana_trabajo),
+                      "fallos_7d": fallos, "esperas_7d": len(esperas), "casos_abiertos": len(abiertos), "ultima": ultima,
                       "fallos_por_tipo": dict(tipos.most_common(4))}
     activos = [s["trabajo_7d"] for s in salud.values() if s["trabajo_7d"] > 0]
     mucho = (statistics.median(activos) * 3) if len(activos) >= 5 else None
@@ -114,7 +122,9 @@ def doctora(lista, casos, hace7, hace3):
         else:
             s["carga"] = "normal"
         s["nota"] = (f"Esta semana ha trabajado {s['trabajo_7d']} veces y ha fallado {s['fallos_7d']}"
-                     + (f" (sobre todo: {', '.join(s['fallos_por_tipo'])})" if s["fallos_por_tipo"] else "") + ".")
+                     + (f" (sobre todo: {', '.join(s['fallos_por_tipo'])})" if s["fallos_por_tipo"] else "")
+                     + (f"; ha esperado a la IA o a los dibujos {s['esperas_7d']} veces (eso no es culpa suya)"
+                        if s.get("esperas_7d") else "") + ".")
     return salud
 
 
@@ -140,7 +150,7 @@ def defensora(salud, casos):
     """Lo que necesita cada robot y solo puede dar otro (sobre todo el dueño)."""
     peticiones = []
     claude = privado.leer(os.path.join("estado", "claude.json"), {}) or {}
-    sin_ia = [rid for rid, s in salud.items() if s["fallos_por_tipo"].get("SinIA") or s["fallos_por_tipo"].get("gemini")]
+    sin_ia = [rid for rid, s in salud.items() if s.get("esperas_7d")]
     if sin_ia and not (claude.get("prueba") or {}).get("bien"):
         peticiones.append({"robots": sin_ia[:8], "pide": "La llave de Claude, para no quedarse parados cuando se acaba la "
                            "IA gratis.", "a_quien": "dueno", "aviso": "pc-claude-llave"})
