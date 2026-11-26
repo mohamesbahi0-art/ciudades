@@ -109,6 +109,27 @@ def _emocion(escena):
     return "sorprendido" if "!" in t else "pensativo" if "?" in t else "serio"
 
 
+def show(guion, imagenes, palabras_voz, durs, total, carpeta):
+    """El Show: el chico de traje es el protagonista y la foto sale en una tarjeta (bots/estudio/show.html).
+    Devuelve el vídeo mudo (sin voz ni subtítulos)."""
+    tramos, t = [], 0.0
+    for n, (e, d) in enumerate(zip(guion["escenas"], durs)):
+        tramos.append({"desde": round(t, 2), "hasta": round(t + d, 2), "emocion": _emocion(e),
+                       "accion": e.get("accion") if e.get("accion") in ACCIONES_SHOW else
+                       ("senala" if _emocion(e) == "serio" and n % 2 else None), "foto": n})
+        t += d
+    datos = os.path.join(carpeta, "show.json")
+    with open(datos, "w", encoding="utf-8") as f:
+        json.dump({"duracion": total, "tramos": tramos, "fotos": [os.path.abspath(i) for i in imagenes],
+                   "palabras": [{"i": w["i"], "f": w["f"]} for w in palabras_voz]}, f)
+    salida = os.path.join(carpeta, "imagen.mp4")
+    subprocess.run(["node", os.path.join(RAIZ, "bots", "estudio", "show.js"), datos, salida, "30"], check=True, timeout=3000)
+    return salida
+
+
+ACCIONES_SHOW = ("senala", "dinero")
+
+
 def narrador(guion, palabras_voz, durs, total, carpeta):
     """Graba el muñeco narrador (bots/estudio/narrador.html) con la boca al ritmo de la voz y la cara de cada escena.
     Devuelve la ruta del .mov con transparencia, o None si no se ha podido (el vídeo sale entonces sin muñeco)."""
@@ -137,11 +158,12 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
         total = duracion(voz) + 0.4
         imagenes = rellenar(imagenes)
         durs = duraciones_escenas(guion["escenas"], [{"inicio": w["i"]} for w in palabras_voz], total)
+        es_show = guion.get("narrador") == "show"
         clips = []
         # Ningún plano quieto de más: el primero se corta a 1,2 s (en el segundo 1 es cuando se va la gente) y los
         # demás, cada 2,4 s como mucho. El corte es la misma imagen con otro encuadre y otro movimiento.
         piezas = []
-        for n, (img, d) in enumerate(trozos(imagenes, durs)):
+        for n, (img, d) in enumerate([] if es_show else trozos(imagenes, durs)):
             tope = PRIMER_CORTE if n == 0 else PLANO_MAXIMO
             if d > tope + 0.5:
                 partes = [PRIMER_CORTE] if n == 0 else []
@@ -161,15 +183,18 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
                             "format=yuv420p", "-frames:v", str(cuadros), "-c:v", "libx264", "-preset", "veryfast",
                             "-crf", "20", clip], check=True)
             clips.append(clip)
-        with open(os.path.join(tmp, "lista.txt"), "w") as f:
-            f.writelines(f"file '{c}'\n" for c in clips)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy",
-                        "imagen.mp4"], cwd=tmp, check=True)
+        if es_show:
+            show(guion, imagenes, palabras_voz, durs, total, tmp)
+        else:
+            with open(os.path.join(tmp, "lista.txt"), "w") as f:
+                f.writelines(f"file '{c}'\n" for c in clips)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy",
+                            "imagen.mp4"], cwd=tmp, check=True)
         subtitulos.escribir_ass(palabras_voz, os.path.join(tmp, "s.ass"), mayus=True,
-                                altura=820 if guion.get("narrador") else 560)      # con muñeco, encima de su cabeza
+                                altura=900 if es_show else 820 if guion.get("narrador") else 560)      # con muñeco, encima de su cabeza
         # Una línea por drawtext: con varias líneas en un mismo texto, el ffmpeg nuevo pinta un cuadradito en el salto.
         fuente = f":fontfile={FUENTE}" if os.path.exists(FUENTE) else ""
-        mov = narrador(guion, palabras_voz, durs, total, tmp) if guion.get("narrador") else None
+        mov = narrador(guion, palabras_voz, durs, total, tmp) if guion.get("narrador") and not es_show else None
         filtro = "[N:v]scale=iw*1.25:-1[nar];[0:v][nar]overlay=x=0:y=main_h-overlay_h:eof_action=pass,ass=s.ass" if mov else "[0:v]ass=s.ass"
         texto_rotulo = str(guion.get("texto_pantalla") or guion["titulo"])
         rotulo = _gancho(texto_rotulo)

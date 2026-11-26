@@ -1,0 +1,308 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- El Show (formato de Overleef Dit desde el 26 nov, lo pidió el dueño): el chico de traje es el protagonista. Sale
+     grande, cuenta la historia hablando y haciendo cosas (señala la foto, se enfada echando humo, salta de alegría con
+     confeti, tira billetes, se queda pensando…) y la foto de la persona aparece como una tarjeta encima.
+     show.js llama a preparar() una vez y a pintar(t) en cada fotograma. Los subtítulos y la voz los pone el montador. -->
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<svg id="s" width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop id="f1" offset="0" stop-color="#1B2A4A"/><stop id="f2" offset="1" stop-color="#060912"/>
+    </linearGradient>
+    <pattern id="puntos" width="46" height="46" patternUnits="userSpaceOnUse">
+      <circle cx="23" cy="23" r="3.2" fill="#fff" opacity="0.07"/>
+    </pattern>
+    <radialGradient id="luz" cx="0.5" cy="0.62" r="0.6">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="traje" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F3A55"/><stop offset="1" stop-color="#1A2236"/>
+    </linearGradient>
+    <radialGradient id="cara" cx="0.42" cy="0.38" r="0.75">
+      <stop offset="0" stop-color="#FFD9B8"/><stop offset="1" stop-color="#EDB48A"/>
+    </radialGradient>
+    <linearGradient id="pelo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE38A"/><stop offset="1" stop-color="#E0A93A"/>
+    </linearGradient>
+    <clipPath id="recorte"><rect x="-430" y="-330" width="860" height="660" rx="26"/></clipPath>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#fondo)"/>
+  <rect id="patron" width="1200" height="2040" fill="url(#puntos)"/>
+  <rect width="1080" height="1920" fill="url(#luz)"/>
+  <g id="camara">
+    <g id="tarjeta"></g>
+    <g id="actor"></g>
+  </g>
+</svg>
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const OUT = "#14171F";
+const PIEL = "#F6C9A4", TRAJE = "url(#traje)", CAMISA = "#FFFFFF", CORBATA = "#D7263D", CEJA = "#B98221";
+const lim = (x, a, b) => Math.max(a, Math.min(b, x));
+const f = n => Math.round(n * 10) / 10;
+const salida = q => 1 - Math.pow(1 - lim(q, 0, 1), 3);
+const rebote = q => { q = lim(q, 0, 1); return 1 + Math.sin(q * Math.PI * 2.2) * Math.exp(-q * 5) * 0.35 - Math.exp(-q * 9) * 0.0; };
+function azar(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+// Fondo de cada emoción (arriba, abajo)
+const FONDOS = {
+  serio: ["#1E2D52", "#070A14"], enfadado: ["#6B1020", "#120306"], sorprendido: ["#4B2A8C", "#0E0720"],
+  contento: ["#E07A12", "#3A1404"], triste: ["#1F4E7A", "#050D18"], pensativo: ["#0F5E63", "#03181A"],
+  dinero: ["#146B3A", "#03160B"],
+};
+
+let FOTOS = [];
+window.preparar = async function () {
+  const g = window.GUION;
+  const cont = document.getElementById("tarjeta");
+  const cargas = [];
+  FOTOS = (g.fotos || []).map((ruta, n) => {
+    const caja = document.createElementNS(NS, "g");
+    caja.setAttribute("visibility", "hidden");
+    const sombra = document.createElementNS(NS, "rect");
+    for (const [k, v] of Object.entries({ x: -452, y: -340, width: 904, height: 700, rx: 36, fill: "#000", opacity: 0.45,
+                                          transform: "translate(14 22)" })) sombra.setAttribute(k, v);
+    const marco = document.createElementNS(NS, "rect");
+    for (const [k, v] of Object.entries({ x: -452, y: -352, width: 904, height: 704, rx: 36, fill: "#FFFFFF" })) marco.setAttribute(k, v);
+    const dentro = document.createElementNS(NS, "g");
+    dentro.setAttribute("clip-path", "url(#recorte)");
+    const img = document.createElementNS(NS, "image");
+    for (const [k, v] of Object.entries({ x: -430, y: -330, width: 860, height: 660, preserveAspectRatio: "xMidYMid slice" })) img.setAttribute(k, v);
+    cargas.push(new Promise(ok => { img.addEventListener("load", ok); img.addEventListener("error", ok); }));
+    img.setAttributeNS("http://www.w3.org/1999/xlink", "href", "file://" + ruta);
+    img.setAttribute("href", "file://" + ruta);
+    dentro.appendChild(img);
+    caja.append(sombra, marco, dentro);
+    cont.appendChild(caja);
+    return { caja, img };
+  });
+  await Promise.race([Promise.all(cargas), new Promise(ok => setTimeout(ok, 15000))]);
+  return true;
+};
+
+function tramo(t) {
+  const tr = (window.GUION && GUION.tramos) || [];
+  let i = tr.findIndex(x => t >= x.desde && t < x.hasta);
+  if (i < 0) i = Math.max(0, tr.length - 1);
+  return { i, x: tr[i] || { desde: 0, hasta: 1, emocion: "serio" } };
+}
+
+function boca(t) {
+  for (const w of (GUION.palabras || [])) {
+    if (t >= w.i - 0.02 && t <= w.f + 0.02) return 0.3 + 0.7 * Math.abs(Math.sin((t - w.i) * Math.PI * 6.5));
+  }
+  return 0;
+}
+
+function brazo(sx, sy, tx, ty, lado) {        // dos huesos que llegan a la mano (cinemática inversa sencilla)
+  const L1 = 150, L2 = 140;
+  let dx = tx - sx, dy = ty - sy, d = Math.hypot(dx, dy);
+  const dd = lim(d, 20, L1 + L2 - 2);
+  const k = dd / (d || 1); tx = sx + dx * k; ty = sy + dy * k;
+  const a = Math.atan2(ty - sy, tx - sx);
+  const b = Math.acos(lim((L1 * L1 + dd * dd - L2 * L2) / (2 * L1 * dd), -1, 1));
+  const ex = sx + Math.cos(a - b * lado) * L1, ey = sy + Math.sin(a - b * lado) * L1;
+  const d1 = `M${f(sx)} ${f(sy)} L${f(ex)} ${f(ey)} L${f(tx)} ${f(ty)}`;
+  let s = `<path d="${d1}" stroke="${OUT}" stroke-width="78" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  s += `<path d="${d1}" stroke="${TRAJE}" stroke-width="64" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  s += `<circle cx="${f(tx)}" cy="${f(ty)}" r="20" fill="${CAMISA}"/>`;
+  s += `<circle cx="${f(tx)}" cy="${f(ty)}" r="38" fill="${PIEL}" stroke="${OUT}" stroke-width="7"/>`;
+  return { s, mano: [tx, ty] };
+}
+
+// Dónde van las manos en cada acción (en el sistema del chico: pies en 0,0; cabeza arriba, en -640)
+function manos(accion, t, dt, habla) {
+  const o = Math.sin(t * 7), o2 = Math.sin(t * 13);
+  switch (accion) {
+    case "senala": return [[-170, -240 + o * 6], [360, -760 + o * 10]];
+    case "enfadado": return [[-250, -680 + o2 * 30], [250, -680 - o2 * 30]];
+    case "sorprendido": return [[-125, -560], [125, -560]];
+    case "contento": return [[-270, -860 + o * 40], [270, -860 - o * 40]];
+    case "triste": return [[-120, -170], [120, -170]];
+    case "pensativo": return [[-170, -240], [30, -520]];
+    case "dinero": return [[-170, -240], [260 + o2 * 40, -560 - Math.abs(o2) * 120]];
+    default: return [[-180, -250 + o * 8 * habla], [230 + o * 30 * habla, -430 + Math.sin(t * 5.3) * 60 * habla]];
+  }
+}
+
+const CARAS = {   // cejas (alto, giro), ojos (tamaño), sonrisa (-1..1)
+  serio: [8, 10, 1, 0.1], senala: [0, 4, 1, 0.45], enfadado: [16, 26, 0.85, -0.7], sorprendido: [-26, -8, 1.3, 0],
+  contento: [-8, -6, 1.05, 1], triste: [-6, -22, 0.95, -0.8], pensativo: [-6, 14, 1, -0.2], dinero: [-6, -4, 1.05, 1],
+};
+
+function personaje(t, accion, dt, b) {
+  const habla = b > 0 ? 1 : 0;
+  const [cejaY, cejaGiro, ojo, sonrisa] = CARAS[accion] || CARAS.serio;
+  // saltos y botes
+  let salto = 0, sx = 1, sy = 1, giro = 0;
+  if (accion === "sorprendido") salto = -Math.max(0, Math.sin(lim(dt / 0.5, 0, 1) * Math.PI)) * 90;
+  if (accion === "contento" || accion === "dinero") salto = -Math.abs(Math.sin(t * 6)) * 45;
+  if (accion === "enfadado") { const p = Math.abs(Math.sin(t * 9)); sy = 1 - p * 0.03; sx = 1 + p * 0.03; }
+  if (accion === "triste") { sy = 0.97; giro = -4; }
+  if (accion === "pensativo") giro = 5;
+  const respira = 1 + Math.sin(t * 2.2) * 0.012;
+  const bote = Math.sin(t * 9) * 6 * habla;
+
+  let s = `<ellipse cx="0" cy="8" rx="${f(220 - salto * 0.6)}" ry="34" fill="#000" opacity="0.35"/>`;
+  s += `<g transform="translate(0 ${f(salto)}) scale(${f(sx)} ${f(sy * respira)})">`;
+  // piernas y zapatos
+  for (const lado of [-1, 1]) {
+    const px = lado * 62 + (accion === "enfadado" && lado === (Math.sin(t * 9) > 0 ? 1 : -1) ? 0 : 0);
+    s += `<rect x="${px - 44}" y="-230" width="88" height="215" rx="30" fill="#232B40" stroke="${OUT}" stroke-width="8"/>`;
+    s += `<ellipse cx="${px + lado * 14}" cy="-12" rx="74" ry="32" fill="#1A1A1A" stroke="${OUT}" stroke-width="7"/>`;
+    s += `<ellipse cx="${px + lado * 4}" cy="-24" rx="30" ry="9" fill="#fff" opacity="0.25"/>`;
+  }
+  // cuerpo (chaqueta)
+  s += `<path d="M-175 -200 Q-190 -420 -120 -455 L120 -455 Q190 -420 175 -200 Q0 -170 -175 -200 Z" fill="${TRAJE}" stroke="${OUT}" stroke-width="9"/>`;
+  s += `<path d="M-62 -455 L0 -300 L62 -455 Z" fill="${CAMISA}" stroke="${OUT}" stroke-width="6"/>`;
+  s += `<path d="M-16 -440 L16 -440 L26 -330 L0 -290 L-26 -330 Z" fill="${CORBATA}" stroke="${OUT}" stroke-width="5"/>`;
+  s += `<path d="M-62 -455 L-95 -380 L-12 -300 Z M62 -455 L95 -380 L12 -300 Z" fill="#141A2B" stroke="${OUT}" stroke-width="6"/>`;
+  s += `<circle cx="0" cy="-250" r="9" fill="#141A2B"/><rect x="70" y="-400" width="50" height="10" rx="4" fill="#fff" opacity="0.8"/>`;
+  // brazos
+  const [mi, md] = manos(accion, t, dt, habla);
+  const bi = brazo(-130, -425, mi[0], mi[1], -1), bd = brazo(130, -425, md[0], md[1], 1);
+  // cabeza
+  const cy = -640 + bote;
+  let c = `<g transform="rotate(${giro + (accion === "enfadado" ? Math.sin(t * 25) * 3 : 0)} 0 ${cy + 150})">`;
+  c += `<rect x="-38" y="${cy + 120}" width="76" height="80" fill="#E5AE85" stroke="${OUT}" stroke-width="7"/>`;
+  for (const lado of [-1, 1]) c += `<ellipse cx="${lado * 178}" cy="${cy + 10}" rx="34" ry="46" fill="${PIEL}" stroke="${OUT}" stroke-width="8"/>`;
+  c += `<ellipse cx="0" cy="${cy}" rx="182" ry="172" fill="url(#cara)" stroke="${OUT}" stroke-width="9"/>`;
+  if (accion === "enfadado") c += `<ellipse cx="0" cy="${cy + 20}" rx="176" ry="150" fill="#E5223A" opacity="${f(0.18 + 0.08 * Math.sin(t * 6))}"/>`;
+  // pelo rubio con tupé
+  c += `<path d="M-178 ${cy - 10} Q-200 ${cy - 170} -80 ${cy - 205} Q-30 ${cy - 270} 70 ${cy - 245} Q190 ${cy - 220} 182 ${cy - 30}
+        Q150 ${cy - 120} 60 ${cy - 140} Q-40 ${cy - 155} -120 ${cy - 95} Q-160 ${cy - 60} -178 ${cy - 10} Z"
+        fill="url(#pelo)" stroke="${OUT}" stroke-width="9" stroke-linejoin="round"/>`;
+  c += `<path d="M-70 ${cy - 200} Q10 ${cy - 245} 90 ${cy - 210}" fill="none" stroke="#FFF3C4" stroke-width="12" stroke-linecap="round" opacity="0.8"/>`;
+  // mejillas
+  c += `<ellipse cx="-112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/><ellipse cx="112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/>`;
+  // ojos
+  const abre = (t % 3.4 > 3.28 ? 0.1 : 1) * ojo;
+  const mira = accion === "senala" ? [14, -8] : accion === "pensativo" ? [-6, -14] : [0, 0];
+  for (const lado of [-1, 1]) {
+    const ox = lado * 70, oy = cy - 2;
+    c += `<ellipse cx="${ox}" cy="${oy}" rx="${f(40 * ojo)}" ry="${f(50 * abre)}" fill="#fff" stroke="${OUT}" stroke-width="7"/>`;
+    if (abre > 0.3) {
+      c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(22 * ojo)}" fill="#3B2412"/>`;
+      c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(11 * ojo)}" fill="#0B0B0B"/>`;
+      c += `<circle cx="${ox + mira[0] + 8}" cy="${oy - 4 + mira[1]}" r="7" fill="#fff"/>`;
+    }
+    const g = -cejaGiro * lado, ey = oy - 78 + cejaY;
+    c += `<rect x="${ox - 44}" y="${ey}" width="88" height="24" rx="12" fill="${CEJA}" stroke="${OUT}" stroke-width="5" transform="rotate(${g} ${ox} ${ey + 12})"/>`;
+  }
+  // nariz
+  c += `<path d="M-6 ${cy + 40} Q14 ${cy + 52} -4 ${cy + 64}" fill="none" stroke="${OUT}" stroke-width="6" stroke-linecap="round"/>`;
+  // boca
+  const my = cy + 98;
+  if (b > 0.05) {
+    const alto = 14 + 52 * b, ancho = 54 - 10 * b, cur = sonrisa * 14;
+    c += `<path d="M${-ancho} ${my - cur} Q0 ${my + alto + cur} ${ancho} ${my - cur} Q0 ${my - 8 - cur * 0.3} ${-ancho} ${my - cur} Z" fill="#5C1A1F" stroke="${OUT}" stroke-width="7"/>`;
+    if (b > 0.4) c += `<ellipse cx="0" cy="${f(my + alto * 0.55)}" rx="${f(ancho * 0.45)}" ry="${f(alto * 0.2)}" fill="#F07C86"/>`;
+    c += `<rect x="${-ancho * 0.6}" y="${my - 4 - cur * 0.6}" width="${ancho * 1.2}" height="10" rx="4" fill="#fff"/>`;
+  } else if (accion === "sorprendido") {
+    c += `<ellipse cx="0" cy="${my + 8}" rx="24" ry="30" fill="#5C1A1F" stroke="${OUT}" stroke-width="7"/>`;
+  } else {
+    const cur = sonrisa * 30;
+    c += `<path d="M-52 ${my} Q0 ${my + cur} 52 ${my}" fill="none" stroke="${OUT}" stroke-width="9" stroke-linecap="round"/>`;
+  }
+  if (accion === "triste") c += `<path d="M78 ${cy + 40} q-10 26 0 34 q10 -8 0 -34 Z" fill="#7FD3FF" stroke="${OUT}" stroke-width="4" transform="translate(0 ${f((t * 60) % 60)})"/>`;
+  c += `</g>`;
+  // brazos delante o detrás según la acción
+  if (accion === "sorprendido" || accion === "pensativo") s += c + bi.s + bd.s;
+  else s += bi.s + bd.s + c;
+  s += `</g>`;
+  return { s, cabeza: cy + salto, mano: [md[0], md[1] + salto] };
+}
+
+function efectos(accion, t, dt, cabeza, mano) {
+  let s = "";
+  if (accion === "enfadado") {                     // humo de la cabeza y la marca de enfado
+    for (let n = 0; n < 6; n++) {
+      const q = ((t * 0.9 + n / 6) % 1), lado = n % 2 ? 1 : -1;
+      s += `<circle cx="${f(lado * (150 + q * 90))}" cy="${f(cabeza - 170 - q * 220)}" r="${f(26 + q * 40)}" fill="#E8E8E8" opacity="${f(0.75 * (1 - q))}"/>`;
+    }
+    const k = 1 + Math.abs(Math.sin(t * 8)) * 0.2;
+    s += `<g transform="translate(150 ${f(cabeza - 150)}) scale(${f(k)})"><path d="M-30 -8 Q-8 -8 -8 -30 M8 -30 Q8 -8 30 -8 M30 8 Q8 8 8 30 M-8 30 Q-8 8 -30 8" stroke="#FF2E4D" stroke-width="12" fill="none" stroke-linecap="round"/></g>`;
+  }
+  if (accion === "sorprendido") {
+    for (let n = 0; n < 3; n++) {
+      const q = salida(lim((dt - n * 0.08) / 0.35, 0, 1));
+      s += `<text x="${-90 + n * 90}" y="${f(cabeza - 220 - q * 60)}" font-size="${f(110 * q)}" font-weight="900" fill="#FFE14D" stroke="${OUT}" stroke-width="8" paint-order="stroke" text-anchor="middle" font-family="Inter, DejaVu Sans, sans-serif" transform="rotate(${(n - 1) * 14} ${-90 + n * 90} ${f(cabeza - 250)})">!</text>`;
+    }
+  }
+  if (accion === "contento") {                     // confeti
+    const colores = ["#FFD23F", "#FF4D6D", "#4DD7FF", "#7CFF6B", "#FF8A3D"];
+    for (let n = 0; n < 40; n++) {
+      const x = (azar(n) - 0.5) * 1000, v = 300 + azar(n + 9) * 400, y = -1300 + ((t * v + azar(n + 3) * 1600) % 1600);
+      s += `<rect x="${f(x)}" y="${f(y)}" width="18" height="30" rx="4" fill="${colores[n % 5]}" transform="rotate(${f(t * 200 + n * 37)} ${f(x + 9)} ${f(y + 15)})"/>`;
+    }
+  }
+  if (accion === "dinero") {                       // billetes que vuelan
+    for (let n = 0; n < 14; n++) {
+      const q = ((t * 0.8 + n / 14) % 1), x = mano[0] + (azar(n) - 0.3) * 600 * q, y = mano[1] - 300 * Math.sin(q * Math.PI) + q * 500;
+      s += `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(q * 360 + n * 40)})"><rect x="-55" y="-28" width="110" height="56" rx="6" fill="#56C271" stroke="#1F6B35" stroke-width="5"/><circle r="15" fill="none" stroke="#1F6B35" stroke-width="5"/></g>`;
+    }
+  }
+  if (accion === "triste") {                       // nube con lluvia
+    const ny = cabeza - 330;
+    s += `<g opacity="0.95"><ellipse cx="-60" cy="${ny}" rx="110" ry="70" fill="#7C8AA5"/><ellipse cx="60" cy="${ny - 20}" rx="120" ry="85" fill="#8C9AB5"/><ellipse cx="0" cy="${ny + 20}" rx="150" ry="60" fill="#6F7D98"/></g>`;
+    for (let n = 0; n < 12; n++) {
+      const q = (t * 1.6 + n / 12) % 1, x = -130 + (n * 23) % 260;
+      s += `<line x1="${x}" y1="${f(ny + 60 + q * 260)}" x2="${x - 6}" y2="${f(ny + 90 + q * 260)}" stroke="#9FD8FF" stroke-width="7" stroke-linecap="round" opacity="${f(1 - q)}"/>`;
+    }
+  }
+  if (accion === "pensativo") {                    // bocadillo de pensar
+    const k = salida(lim(dt / 0.4, 0, 1));
+    s += `<g transform="translate(-250 ${f(cabeza - 300)}) scale(${f(k)})"><circle cx="150" cy="150" r="16" fill="#fff"/><circle cx="110" cy="100" r="26" fill="#fff"/>
+          <ellipse cx="0" cy="0" rx="120" ry="90" fill="#fff" stroke="${OUT}" stroke-width="6"/>
+          <text x="0" y="40" font-size="120" font-weight="900" text-anchor="middle" fill="#2B6CB0" font-family="Inter, DejaVu Sans, sans-serif" transform="rotate(${f(Math.sin(t * 3) * 10)} 0 0)">?</text></g>`;
+  }
+  return s;
+}
+
+window.pintar = function (t) {
+  const g = window.GUION;
+  const { i, x } = tramo(t);
+  const accion = x.accion || x.emocion || "serio";
+  const dt = t - x.desde;
+  const b = boca(t);
+  // fondo
+  const [c1, c2] = FONDOS[accion] || FONDOS[x.emocion] || FONDOS.serio;
+  document.getElementById("f1").setAttribute("stop-color", c1);
+  document.getElementById("f2").setAttribute("stop-color", c2);
+  document.getElementById("patron").setAttribute("transform", `translate(${f(-((t * 20) % 46))} ${f(-((t * 20) % 46))})`);
+  // cámara: golpe al cambiar de escena y temblor al enfadarse
+  const golpe = 1 + 0.05 * Math.exp(-dt * 6);
+  const tiembla = accion === "enfadado" ? [Math.sin(t * 47) * 6, Math.cos(t * 39) * 6] : [0, 0];
+  document.getElementById("camara").setAttribute("transform",
+    `translate(${f(540 + tiembla[0])} ${f(960 + tiembla[1])}) scale(${f(golpe)}) translate(-540 -960)`);
+  // la tarjeta con la foto de esta escena
+  FOTOS.forEach((ft, n) => ft.caja.setAttribute("visibility", n === (x.foto != null ? x.foto : i) % Math.max(1, FOTOS.length) ? "visible" : "hidden"));
+  const ft = FOTOS.length ? FOTOS[(x.foto != null ? x.foto : i) % FOTOS.length] : null;
+  if (ft) {
+    const q = lim(dt / 0.45, 0, 1);
+    const k = 0.55 + 0.45 * salida(q) + Math.sin(q * Math.PI) * 0.06;
+    const rot = (i % 2 ? 2.5 : -2.5) * salida(q);
+    const tarjetaY = accion === "senala" ? 500 : 520;
+    ft.caja.setAttribute("transform", `translate(540 ${tarjetaY}) rotate(${f(rot)}) scale(${f(k * 0.98)})`);
+    const z = 1.04 + 0.08 * lim(dt / Math.max(1, x.hasta - x.desde), 0, 1);
+    ft.img.setAttribute("transform", `scale(${f(z)}) translate(${f((i % 2 ? -1 : 1) * dt * 6)} 0)`);
+  }
+  // el chico
+  const p = personaje(t, accion, dt, b);
+  const escala = 0.95;
+  document.getElementById("actor").innerHTML =
+    `<g transform="translate(540 1905) scale(${escala})">${p.s}${efectos(accion, t, dt, p.cabeza, p.mano)}</g>`;
+};
+window.listo = true;
+</script>
+</body>
+</html>

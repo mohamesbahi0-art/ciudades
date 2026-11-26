@@ -73,7 +73,7 @@ def main(argv=None):
     asyncio.run(locutor.generar(g["narracion"], canal.get("voz"), canal.get("velocidad", "+0%"), "+0Hz", trabajo))
     print(f"{a.cuenta}: voz con {locutor.MOTOR.get('motor')}", flush=True)
     locutor.apretar(trabajo)
-    g["narrador"] = bool(canal.get("narrador"))
+    g["narrador"] = canal.get("narrador") or False
     salida = os.path.join(trabajo, f"{guion_id}.mp4")
     montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"), salida)
     segundos = montador.duracion(salida)

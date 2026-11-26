@@ -1,0 +1,43 @@
+# Trae vídeos públicos de una cuenta de referencia del dueño para copiar su estilo (la dirección está solo en el
+# repositorio privado). Con peticiones/traer-referencias.json ({"nombre": "ref-show"}) o a mano.
+name: Traer referencias
+on:
+  push:
+    paths:
+      - "peticiones/traer-referencias.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  traer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Traer
+        env:
+          PRIVADO: privado
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -U yt-dlp
+          nombre=$(python -c "import json;print(json.load(open('peticiones/traer-referencias.json'))['nombre'])" | tr -cd 'a-z0-9_-')
+          python herramientas/traer_referencias.py "$nombre" 4
+      - name: Guardar
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('referencias traídas') else 1)"
