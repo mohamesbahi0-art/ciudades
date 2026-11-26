@@ -92,6 +92,37 @@ def _sin_juez(v, a, paso, sala=None):
     raise ia.SinIA("no hay juez ahora: el vídeo se queda sin juzgar y espera a la siguiente ronda")
 
 
+def _voz_al_aprobar(canal):
+    """¿Esta cuenta graba primero con la voz gratis y solo paga la buena (ElevenLabs) cuando el vídeo vale? (El dueño,
+    26 nov: así los suspensos no gastan créditos.)"""
+    return bool(canal.get("voz_al_aprobar")) and str(canal.get("voz") or "").startswith("eleven:")
+
+
+def _voz_buena(clave, canal, g, imagenes, trabajo, video, paso):
+    """El vídeo aprobado se vuelve a montar con la voz buena (ElevenLabs, con el modelo que diga la cuenta). Mismo
+    guion y mismas fotos: solo cambia la voz. Si ElevenLabs no puede, se queda el vídeo con la voz gratis."""
+    if not _voz_al_aprobar(canal) or g.get("voz_motor") == "elevenlabs":
+        return video
+    carpeta = os.path.join(trabajo, "voz_buena")
+    try:
+        paso("locutor", "el vídeo vale: graba la voz buena (solo se paga la de los vídeos que salen)",
+             "el vídeo vale: graba la voz buena")
+        asyncio.run(locutor.generar(g["narracion"], str(canal["voz"]).partition("|")[0], canal.get("velocidad", "+10%"),
+                                    "+0Hz", carpeta, modelo=canal.get("voz_modelo")))
+        if locutor.MOTOR.get("motor") != "elevenlabs":
+            paso("locutor", "la voz buena no ha podido: se queda la voz gratis")
+            return video
+        locutor.apretar(carpeta, hueco_max=0.9) if canal.get("narrador") == "show" else locutor.apretar(carpeta)
+        nuevo = montador.montar(g, imagenes, os.path.join(carpeta, "voz.mp3"), os.path.join(carpeta, "palabras.json"),
+                                video[:-4] + "-v.mp4",
+                                ambiente=None if juez_guardia.sin_musica(canal) else montador.musica.ambiente_de(canal))
+        _voz_de_pago(g, canal)
+        return nuevo
+    except Exception as e:
+        paso("locutor", f"la voz buena no ha podido ({type(e).__name__}): se queda la voz gratis")
+        return video
+
+
 def _voz_de_pago(g, canal):
     """Apunta con qué voz ha salido el vídeo y, si es la de ElevenLabs en su plan gratis, la nombra en los textos (lo
     pide ese plan). Igual que hace el estudio de animación."""
@@ -802,6 +833,7 @@ def main(argv=None):
     peticion = json.load(open(a.peticion, encoding="utf-8")) if a.peticion else {}
     clave = privado.resolver(a.canal or peticion["canal"])
     a.con_mano = bool(peticion.get("a_mano"))      # prueba con el siguiente guion a mano (sin quitarlo de la lista)
+    a.voz_buena = bool(peticion.get("voz_buena"))  # prueba que se monta al final con la voz buena aunque no apruebe
     canal = privado.canal(clave)
     ajustes = privado.ajustes()
     hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
@@ -974,9 +1006,12 @@ def main(argv=None):
                     continue
                 paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} escenas con foto libre ({len(origen)} fotos distintas)")
 
-            paso("locutor", f"grabando la voz ({canal.get('voz')})", "grabando la voz")
-            asyncio.run(locutor.generar(g["narracion"], canal.get("voz", "es-MX-JorgeNeural"), canal.get("velocidad", "+10%"),
-                                        "+0Hz", trabajo))
+            voz = canal.get("voz", "es-MX-JorgeNeural")
+            if _voz_al_aprobar(canal):        # se juzga con la voz gratis; la buena solo si el vídeo vale
+                voz = str(voz).partition("|")[2] or locutor.VOZ_GRATIS
+            paso("locutor", f"grabando la voz ({voz})", "grabando la voz")
+            asyncio.run(locutor.generar(g["narracion"], voz, canal.get("velocidad", "+10%"), "+0Hz", trabajo,
+                                        modelo=canal.get("voz_modelo")))
             quitado = locutor.apretar(trabajo, hueco_max=0.9) if canal.get("narrador") == "show" \
                 else locutor.apretar(trabajo)       # en el Show se dejan las pausas: el chico reacciona en ellas
             _voz_de_pago(g, canal)
@@ -1010,6 +1045,9 @@ def main(argv=None):
             paso("juez_guardia", "juzgando el vídeo")
             v = tribunal.juzgar(video, g, canal, cuadernos["juez_guardia"].para_el_prompt(),
                                 os.path.join(trabajo, f"juicio{intento}"), audio=os.path.join(trabajo, "voz.mp3"), prueba=a.prueba)
+            if v.get("veredicto") == "sin_juicio" and v.get("preaprobado") and not a.prueba:
+                video = _voz_buena(clave, canal, g, imagenes, trabajo, video, paso)   # a la Sala, ya con la voz buena
+                segundos = montador.duracion(video)
             _sin_juez(v, a, paso, sala=dict(resumen=resumen, clave=clave, video=video, g=g, segundos=segundos,
                                             id_guion=id_guion, intento=intento))
             v["intento"] = intento                  # la app enseña «Intento 2» a partir del segundo
@@ -1031,6 +1069,9 @@ def main(argv=None):
                                      for x in (v.get("votos") or [])[:3])
                           + " Escribe un guion que corrija justo eso.)")
 
+        if v["veredicto"] == "aprobado" or (a.prueba and getattr(a, "voz_buena", False)):
+            video = _voz_buena(clave, canal, g, imagenes, trabajo, video, paso)
+            segundos = montador.duracion(video)
         g = _coliseo(clave, canal, g, v, paso, a, resumen)
         _destino(clave, canal, video, g, v, segundos, id_guion, cuadernos, ajustes, paso, a, resumen)
         resumen["resultado"] = "hecho"

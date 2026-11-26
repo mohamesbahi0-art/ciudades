@@ -21,7 +21,7 @@ VOZ_GRATIS = "es-ES-AlvaroNeural"
 MOTOR = {}          # qué motor sonó la última vez (para apuntarlo): {"motor": "elevenlabs"|"edge", "aviso": ...}
 
 
-def _eleven(texto, voz_id, velocidad, carpeta):
+def _eleven(texto, voz_id, velocidad, carpeta, modelo=None):
     """ElevenLabs con tiempos por letra; los junta en palabras. Lanza RuntimeError si no se puede."""
     clave = os.environ.get("ELEVENLABS_API_KEY")
     if not clave:
@@ -30,9 +30,11 @@ def _eleven(texto, voz_id, velocidad, carpeta):
         rapidez = max(0.7, min(1.2, 1 + float(str(velocidad).strip().rstrip("%") or 0) / 100))
     except ValueError:
         rapidez = 1.0
-    cuerpo = {"text": texto, "model_id": os.environ.get("ELEVENLABS_MODELO", "eleven_multilingual_v2"),
-              "voice_settings": {"stability": 0.45, "similarity_boost": 0.8, "style": 0.35, "use_speaker_boost": True,
-                                 "speed": rapidez}}
+    modelo = modelo or os.environ.get("ELEVENLABS_MODELO", "eleven_multilingual_v2")
+    ajustes = {"stability": 0.45, "similarity_boost": 0.8, "style": 0.35, "use_speaker_boost": True, "speed": rapidez}
+    if "flash" in modelo or "turbo" in modelo:     # los modelos rápidos (mitad de precio) no llevan «style»
+        ajustes.pop("style")
+    cuerpo = {"text": texto, "model_id": modelo, "voice_settings": ajustes}
     req = urllib.request.Request(f"https://api.elevenlabs.io/v1/text-to-speech/{voz_id}/with-timestamps"
                                  "?output_format=mp3_44100_128", data=json.dumps(cuerpo).encode(), method="POST",
                                  headers={"xi-api-key": clave, "Content-Type": "application/json"})
@@ -79,11 +81,12 @@ async def _edge(texto, voz, velocidad, tono, carpeta, proxy):
     return palabras
 
 
-async def generar(texto, voz, velocidad, tono, carpeta):
+async def generar(texto, voz, velocidad, tono, carpeta, modelo=None):
+    """`modelo`: el de ElevenLabs (p. ej. eleven_flash_v2_5, a mitad de precio); si no, el de siempre."""
     if str(voz).startswith("eleven:"):
         voz, _, gratis = str(voz).partition("|")
         try:
-            palabras = _eleven(texto, voz.split(":", 1)[1], velocidad, carpeta)
+            palabras = _eleven(texto, voz.split(":", 1)[1], velocidad, carpeta, modelo=modelo)
             MOTOR.update(motor="elevenlabs", aviso=None)
             return palabras
         except (RuntimeError, OSError, ValueError, KeyError) as e:
