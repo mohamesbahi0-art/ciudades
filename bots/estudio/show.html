@@ -485,12 +485,12 @@ window.pintar = function (t) {
   document.getElementById("detras").innerHTML = efectosDetras(accion, t);
   document.getElementById("efectos").innerHTML = efectos(accion, t, dt, A);
   document.getElementById("foco").setAttribute("opacity", f(0.85 + 0.15 * Math.sin(t * 7) * Math.sin(t * 3.1)));
-  // el texto que salta (p. ej. «x20»), al lado de la cara
+  // el texto que salta (p. ej. «x20»), a la izquierda de la cara: ni encima de los subtítulos ni de los botones de TikTok
   let pop = "";
   if (x.pop) {
     const q = lim(dt / 0.35, 0, 1), k = salida(q) * (1 + Math.sin(q * Math.PI) * 0.25);
     const txt = String(x.pop).replace(/[<&]/g, "");
-    pop = `<g transform="translate(860 1060) rotate(-8) scale(${f(k * 100) / 100})"><text x="0" y="0" text-anchor="middle" font-size="140" font-weight="900" font-family="${FUENTE}" fill="#C8102E" transform="translate(10 10)">${txt}</text><text x="0" y="0" text-anchor="middle" font-size="140" font-weight="900" font-family="${FUENTE}" fill="#FFFFFF" stroke="${OUT}" stroke-width="16" paint-order="stroke">${txt}</text></g>`;
+    pop = `<g transform="translate(205 1215) rotate(-8) scale(${f(k * 100) / 100})"><text x="0" y="0" text-anchor="middle" font-size="140" font-weight="900" font-family="${FUENTE}" fill="#C8102E" transform="translate(10 10)">${txt}</text><text x="0" y="0" text-anchor="middle" font-size="140" font-weight="900" font-family="${FUENTE}" fill="#FFFFFF" stroke="${OUT}" stroke-width="16" paint-order="stroke">${txt}</text></g>`;
   }
   document.getElementById("pop").innerHTML = pop;
 };
