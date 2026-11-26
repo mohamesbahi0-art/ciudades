@@ -117,6 +117,10 @@ Lo que puedes hacer TÚ ahora mismo con lo que te pide (va en «acciones»):
 - "quitar_orden": dejar de aplicar una orden suya anterior (pon en "texto" cuál).
 - "para_claude": lo que tú no puedes hacer y hace falta tocar el programa, o lo que está fuera de tus límites (cambiar
   la nota mínima, gastar dinero, llaves o permisos, borrar o crear canales). Se lo pasas a Claude; díselo al dueño así.
+  Claude tiene además la herramienta «reverse-api-engineer»: convierte lo que una web hace en el navegador en un
+  programa que pide esos datos directamente. Si el dueño (o tú) necesita datos de una web que no tiene API pública,
+  pásalo con "para_claude" diciendo qué datos, de qué web y para qué; Claude lo hará con el permiso del dueño, porque
+  gasta dinero. Nunca para TikTok, Instagram ni YouTube (allí solo lo público o su API oficial, sin saltarse nada).
 Si solo pregunta algo, contesta y no hagas nada ("acciones": []).
 
 Devuelve SOLO un JSON: {{"respuesta": "lo que le contestas", "acciones": [{{"tipo": "orden"|"repensar"|"quitar_orden"|

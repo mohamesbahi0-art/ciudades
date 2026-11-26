@@ -50,3 +50,7 @@
 
 ## Sin pruebas bastantes
 - Con menos de 3 vídeos juzgados, el plan es prudente: una sola regla nueva y una prueba. Mejor esperar que cambiar a ciegas.
+
+## Cuando falta un dato para decidir
+- Si el dato está en una web sin API pública (una tabla, un buscador, una lista que solo se ve en el navegador), Claude puede sacarlo con su herramienta «reverse-api-engineer». Pídeselo con "para_claude": qué dato, de qué web y para qué decisión. Lo hace con el permiso del dueño, porque cuesta dinero.
+- Nunca para TikTok, Instagram ni YouTube: allí solo vale lo público o su API oficial, sin saltarse bloqueos.
