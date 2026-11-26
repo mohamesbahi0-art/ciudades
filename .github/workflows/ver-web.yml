@@ -1,0 +1,43 @@
+# Mira una página pública de referencia que eligió el dueño (la dirección está solo en el repositorio privado,
+# referencias/pedidas.json) y guarda capturas e imágenes en el repositorio privado, para copiar el estilo.
+# Con peticiones/ver-web.json ({"nombre": "ref-web"}) o a mano.
+name: Ver una web de referencia
+on:
+  push:
+    paths:
+      - "peticiones/ver-web.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Mirar
+        run: |
+          npm install --no-save --silent playwright@1.63.0 && npx playwright install --with-deps chromium > /dev/null
+          nombre=$(python -c "import json;print(json.load(open('peticiones/ver-web.json'))['nombre'])" | tr -cd 'a-z0-9_-')
+          url=$(python -c "import json,sys;print(json.load(open('privado/referencias/pedidas.json')).get(sys.argv[1],''))" "$nombre")
+          test -n "$url" || { echo "no hay dirección para esa referencia"; exit 1; }
+          node herramientas/ver_web.js "$url" "privado/referencias/$nombre" 2>&1 | grep -v "$url" || true
+      - name: Guardar
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('referencia: capturas de una web') else 1)"
