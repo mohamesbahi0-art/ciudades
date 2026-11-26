@@ -18,6 +18,7 @@ import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, RAIZ)
+from bots.central import a_mano  # noqa: E402
 from bots.central import clips, discoteca, huecos, parasubir, subidor, turno, videoteca  # noqa: E402
 from bots.comun import privado  # noqa: E402
 
@@ -438,6 +439,11 @@ def main():
             solo_claude = privado.canal(clave).get("guionista") == "claude"
         except BaseException:
             solo_claude = False
+        try:                                     # con un guion escrito a mano, no hace falta quien escriba: solo jueces
+            if a_mano.cuantos(clave):
+                solo_claude, con_arreglo = False, False
+        except Exception:
+            pass
         con_ia, falta = (True, "") if a.prueba else hay_ia(arreglo=con_arreglo, solo_claude=solo_claude)
         if not con_ia and falta == "claude":     # cosa de esta cuenta, no de la fábrica: ni se corta la línea ni hay pausa
             ronda["esperan"][clave] = ("solo escribe con el cerebro de pago (lo decidió la Élite) y ahora no tiene su "

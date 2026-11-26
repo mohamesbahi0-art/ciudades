@@ -408,6 +408,8 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
     except (TypeError, ValueError):
         acepta_arreglo = False
     arreglar = None if a.prueba or not acepta_arreglo else arreglo_pendiente(clave)   # lo que quedó del turno anterior
+    if arreglar and a_mano.cuantos(clave):         # primero los guiones escritos a mano; el arreglo sigue apuntado
+        arreglar = None
     if arreglar and int(arreglar.get("version") or 2) > versiones:
         arreglar = None
     video, sin_juez = None, False
