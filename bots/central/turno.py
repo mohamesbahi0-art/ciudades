@@ -343,6 +343,14 @@ VERSIONES = 3                 # el vídeo y hasta 2 versiones corregidas; si ni 
 CADUCA_ARREGLO = 20           # horas que un arreglo pendiente espera su turno
 
 
+def _guion_a_mano(clave, a):
+    """El guion a mano de la cuenta: en un turno de verdad se coge (y se quita de la lista); en una prueba que lo pide
+    («a_mano»: true en la petición) solo se mira, para hacer una muestra sin gastarlo."""
+    if a.prueba:
+        return a_mano.mirar(clave) if getattr(a, "con_mano", False) else None
+    return a_mano.tomar(clave)
+
+
 def _ruta_arreglo(clave):
     return os.path.join(ARREGLOS, f"{privado.alias(clave)}.json")
 
@@ -424,7 +432,7 @@ def _turno_estudio(clave, canal, cuadernos, nombres, trabajo, paso, resumen, a, 
             g0.update(cerebro=ia.quien().get("motor", "gemini"), version=version, arreglo_de=arreglar.get("titulo"))
             if arreglar.get("jurado"):             # el Jurado ya votó ese guion: no se reúne otra vez por un arreglo
                 g0["jurado"] = arreglar["jurado"]
-        elif not a.prueba and (mano := a_mano.tomar(clave)):      # un guion que Claude ha escrito a mano para esta cuenta
+        elif mano := _guion_a_mano(clave, a):      # un guion que Claude ha escrito a mano para esta cuenta
             paso("escritor", f"guion escrito a mano por Claude: «{mano.get('titulo', '')}»", "guion escrito a mano por Claude")
             g0 = mano
         else:
@@ -769,7 +777,9 @@ def main(argv=None):
     p.add_argument("--prueba", action="store_true", help="hace el vídeo pero no lo sube ni lo deja para subir")
     p.add_argument("--salida", default="trabajo")
     a = p.parse_args(argv)
-    clave = privado.resolver(a.canal or json.load(open(a.peticion, encoding="utf-8"))["canal"])
+    peticion = json.load(open(a.peticion, encoding="utf-8")) if a.peticion else {}
+    clave = privado.resolver(a.canal or peticion["canal"])
+    a.con_mano = bool(peticion.get("a_mano"))      # prueba con el siguiente guion a mano (sin quitarlo de la lista)
     canal = privado.canal(clave)
     ajustes = privado.ajustes()
     hoy = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d-%H%M")
@@ -843,7 +853,7 @@ def main(argv=None):
         idea, id_idea = None, None
         sin_fotos = []
         con_fotos = canal.get("fotos") == "commons"
-        mano = None if a.prueba else a_mano.tomar(clave)    # un guion que Claude ha escrito a mano para esta cuenta
+        mano = _guion_a_mano(clave, a)               # un guion que Claude ha escrito a mano para esta cuenta
         if mano:
             paso("escritor", f"guion escrito a mano por Claude: «{mano.get('titulo', '')}»", "guion escrito a mano por Claude")
         if not mano and (ajustes.get("sala_ideas", True) or con_fotos):     # la Sala de Ideas elige la mejor de 3 antes de gastar

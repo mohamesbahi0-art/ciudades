@@ -46,7 +46,10 @@ def subir(canal, video, titulo, hora, registro, descripcion="", etiquetas="", ca
     if hora <= dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=15):
         return 1, "La hora de publicación tiene que ser al menos 15 minutos en el futuro.", None
     lista = leer_registro(registro)
-    if any(r.get("archivo") == os.path.basename(video) and r.get("canal") == canal for r in lista):
+    # Mismo canal, mismo archivo Y mismo título: los vídeos del estudio se llaman todos «video.mp4», así que el nombre
+    # solo no basta (se perdieron dos vídeos aprobados el 26 nov por creerlos ya subidos).
+    if any(r.get("archivo") == os.path.basename(video) and r.get("canal") == canal and r.get("titulo") == titulo
+           for r in lista):
         return 0, "Ya estaba subido según el registro: no lo subo otra vez.", None
     if isinstance(etiquetas, str):
         etiquetas = [t.strip() for t in etiquetas.split(",") if t.strip()]

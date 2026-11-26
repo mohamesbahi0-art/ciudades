@@ -14,6 +14,9 @@ const { chromium } = require("playwright");
   const pagina = await navegador.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
   await pagina.goto("file://" + path.resolve(__dirname, "show.html"));
   await pagina.evaluate(g => { window.GUION = g; }, datos);
+  const rutaChico = path.resolve(__dirname, "personaje", "personaje.json");   // el chico dibujado (poses y bocas)
+  if (fs.existsSync(rutaChico))
+    await pagina.evaluate(p => { window.PERSONAJE = p; }, JSON.parse(fs.readFileSync(rutaChico, "utf8")));
   await pagina.evaluate(() => window.preparar());
   await pagina.evaluate(() => document.fonts.ready);
   const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "mjpeg",

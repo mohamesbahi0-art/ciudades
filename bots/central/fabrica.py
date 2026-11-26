@@ -189,6 +189,12 @@ def planear(ajustes, cfg, revs, solo=None, ahora=None, linea=None):
         if not hora:
             esperan[clave] = f"ya tiene vídeos para {ajustes['dias_maximos']} días"
             continue
+        # El dueño (26 nov): «los que ya tienen vídeos hasta enero no hagan tantos; céntrate en los que no tienen».
+        tope_colchon = float(c.get("colchon_maximo_dias") or ajustes.get("colchon_maximo_dias") or 0)
+        if tope_colchon and huecos.colchon(ocupadas, ahora) > tope_colchon and not (solo and clave in solo):
+            esperan[clave] = (f"ya tiene vídeos programados para más de {int(tope_colchon)} días: "
+                              "la fábrica se centra en los canales que tienen menos")
+            continue
         if insiste(clave):
             candidatos.append((not pendiente(clave), clave not in con_clip, huecos.colchon(ocupadas, ahora),
                                orden.get(clave, 99), clave, hora))

@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- El Show (formato de las biografías desde el 26 nov, lo pidió el dueño): el chico rubio de traje es el protagonista y
-     ACTÚA lo que cuenta, con gracia: fuma como una chimenea si la historia habla de tabaco, chuta un balón, levanta un
-     trofeo, tira billetes, habla por teléfono, corre, se enfada echando humo, salta de alegría con confeti…
+     ACTÚA lo que cuenta, con gracia: fuma como una chimenea si la historia habla de tabaco, enseña el balón, levanta un
+     trofeo, tira billetes, habla por teléfono, se enfada echando humo, salta de alegría con confeti…
+     Desde el 26 nov por la noche el chico es un dibujo hecho con IA (personaje/, 15 poses con su boca para hablar),
+     más fluido que el muñeco de antes; solo para los vídeos nuevos (los ya hechos no se tocan).
      Cada escena tiene su escenario (habitación, oficina, estadio, calle, banco, hospital o plató) y la foto de la persona
      va dentro del escenario: un cuadro en la pared, la tele, el videomarcador o una valla.
      show.js llama a preparar() una vez y a pintar(t) en cada fotograma. La voz y los subtítulos los pone el montador.
@@ -57,13 +59,14 @@
   <g id="camara">
     <g>
       <g id="decorado"></g>
+      <g id="detras"></g>
       <g id="tarjeta"></g>
       <g id="pizarra"></g>
       <path id="foco" d="M440 0 L640 0 L900 1920 L180 1920 Z" fill="url(#haz)"/>
       <g id="actor"></g>
       <g id="delante"></g>
     </g>
-    <g id="acento"></g>
+    <g id="efectos"></g>
   </g>
   <rect width="1080" height="1920" fill="url(#vineta)" opacity="0.45"/>
   
@@ -153,6 +156,211 @@ const MARCOS = { madera: ["#8B5A2B", 34], tele: ["#111", 30], pantalla: ["#1F1F1
 const DE_EMOCION = { enfadado: "habitacion", triste: "habitacion", contento: "plato", sorprendido: "calle", pensativo: "oficina", serio: "oficina" };
 const DE_ACCION = { fumar: "habitacion", balon: "estadio", trofeo: "plato", dinero: "banco", telefono: "oficina", correr: "calle", hospital: "hospital" };
 
+// ---------- EL CHICO ----------
+// Dibujado con IA una vez (personaje/preparar.py): 15 poses con la cabeza siempre en el mismo sitio, y en cada una el
+// trozo de la boca abierta para hablar. Aquí solo se elige la pose, se le da vida (respira, se balancea, bota al hablar,
+// «pop» al cambiar de pose, parpadea) y se abre la boca con las sílabas de la voz.
+const ESCALA_CHICO = 1.25, OJOS_Y = 1235;       // tamaño en pantalla y altura de los ojos (la cara queda fuera de la
+                                                 // zona que tapan los botones y el texto de TikTok)
+const POSES = {
+  senala: ["apunta", "dedo"], enfadado: ["enfadado"], sorprendido: ["sorprendido"], contento: ["contento"],
+  triste: ["triste"], pensativo: ["pensativo"], dinero: ["dinero"], fumar: ["fumar"], trofeo: ["trofeo"],
+  telefono: ["telefono"], balon: ["balon"], correr: ["contento"], beber: ["beber"], ceja: ["pensativo"],
+  hombros: ["explica"], hospital: ["triste"], serio: ["serio", "dedo", "explica"], normal: ["explica", "dedo", "apunta", "serio"],
+};
+const CAMBIO_GESTO = 2.6;          // en una escena larga, cambia de gesto cada ~2,6 s (como quien habla con las manos)
+let CHICO = null;
+let ULTIMA = { pose: null, desde: 0 };
+
+function crear(tipo, attrs) {
+  const e = document.createElementNS(NS, tipo);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  return e;
+}
+
+function datosChico() {
+  if (window.PERSONAJE) return window.PERSONAJE;
+  try {                               // show.js lo mete; si no, se lee al lado (file:// con permiso de Chromium)
+    const r = new XMLHttpRequest(); r.open("GET", "personaje/personaje.json", false); r.send();
+    return JSON.parse(r.responseText);
+  } catch (e) { return null; }
+}
+
+function prepararChico(cargas) {
+  const P = datosChico();
+  if (!P) return;
+  const [W, H] = P.lienzo;
+  const actor = document.getElementById("actor");
+  actor.innerHTML = "";
+  const raiz = crear("g"), cuerpo = crear("g");
+  const capas = {};
+  for (const [n, p] of Object.entries(P.poses)) {
+    const img = crear("image", { x: 0, y: 0, width: W, height: H, visibility: "hidden" });
+    cargas.push(new Promise(ok => { img.addEventListener("load", ok); img.addEventListener("error", ok); }));
+    img.setAttribute("href", `personaje/${n}.webp`);
+    cuerpo.appendChild(img);
+    capas[n] = { img, p };
+  }
+  for (const [n, p] of Object.entries(P.poses)) {
+    if (!p.boca) continue;
+    const b = crear("image", { x: p.boca.x, y: p.boca.y, width: p.boca.w, height: p.boca.h, visibility: "hidden" });
+    cargas.push(new Promise(ok => { b.addEventListener("load", ok); b.addEventListener("error", ok); }));
+    b.setAttribute("href", `personaje/${n}-boca.webp`);
+    cuerpo.appendChild(b);
+    capas[n].boca = b;
+  }
+  const parpados = crear("g");
+  cuerpo.appendChild(parpados);
+  raiz.appendChild(cuerpo);
+  actor.appendChild(raiz);
+  CHICO = { P, W, H, capas, raiz, cuerpo, parpados };
+}
+
+function elegirPose(accion, x, i, dt) {
+  const lista = POSES[accion] || (x.emocion && POSES[x.emocion]) || POSES.normal;
+  if (lista.length === 1) return lista[0];
+  const k = Math.floor(Math.max(0, dt) / CAMBIO_GESTO);
+  return lista[(i + k) % lista.length];
+}
+
+function aPantalla(px, py, extra) {        // de coordenadas del dibujo a la pantalla
+  const c = CHICO.P.cabeza, S = ESCALA_CHICO;
+  return [540 + (px - c.x) * S + (extra ? extra[0] : 0), OJOS_Y + (py - c.y) * S + (extra ? extra[1] : 0)];
+}
+
+function moverChico(t, accion, pose, b, dt) {
+  const { P, W, H, capas, raiz, cuerpo, parpados } = CHICO;
+  if (pose !== ULTIMA.pose) ULTIMA = { pose, desde: t };
+  const dp = t - ULTIMA.desde;
+  const habla = b > 0 ? 1 : 0;
+  // vida: respira, se balancea, bota un poco al hablar y hace «pop» al cambiar de pose
+  let dy = -habla * Math.abs(Math.sin(t * 9)) * 7, dx = 0, giro = Math.sin(t * 1.1) * 1.2 + habla * Math.sin(t * 6.3) * 0.9;
+  if (accion === "contento" || accion === "trofeo" || accion === "dinero") dy -= Math.abs(Math.sin(t * 5)) * 24;
+  if (accion === "correr") { dy -= Math.abs(Math.sin(t * 12)) * 20; giro += 4; }
+  if (accion === "enfadado") dx += Math.sin(t * 41) * 4;
+  if (accion === "sorprendido") dy -= Math.sin(lim(dp / 0.45, 0, 1) * Math.PI) * 70;
+  if (accion === "triste") { dy += 12; giro -= 2; }
+  if (accion === "hombros") dy -= Math.abs(Math.sin(lim(dp, 0, 0.6) * 10)) * 16;
+  if (accion === "telefono") giro += Math.sin(t * 4) * 1.5;
+  const k = 1 + 0.07 * Math.exp(-dp * 9) * Math.cos(dp * 18);
+  const respira = 1 + Math.sin(t * 2.2) * 0.012;
+  const c = P.cabeza, S = ESCALA_CHICO;
+  raiz.setAttribute("transform", `translate(${f(540 - c.x * S + dx)} ${f(OJOS_Y - c.y * S + dy)}) scale(${S})`);
+  const px = c.x, py = H * 0.9;           // todo gira y se estira desde la cintura
+  cuerpo.setAttribute("transform",
+    `translate(${px} ${py}) rotate(${f(giro)}) scale(${f(k * 1000) / 1000} ${f((2 - k) * respira * 1000) / 1000}) translate(${-px} ${-py})`);
+  for (const [n, cp] of Object.entries(capas)) {
+    cp.img.setAttribute("visibility", n === pose ? "visible" : "hidden");
+    if (cp.boca) cp.boca.setAttribute("visibility", "hidden");
+  }
+  // la boca: abierta, medio abierta o cerrada, siguiendo las sílabas
+  const cp = capas[pose];
+  if (cp && cp.boca && b > 0.4) {
+    cp.boca.setAttribute("visibility", "visible");
+    const bb = cp.p.boca, medio = b <= 0.68;
+    const ancla = bb.y + bb.h * 0.3;
+    cp.boca.setAttribute("transform", medio ? `translate(0 ${f(ancla)}) scale(1 0.62) translate(0 ${f(-ancla)})` : "");
+  }
+  // parpadeo (cada 3-4 s, 0,13 s) salvo mientras bebe
+  let s = "";
+  const ciclo = 3.6, fase = (t + (pose.length * 0.37)) % ciclo;
+  if (cp && pose !== "beber" && fase > ciclo - 0.13) {
+    for (const o of cp.p.ojos) {
+      s += `<ellipse cx="${o.x}" cy="${o.y}" rx="${f(o.rx + 4)}" ry="${f(o.ry + 4)}" fill="${cp.p.piel}"/>`;
+      s += `<path d="M${f(o.x - o.rx)} ${f(o.y + o.ry * 0.1)} Q${o.x} ${f(o.y + o.ry * 0.55)} ${f(o.x + o.rx)} ${f(o.y + o.ry * 0.1)}" stroke="#16181D" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+    }
+  }
+  parpados.innerHTML = s;
+  const extra = [dx, dy];
+  return {
+    cabeza: aPantalla(c.x, c.y, extra),
+    arriba: aPantalla(c.x, c.y - c.ojos * 2.35, extra)[1],
+    brasa: cp && cp.p.brasa ? aPantalla(cp.p.brasa[0], cp.p.brasa[1], extra) : null,
+    billetes: cp && cp.p.billetes ? aPantalla(cp.p.billetes[0], cp.p.billetes[1], extra) : null,
+  };
+}
+
+function billete(x, y, giro) {
+  return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(giro)})"><rect x="-55" y="-28" width="110" height="56" rx="6" fill="#56C271" stroke="#1F6B35" stroke-width="5"/><circle r="15" fill="none" stroke="#1F6B35" stroke-width="5"/></g>`;
+}
+function efectosDetras(accion, t) {               // lo que pasa por detrás del chico (lluvia de billetes)
+  let s = "";
+  if (accion === "dinero")
+    for (let n = 0; n < 26; n++) {
+      const x = azar(n + 50) * 1080, v = 260 + azar(n + 7) * 260, y = -80 + ((t * v + azar(n + 11) * 2100) % 2100);
+      s += billete(x, y, t * 120 + n * 47);
+    }
+  return s;
+}
+
+// Efectos alrededor del chico, en coordenadas de pantalla (cabeza = centro entre los ojos, arriba = donde acaba el pelo).
+function efectos(accion, t, dt, A) {
+  let s = "";
+  const [hx, hy] = A.cabeza, top = A.arriba;
+  if (accion === "fumar") {                         // humo de chimenea que sale del cigarro, y alguna tos
+    const [bx, by] = A.brasa || [hx - 260, hy + 60];
+    for (let n = 0; n < 14; n++) {
+      const q = ((t * 0.5 + n / 14) % 1);
+      s += `<circle cx="${f(bx + Math.sin(q * 9 + n) * 40 + q * 60)}" cy="${f(by - 20 - q * 620)}" r="${f(14 + q * 90)}" fill="#C9C9C9" stroke="#9A9A9A" stroke-width="4" opacity="${f(0.8 * (1 - q))}"/>`;
+    }
+    for (let n = 0; n < 4; n++) s += `<circle cx="${f(hx + Math.sin(t + n * 2) * 260)}" cy="${f(top + 40 + Math.cos(t * 0.7 + n) * 70)}" r="${f(110 + n * 25)}" fill="#D0D0D0" opacity="0.16"/>`;
+    const q = t % 5.2;
+    if (q > 3.9 && q < 4.5) s += `<text x="${f(hx + 250)}" y="${f(top + 40)}" font-size="96" font-weight="900" fill="#fff" stroke="${OUT}" stroke-width="10" paint-order="stroke" font-family="${FUENTE}" text-anchor="middle" transform="rotate(-10 ${f(hx + 250)} ${f(top + 40)})">KUCH!</text>`;
+  }
+  if (accion === "enfadado") {
+    for (let n = 0; n < 6; n++) {
+      const q = ((t * 0.9 + n / 6) % 1), lado = n % 2 ? 1 : -1;
+      s += `<circle cx="${f(hx + lado * (170 + q * 90))}" cy="${f(top + 60 - q * 200)}" r="${f(24 + q * 40)}" fill="#EDEDED" opacity="${f(0.75 * (1 - q))}"/>`;
+    }
+    const k = 1 + Math.abs(Math.sin(t * 8)) * 0.2;
+    s += `<g transform="translate(${f(hx + 190)} ${f(top + 40)}) scale(${f(k)})"><path d="M-30 -8 Q-8 -8 -8 -30 M8 -30 Q8 -8 30 -8 M30 8 Q8 8 8 30 M-8 30 Q-8 8 -30 8" stroke="#FF2E4D" stroke-width="12" fill="none" stroke-linecap="round"/></g>`;
+  }
+  if (accion === "sorprendido") {
+    for (let n = 0; n < 3; n++) {
+      const q = salida(lim((dt - n * 0.08) / 0.35, 0, 1)), x = hx - 90 + n * 90;
+      s += `<text x="${x}" y="${f(top - 10 - q * 50)}" font-size="${f(110 * q)}" font-weight="900" fill="#FFE14D" stroke="${OUT}" stroke-width="8" paint-order="stroke" text-anchor="middle" font-family="${FUENTE}" transform="rotate(${(n - 1) * 14} ${x} ${f(top - 40)})">!</text>`;
+    }
+  }
+  if (accion === "contento" || accion === "trofeo" || accion === "correr") {
+    const colores = ["#FFD23F", "#FF4D6D", "#4DD7FF", "#7CFF6B", "#FF8A3D"];
+    for (let n = 0; n < 44; n++) {
+      const x = azar(n) * 1080, v = 300 + azar(n + 9) * 400, y = -60 + ((t * v + azar(n + 3) * 2000) % 2000);
+      s += `<rect x="${f(x)}" y="${f(y)}" width="18" height="30" rx="4" fill="${colores[n % 5]}" transform="rotate(${f(t * 200 + n * 37)} ${f(x + 9)} ${f(y + 15)})"/>`;
+    }
+  }
+  if (accion === "dinero") {                       // tira billetes hacia fuera (nunca por delante de la cara)
+    const [mx, my] = A.billetes || [hx - 240, hy + 40];
+    for (let n = 0; n < 8; n++) {
+      const q = ((t * 0.9 + n / 8) % 1), x = mx - 40 - (0.3 + azar(n) * 0.7) * 420 * q, y = my - 260 * Math.sin(q * Math.PI) + q * 420;
+      s += billete(x, y, q * 360 + n * 40);
+    }
+  }
+  if (accion === "triste" || accion === "hospital") {
+    const ny = top - 40;
+    s += `<g opacity="0.95"><ellipse cx="${hx - 60}" cy="${ny}" rx="110" ry="62" fill="#7C8AA5"/><ellipse cx="${hx + 60}" cy="${ny - 18}" rx="120" ry="78" fill="#8C9AB5"/><ellipse cx="${hx}" cy="${ny + 18}" rx="150" ry="55" fill="#6F7D98"/></g>`;
+    for (let n = 0; n < 12; n++) {
+      const q = (t * 1.6 + n / 12) % 1, x = hx - 130 + (n * 23) % 260;
+      s += `<line x1="${x}" y1="${f(ny + 50 + q * 200)}" x2="${x - 6}" y2="${f(ny + 80 + q * 200)}" stroke="#9FD8FF" stroke-width="7" stroke-linecap="round" opacity="${f(1 - q)}"/>`;
+    }
+  }
+  if (accion === "pensativo" || accion === "ceja") {
+    const k = salida(lim(dt / 0.4, 0, 1));
+    const bx = hx + 300, by = top + 60;
+    if (accion === "pensativo")
+      s += `<g transform="translate(${f(bx)} ${f(by)}) scale(${f(k)})"><circle cx="-150" cy="150" r="14" fill="#fff" stroke="${OUT}" stroke-width="4"/><circle cx="-105" cy="100" r="24" fill="#fff" stroke="${OUT}" stroke-width="5"/>
+            <ellipse cx="0" cy="0" rx="110" ry="85" fill="#fff" stroke="${OUT}" stroke-width="6"/>
+            <text x="0" y="40" font-size="115" font-weight="900" text-anchor="middle" fill="#2B6CB0" font-family="${FUENTE}" transform="rotate(${f(Math.sin(t * 3) * 10)} 0 0)">?</text></g>`;
+    else s += `<text x="${f(bx - 20)}" y="${f(by + 20)}" font-size="82" font-weight="900" text-anchor="middle" fill="#FFE14D" stroke="${OUT}" stroke-width="8" paint-order="stroke" font-family="${FUENTE}" transform="rotate(12 ${f(bx)} ${f(by)})">hm…</text>`;
+  }
+  if (accion === "hombros") for (const lado of [-1, 1]) s += `<text x="${f(hx + lado * 330)}" y="${f(hy - 40 - Math.abs(Math.sin(t * 5)) * 30)}" font-size="90" font-weight="900" text-anchor="middle" fill="#fff" stroke="${OUT}" stroke-width="8" paint-order="stroke" font-family="${FUENTE}">?</text>`;
+  if (accion === "correr") for (let n = 0; n < 5; n++) s += `<line x1="${f(hx - 330 - n * 20)}" y1="${f(hy - 60 + n * 90)}" x2="${f(hx - 480 - n * 30)}" y2="${f(hy - 60 + n * 90)}" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity="${f(0.5 + 0.5 * Math.sin(t * 20 + n))}"/>`;
+  if (accion === "telefono") for (let n = 0; n < 3; n++) {
+    const q = (t * 1.5 + n / 3) % 1;
+    s += `<path d="M${f(hx + 230 + q * 60)} ${f(hy - 60)} q${f(30 + q * 30)} 60 0 ${f(120 + q * 40)}" stroke="#FFE14D" stroke-width="8" fill="none" stroke-linecap="round" opacity="${f(1 - q)}"/>`;
+  }
+  return s;
+}
+
 let FOTOS = [];
 window.preparar = async function () {
   const g = window.GUION;
@@ -180,6 +388,7 @@ window.preparar = async function () {
     cont.appendChild(caja);
     return { caja, img, marco };
   });
+  prepararChico(cargas);
   await Promise.race([Promise.all(cargas), new Promise(ok => setTimeout(ok, 15000))]);
   return true;
 };
@@ -211,220 +420,6 @@ function enPausa(t) {
   return null;
 }
 
-function brazo(sx, sy, tx, ty, lado) {
-  const L1 = 150, L2 = 140;
-  let dx = tx - sx, dy = ty - sy, d = Math.hypot(dx, dy);
-  const dd = lim(d, 20, L1 + L2 - 2);
-  const k = dd / (d || 1); tx = sx + dx * k; ty = sy + dy * k;
-  const a = Math.atan2(ty - sy, tx - sx);
-  const b = Math.acos(lim((L1 * L1 + dd * dd - L2 * L2) / (2 * L1 * dd), -1, 1));
-  const ex = sx + Math.cos(a - b * lado) * L1, ey = sy + Math.sin(a - b * lado) * L1;
-  const d1 = `M${f(sx)} ${f(sy)} L${f(ex)} ${f(ey)} L${f(tx)} ${f(ty)}`;
-  let s = `<path d="${d1}" stroke="${OUT}" stroke-width="78" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
-  s += `<path d="${d1}" stroke="${TRAJE}" stroke-width="64" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
-  s += `<circle cx="${f(tx)}" cy="${f(ty)}" r="20" fill="${CAMISA}"/>`;
-  s += `<circle cx="${f(tx)}" cy="${f(ty)}" r="38" fill="${PIEL}" stroke="${OUT}" stroke-width="7"/>`;
-  return { s, mano: [tx, ty] };
-}
-
-function manos(accion, t, dt, habla) {
-  const o = Math.sin(t * 7), o2 = Math.sin(t * 13);
-  switch (accion) {
-    case "senala": return [[-170, -240 + o * 6], [360, -900 + o * 10]];
-    case "enfadado": return [[-250, -680 + o2 * 30], [250, -680 - o2 * 30]];
-    case "sorprendido": return [[-125, -560], [125, -560]];
-    case "contento": return [[-270, -860 + o * 40], [270, -860 - o * 40]];
-    case "triste": return [[-120, -170], [120, -170]];
-    case "pensativo": return [[-170, -240], [30, -520]];
-    case "dinero": return [[-170, -240], [260 + o2 * 40, -560 - Math.abs(o2) * 120]];
-    case "fumar": { const calada = (t % 2.6) < 1.1; return [[-180, -250], calada ? [70, -560] : [200, -470]]; }
-    case "trofeo": return [[-90, -900 + o * 15], [90, -900 + o * 15]];
-    case "telefono": return [[-180, -250 + o * 6], [175, -650]];
-    case "balon": return [[-230, -380 + o * 20], [230, -380 - o * 20]];
-    case "correr": return [[-200 + o2 * 80, -330], [200 - o2 * 80, -330]];
-    case "beber": return [[-180, -250], (t % 1.6) < 0.9 ? [60, -560] : [170, -430]];
-    case "ceja": return [[-170, -230], [180, -260]];
-    case "hombros": return [[-270, -470 - Math.abs(o) * 20], [270, -470 - Math.abs(o) * 20]];
-    default: return [[-180, -250 + o * 8 * habla], [230 + o * 30 * habla, -430 + Math.sin(t * 5.3) * 60 * habla]];
-  }
-}
-
-const CARAS = {
-  serio: [8, 10, 1, 0.1], senala: [0, 4, 1, 0.45], enfadado: [16, 26, 0.85, -0.7], sorprendido: [-26, -8, 1.3, 0],
-  contento: [-8, -6, 1.05, 1], triste: [-6, -22, 0.95, -0.8], pensativo: [-6, 14, 1, -0.2], dinero: [-6, -4, 1.05, 1],
-  fumar: [4, 8, 0.8, 0.3], beber: [-6, -4, 0.9, 0.2], ceja: [0, 0, 1, 0.55], hombros: [-14, -10, 1.05, -0.3], trofeo: [-10, -8, 1.05, 1], telefono: [0, 6, 1, 0.3], balon: [-6, -4, 1.05, 0.7], correr: [6, 12, 0.95, -0.2],
-};
-
-function personaje(t, accion, emocion, dt, b) {
-  const habla = b > 0 ? 1 : 0;
-  const [cejaY, cejaGiro, ojo, sonrisa] = CARAS[accion] || CARAS[emocion] || CARAS.serio;
-  let salto = 0, sx = 1, sy = 1, giro = 0;
-  if (accion === "sorprendido") salto = -Math.max(0, Math.sin(lim(dt / 0.5, 0, 1) * Math.PI)) * 90;
-  if (accion === "contento" || accion === "dinero" || accion === "trofeo") salto = -Math.abs(Math.sin(t * 6)) * 45;
-  if (accion === "correr") salto = -Math.abs(Math.sin(t * 14)) * 25;
-  if (accion === "enfadado") { const p = Math.abs(Math.sin(t * 9)); sy = 1 - p * 0.03; sx = 1 + p * 0.03; }
-  if (accion === "triste") { sy = 0.97; giro = -4; }
-  if (accion === "pensativo") giro = 5;
-  if (accion === "ceja") giro = -7;
-  if (accion === "hombros") { salto = -Math.abs(Math.sin(lim(dt, 0, 9) * 0)) ; sy = 1.02; }
-  if (accion === "correr") giro = 6;
-  let tos = 0;
-  if (accion === "fumar") { const q = t % 2.6; if (q > 1.9 && q < 2.4) { tos = Math.sin((q - 1.9) * 40) * 8; } }
-  const respira = 1 + Math.sin(t * 2.2) * 0.012;
-  const bote = Math.sin(t * 9) * 6 * habla + tos;
-
-  let s = `<ellipse cx="0" cy="8" rx="${f(220 - salto * 0.6)}" ry="34" fill="#000" opacity="0.35"/>`;
-  const postura = `translate(0 ${f(salto)}) rotate(${giro} 0 -200) scale(${f(sx)} ${f(sy * respira)})`;
-  s += `<g transform="${postura}">`;
-  for (const lado of [-1, 1]) {
-    const paso = accion === "correr" ? Math.sin(t * 14 + (lado > 0 ? Math.PI : 0)) * 40 : 0;
-    const px = lado * 62;
-    s += `<rect x="${px - 44}" y="${f(-230 - Math.max(0, paso))}" width="88" height="215" rx="30" fill="#232B40" stroke="${OUT}" stroke-width="8" transform="rotate(${f(paso * 0.5)} ${px} -230)"/>`;
-    s += `<ellipse cx="${f(px + lado * 14 + paso)}" cy="${f(-12 - Math.max(0, paso))}" rx="74" ry="32" fill="#1A1A1A" stroke="${OUT}" stroke-width="7"/>`;
-  }
-  s += `<path d="M-175 -200 Q-190 -420 -120 -455 L120 -455 Q190 -420 175 -200 Q0 -170 -175 -200 Z" fill="${TRAJE}" stroke="${OUT}" stroke-width="9"/>`;
-  s += `<path d="M-62 -455 L0 -300 L62 -455 Z" fill="${CAMISA}" stroke="${OUT}" stroke-width="6"/>`;
-  s += `<path d="M-16 -440 L16 -440 L26 -330 L0 -290 L-26 -330 Z" fill="${CORBATA}" stroke="${OUT}" stroke-width="5"/>`;
-  s += `<path d="M-62 -455 L-95 -380 L-12 -300 Z M62 -455 L95 -380 L12 -300 Z" fill="#141A2B" stroke="${OUT}" stroke-width="6"/>`;
-  s += `<circle cx="0" cy="-250" r="9" fill="#141A2B"/><rect x="70" y="-400" width="50" height="10" rx="4" fill="#fff" opacity="0.8"/>`;
-  const [mi, md] = manos(accion, t, dt, habla);
-  const bi = brazo(-130, -425, mi[0], mi[1], -1), bd = brazo(130, -425, md[0], md[1], 1);
-  const cy = -640 + bote;
-  let c = `<g transform="rotate(${giro + (accion === "enfadado" ? Math.sin(t * 25) * 3 : 0)} 0 ${cy + 150})">`;
-  c += `<rect x="-38" y="${cy + 120}" width="76" height="80" fill="#E5AE85" stroke="${OUT}" stroke-width="7"/>`;
-  for (const lado of [-1, 1]) c += `<ellipse cx="${lado * 178}" cy="${cy + 10}" rx="34" ry="46" fill="${PIEL}" stroke="${OUT}" stroke-width="8"/>`;
-  c += `<ellipse cx="0" cy="${cy}" rx="182" ry="172" fill="url(#cara)" stroke="${OUT}" stroke-width="9"/>`;
-  c += `<path d="M60 ${cy - 160} Q200 ${cy - 60} 150 ${cy + 90} Q100 ${cy + 160} 10 ${cy + 170} Q150 ${cy + 60} 60 ${cy - 160} Z" fill="#000" opacity="0.13"/>`;
-  c += `<ellipse cx="-10" cy="${cy - 105}" rx="160" ry="40" fill="#000" opacity="0.10"/>`;
-  c += `<path d="M-120 ${cy - 120} Q-150 ${cy - 40} -130 ${cy + 40}" stroke="#fff" stroke-width="10" fill="none" opacity="0.35" stroke-linecap="round"/>`;
-  if (accion === "enfadado") c += `<ellipse cx="0" cy="${cy + 20}" rx="176" ry="150" fill="#E5223A" opacity="${f(0.18 + 0.08 * Math.sin(t * 6))}"/>`;
-  if (tos) c += `<ellipse cx="0" cy="${cy + 20}" rx="176" ry="150" fill="#7BC043" opacity="0.18"/>`;
-  c += `<path d="M-178 ${cy - 10} Q-200 ${cy - 170} -80 ${cy - 205} Q-30 ${cy - 270} 70 ${cy - 245} Q190 ${cy - 220} 182 ${cy - 30}
-        Q150 ${cy - 120} 60 ${cy - 140} Q-40 ${cy - 155} -120 ${cy - 95} Q-160 ${cy - 60} -178 ${cy - 10} Z"
-        fill="url(#pelo)" stroke="${OUT}" stroke-width="9" stroke-linejoin="round"/>`;
-  c += `<path d="M-70 ${cy - 200} Q10 ${cy - 245} 90 ${cy - 210}" fill="none" stroke="#FFF3C4" stroke-width="12" stroke-linecap="round" opacity="0.8"/>`;
-  c += `<path d="M-130 ${cy - 120} Q-60 ${cy - 190} 30 ${cy - 175} M-40 ${cy - 140} Q40 ${cy - 200} 140 ${cy - 150}" fill="none" stroke="#3A2A10" stroke-width="6" stroke-linecap="round" opacity="0.7"/>`;
-  c += `<ellipse cx="-112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/><ellipse cx="112" cy="${cy + 60}" rx="34" ry="20" fill="#FF7B8A" opacity="0.4"/>`;
-  const abre = (t % 3.4 > 3.28 || tos ? 0.1 : 1) * ojo;
-  const mira = accion === "ceja" ? [0, 4] : accion === "senala" ? [14, -14] : accion === "pensativo" ? [-6, -14] : [0, 0];
-  for (const lado of [-1, 1]) {
-    const ox = lado * 70, oy = cy - 2;
-    c += `<ellipse cx="${ox}" cy="${oy}" rx="${f(40 * ojo)}" ry="${f(50 * abre)}" fill="#fff" stroke="${OUT}" stroke-width="7"/>`;
-    if (abre > 0.3) {
-      c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(22 * ojo)}" fill="#3B2412"/>`;
-      c += `<circle cx="${ox + mira[0]}" cy="${oy + 6 + mira[1]}" r="${f(11 * ojo)}" fill="#0B0B0B"/>`;
-      c += `<circle cx="${ox + mira[0] + 8}" cy="${oy - 4 + mira[1]}" r="7" fill="#fff"/>`;
-      // párpados: la mirada dice más que la boca
-      const rx = 40 * ojo, ry = 50 * abre;
-      if (accion === "enfadado" || accion === "serio" || accion === "fumar" || accion === "correr")
-        c += `<path d="M${f(ox - rx - 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry * (lado < 0 ? 0.15 : 0.55))} L${f(ox - rx - 6)} ${f(oy - ry * (lado < 0 ? 0.55 : 0.15))} Z" fill="${PIEL}" stroke="${OUT}" stroke-width="6" stroke-linejoin="round"/>`;
-      if (accion === "triste")
-        c += `<path d="M${f(ox - rx - 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry - 8)} L${f(ox + rx + 6)} ${f(oy - ry * (lado < 0 ? 0.6 : 0.05))} L${f(ox - rx - 6)} ${f(oy - ry * (lado < 0 ? 0.05 : 0.6))} Z" fill="${PIEL}" stroke="${OUT}" stroke-width="6" stroke-linejoin="round"/>`;
-      if (accion === "contento" || accion === "trofeo" || accion === "dinero")
-        c += `<path d="M${f(ox - rx - 6)} ${f(oy + ry + 8)} L${f(ox - rx - 6)} ${f(oy + ry * 0.35)} Q${ox} ${f(oy - ry * 0.1)} ${f(ox + rx + 6)} ${f(oy + ry * 0.35)} L${f(ox + rx + 6)} ${f(oy + ry + 8)} Z" fill="${PIEL}" stroke="${OUT}" stroke-width="6" stroke-linejoin="round"/>`;
-    }
-    const g = -cejaGiro * lado, ey = oy - 78 + cejaY - (accion === "ceja" && lado === 1 ? 46 : 0);
-    c += `<rect x="${ox - 44}" y="${ey}" width="88" height="24" rx="12" fill="${CEJA}" stroke="${OUT}" stroke-width="5" transform="rotate(${g} ${ox} ${ey + 12})"/>`;
-  }
-  c += `<path d="M-6 ${cy + 40} Q14 ${cy + 52} -4 ${cy + 64}" fill="none" stroke="${OUT}" stroke-width="6" stroke-linecap="round"/>`;
-  const my = cy + 98;
-  if (b > 0.05) {
-    const alto = 14 + 52 * b, ancho = 54 - 10 * b, cur = sonrisa * 14;
-    c += `<path d="M${-ancho} ${my - cur} Q0 ${my + alto + cur} ${ancho} ${my - cur} Q0 ${my - 8 - cur * 0.3} ${-ancho} ${my - cur} Z" fill="#5C1A1F" stroke="${OUT}" stroke-width="7"/>`;
-    if (b > 0.4) c += `<ellipse cx="0" cy="${f(my + alto * 0.55)}" rx="${f(ancho * 0.45)}" ry="${f(alto * 0.2)}" fill="#F07C86"/>`;
-    c += `<rect x="${-ancho * 0.6}" y="${my - 4 - cur * 0.6}" width="${ancho * 1.2}" height="10" rx="4" fill="#fff"/>`;
-  } else if (accion === "sorprendido" || tos) {
-    c += `<ellipse cx="0" cy="${my + 8}" rx="24" ry="30" fill="#5C1A1F" stroke="${OUT}" stroke-width="7"/>`;
-  } else {
-    const cur = sonrisa * 30;
-    if (accion === "ceja") c += `<path d="M-50 ${my + 6} Q10 ${my + 22} 56 ${my - 14}" fill="none" stroke="${OUT}" stroke-width="9" stroke-linecap="round"/>`;
-    else c += `<path d="M-52 ${my} Q0 ${my + cur} 52 ${my}" fill="none" stroke="${OUT}" stroke-width="9" stroke-linecap="round"/>`;
-  }
-  // el cigarro en la boca (o en la mano cuando no da una calada)
-  if (accion === "fumar" && !tos) {
-    const enBoca = (t % 2.6) < 1.1;
-    const [cx0, cy0] = enBoca ? [40, my + 4] : [md[0] - 10, md[1] - 650 - cy + cy];
-    if (enBoca) c += `<g transform="translate(${cx0} ${f(cy0)}) rotate(-12)"><rect x="0" y="-9" width="120" height="18" rx="5" fill="#fff" stroke="${OUT}" stroke-width="4"/><rect x="0" y="-9" width="30" height="18" fill="#E0A35A"/><rect x="112" y="-9" width="12" height="18" rx="3" fill="#FF5A1F"/></g>`;
-  }
-  if (accion === "triste") c += `<path d="M78 ${cy + 40} q-10 26 0 34 q10 -8 0 -34 Z" fill="#7FD3FF" stroke="${OUT}" stroke-width="4" transform="translate(0 ${f((t * 60) % 60)})"/>`;
-  c += `</g>`;
-  // cosas en las manos
-  let mano = "";
-  if (accion === "fumar" && (t % 2.6) >= 1.1) mano += `<g transform="translate(${f(md[0])} ${f(md[1] - 10)}) rotate(-30)"><rect x="0" y="-9" width="110" height="18" rx="5" fill="#fff" stroke="${OUT}" stroke-width="4"/><rect x="0" y="-9" width="28" height="18" fill="#E0A35A"/><rect x="102" y="-9" width="12" height="18" rx="3" fill="#FF5A1F"/></g>`;
-  if (accion === "trofeo") mano += `<g transform="translate(0 ${f(md[1] - 120)})"><path d="M-80 -120 L80 -120 L60 0 L-60 0 Z" fill="url(#oro)" stroke="${OUT}" stroke-width="7"/><path d="M-80 -110 Q-140 -100 -110 -40 Q-90 -20 -64 -30" fill="none" stroke="${OUT}" stroke-width="16"/><path d="M80 -110 Q140 -100 110 -40 Q90 -20 64 -30" fill="none" stroke="${OUT}" stroke-width="16"/><path d="M-80 -110 Q-140 -100 -110 -40 Q-90 -20 -64 -30 M80 -110 Q140 -100 110 -40 Q90 -20 64 -30" fill="none" stroke="#F2B705" stroke-width="8"/><rect x="-18" y="0" width="36" height="60" fill="url(#oro)" stroke="${OUT}" stroke-width="6"/><rect x="-60" y="60" width="120" height="34" rx="6" fill="#5A3A1A" stroke="${OUT}" stroke-width="6"/></g>`;
-  if (accion === "beber") mano += `<g transform="translate(${f(md[0] - 10)} ${f(md[1] - 20)})"><rect x="-40" y="-55" width="80" height="95" rx="12" fill="#fff" stroke="${OUT}" stroke-width="7"/><path d="M40 -35 Q78 -30 72 0 Q66 20 40 18" fill="none" stroke="${OUT}" stroke-width="9"/><rect x="-40" y="-20" width="80" height="22" fill="#D7263D"/>${(t % 1.6) < 0.9 ? "" : `<path d="M-14 -70 q10 -20 0 -40 M14 -70 q10 -20 0 -40" stroke="#ddd" stroke-width="6" fill="none" opacity="0.7"/>`}</g>`;
-  if (accion === "telefono") mano += `<rect x="${f(md[0] - 28)}" y="${f(md[1] - 70)}" width="56" height="110" rx="12" fill="#222" stroke="${OUT}" stroke-width="6"/>`;
-  if (accion === "sorprendido" || accion === "pensativo") s += c + bi.s + bd.s + mano;
-  else s += bi.s + bd.s + c + mano;
-  // el balón
-  if (accion === "balon") {
-    const q = (t * 1.6) % 1, by = -60 - Math.sin(q * Math.PI) * 420, bx = 150 + Math.sin(t * 3) * 40;
-    s += `<g transform="translate(${f(bx)} ${f(by)}) rotate(${f(t * 400)})"><circle r="62" fill="#fff" stroke="${OUT}" stroke-width="7"/><path d="M0 -22 L21 -7 L13 18 L-13 18 L-21 -7 Z" fill="${OUT}"/><path d="M0 -62 L0 -22 M21 -7 L58 -20 M13 18 L36 50 M-13 18 L-36 50 M-21 -7 L-58 -20" stroke="${OUT}" stroke-width="6"/></g>`;
-  }
-  s += `</g>`;
-  return { s, cabeza: cy + salto, mano: [md[0], md[1] + salto], postura };
-}
-
-function efectos(accion, t, dt, cabeza, mano) {
-  let s = "";
-  if (accion === "fumar") {                         // humo de chimenea, colillas en el suelo y tos
-    for (let n = 0; n < 14; n++) {
-      const q = ((t * 0.5 + n / 14) % 1);
-      s += `<circle cx="${f(60 + Math.sin(q * 9 + n) * 60 + q * 120)}" cy="${f(cabeza + 90 - q * 700)}" r="${f(30 + q * 110)}" fill="#B9B9B9" stroke="#8D8D8D" stroke-width="5" opacity="${f(0.85 * (1 - q))}"/>`;
-    }
-    for (let n = 0; n < 5; n++) s += `<circle cx="${f(Math.sin(t + n * 2) * 220)}" cy="${f(cabeza - 120 + Math.cos(t * 0.7 + n) * 60)}" r="${f(120 + n * 20)}" fill="#C8C8C8" opacity="0.22"/>`;
-    for (let n = 0; n < 12; n++) s += `<g transform="translate(${f(-330 + (n % 6) * 26 + (n > 5 ? 12 : 0))} ${-14 - (n > 5 ? 16 : 0)}) rotate(${(n * 37) % 60 - 30})"><rect x="-30" y="-9" width="60" height="18" rx="4" fill="#fff" stroke="${OUT}" stroke-width="4"/><rect x="-30" y="-9" width="20" height="18" fill="#E0A35A"/></g>`;
-    s += `<ellipse cx="-260" cy="0" rx="130" ry="30" fill="#9AA0A6" stroke="${OUT}" stroke-width="7"/>`;
-    const q = t % 2.6;
-    if (q > 1.9 && q < 2.5) s += `<text x="230" y="${f(cabeza - 120)}" font-size="96" font-weight="900" fill="#fff" stroke="${OUT}" stroke-width="10" paint-order="stroke" font-family="${FUENTE}" transform="rotate(-10 230 ${f(cabeza - 120)})">KUCH!</text>`;
-  }
-  if (accion === "enfadado") {
-    for (let n = 0; n < 6; n++) {
-      const q = ((t * 0.9 + n / 6) % 1), lado = n % 2 ? 1 : -1;
-      s += `<circle cx="${f(lado * (150 + q * 90))}" cy="${f(cabeza - 170 - q * 220)}" r="${f(26 + q * 40)}" fill="#E8E8E8" opacity="${f(0.75 * (1 - q))}"/>`;
-    }
-    const k = 1 + Math.abs(Math.sin(t * 8)) * 0.2;
-    s += `<g transform="translate(150 ${f(cabeza - 150)}) scale(${f(k)})"><path d="M-30 -8 Q-8 -8 -8 -30 M8 -30 Q8 -8 30 -8 M30 8 Q8 8 8 30 M-8 30 Q-8 8 -30 8" stroke="#FF2E4D" stroke-width="12" fill="none" stroke-linecap="round"/></g>`;
-  }
-  if (accion === "sorprendido") {
-    for (let n = 0; n < 3; n++) {
-      const q = salida(lim((dt - n * 0.08) / 0.35, 0, 1));
-      s += `<text x="${-90 + n * 90}" y="${f(cabeza - 220 - q * 60)}" font-size="${f(110 * q)}" font-weight="900" fill="#FFE14D" stroke="${OUT}" stroke-width="8" paint-order="stroke" text-anchor="middle" font-family="${FUENTE}" transform="rotate(${(n - 1) * 14} ${-90 + n * 90} ${f(cabeza - 250)})">!</text>`;
-    }
-  }
-  if (accion === "contento" || accion === "trofeo") {
-    const colores = ["#FFD23F", "#FF4D6D", "#4DD7FF", "#7CFF6B", "#FF8A3D"];
-    for (let n = 0; n < 40; n++) {
-      const x = (azar(n) - 0.5) * 1000, v = 300 + azar(n + 9) * 400, y = -1500 + ((t * v + azar(n + 3) * 1600) % 1600);
-      s += `<rect x="${f(x)}" y="${f(y)}" width="18" height="30" rx="4" fill="${colores[n % 5]}" transform="rotate(${f(t * 200 + n * 37)} ${f(x + 9)} ${f(y + 15)})"/>`;
-    }
-  }
-  if (accion === "dinero") {
-    for (let n = 0; n < 14; n++) {
-      const q = ((t * 0.8 + n / 14) % 1), x = mano[0] + (azar(n) - 0.3) * 600 * q, y = mano[1] - 300 * Math.sin(q * Math.PI) + q * 500;
-      s += `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(q * 360 + n * 40)})"><rect x="-55" y="-28" width="110" height="56" rx="6" fill="#56C271" stroke="#1F6B35" stroke-width="5"/><circle r="15" fill="none" stroke="#1F6B35" stroke-width="5"/></g>`;
-    }
-  }
-  if (accion === "triste") {
-    const ny = cabeza - 330;
-    s += `<g opacity="0.95"><ellipse cx="-60" cy="${ny}" rx="110" ry="70" fill="#7C8AA5"/><ellipse cx="60" cy="${ny - 20}" rx="120" ry="85" fill="#8C9AB5"/><ellipse cx="0" cy="${ny + 20}" rx="150" ry="60" fill="#6F7D98"/></g>`;
-    for (let n = 0; n < 12; n++) {
-      const q = (t * 1.6 + n / 12) % 1, x = -130 + (n * 23) % 260;
-      s += `<line x1="${x}" y1="${f(ny + 60 + q * 260)}" x2="${x - 6}" y2="${f(ny + 90 + q * 260)}" stroke="#9FD8FF" stroke-width="7" stroke-linecap="round" opacity="${f(1 - q)}"/>`;
-    }
-  }
-  if (accion === "pensativo") {
-    const k = salida(lim(dt / 0.4, 0, 1));
-    s += `<g transform="translate(-250 ${f(cabeza - 300)}) scale(${f(k)})"><circle cx="150" cy="150" r="16" fill="#fff"/><circle cx="110" cy="100" r="26" fill="#fff"/>
-          <ellipse cx="0" cy="0" rx="120" ry="90" fill="#fff" stroke="${OUT}" stroke-width="6"/>
-          <text x="0" y="40" font-size="120" font-weight="900" text-anchor="middle" fill="#2B6CB0" font-family="${FUENTE}" transform="rotate(${f(Math.sin(t * 3) * 10)} 0 0)">?</text></g>`;
-  }
-  if (accion === "hombros") for (const lado of [-1, 1]) s += `<text x="${lado * 330}" y="${f(cabeza - 60 - Math.abs(Math.sin(t * 5)) * 30)}" font-size="90" font-weight="900" text-anchor="middle" fill="#fff" stroke="${OUT}" stroke-width="8" paint-order="stroke" font-family="${FUENTE}">?</text>`;
-  if (accion === "ceja") s += `<text x="250" y="${f(cabeza - 170)}" font-size="80" font-weight="900" text-anchor="middle" fill="#FFE14D" stroke="${OUT}" stroke-width="8" paint-order="stroke" font-family="${FUENTE}" transform="rotate(12 250 ${f(cabeza - 170)})">hm…</text>`;
-  if (accion === "correr") for (let n = 0; n < 5; n++) s += `<line x1="${-300 - n * 20}" y1="${-500 + n * 90}" x2="${-450 - n * 30}" y2="${-500 + n * 90}" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity="${f(0.5 + 0.5 * Math.sin(t * 20 + n))}"/>`;
-  return s;
-}
-
 function partir(texto, ancho) {
   const lineas = [], palabras = String(texto).toUpperCase().split(/\s+/);
   let l = "";
@@ -435,7 +430,7 @@ function partir(texto, ancho) {
 function pizarra(x, dt) {          // «LES 1»: lo que se aprende de esta persona, en una pizarra que el chico señala
   const q = salida(lim(dt / 0.4, 0, 1));
   const lineas = partir(x.leccion, 17);
-  let s = `<g transform="translate(540 560) scale(${f(0.6 + 0.4 * q)}) rotate(${f(-2 * q)})">`;
+  let s = `<g transform="translate(540 520) scale(${f((0.6 + 0.4 * q) * 0.9)}) rotate(${f(-2 * q)})">`;
   s += `<rect x="-470" y="-360" width="940" height="720" rx="20" fill="#8B5A2B" stroke="${OUT}" stroke-width="10"/>`;
   s += `<rect x="-440" y="-330" width="880" height="660" rx="10" fill="#1F3B2D"/>`;
   s += `<rect x="-200" y="-300" width="400" height="110" rx="55" fill="#FFE14D" stroke="${OUT}" stroke-width="8"/>`;
@@ -448,11 +443,13 @@ function pizarra(x, dt) {          // «LES 1»: lo que se aprende de esta perso
   return s + `</g>`;
 }
 
+const FOTO_Y = 500, FOTO_K = 0.78;       // la foto arriba, encima de los subtítulos y de la cabeza del chico
+
 window.pintar = function (t) {
   const { i, x } = tramo(t);
   let accion = x.leccion ? "senala" : (x.accion || x.emocion || "serio");
   const pausa = enPausa(t);
-  if (pausa && !["fumar", "trofeo", "balon", "dinero", "correr"].includes(accion)) accion = pausa;
+  if (pausa && !["fumar", "trofeo", "balon", "dinero", "correr", "telefono"].includes(accion)) accion = pausa;
   const dt = t - x.desde;
   const b = boca(t);
   // decorado de la escena
@@ -460,7 +457,7 @@ window.pintar = function (t) {
   const dec = DECORADOS[fondo](t);
   document.getElementById("decorado").innerHTML = dec.s;
   document.getElementById("delante").innerHTML = dec.delante || "";
-  // cámara: golpe al cambiar de escena y temblor al enfadarse o toser
+  // cámara: golpe al cambiar de escena y temblor al enfadarse
   const golpe = 1 + 0.05 * Math.exp(-dt * 6);
   const fuerte = accion === "enfadado" ? 6 : 0;
   document.getElementById("camara").setAttribute("transform",
@@ -471,29 +468,29 @@ window.pintar = function (t) {
   FOTOS.forEach((ft, k) => ft.caja.setAttribute("visibility", k === n ? "visible" : "hidden"));
   if (n >= 0) {
     const ft = FOTOS[n];
-    const [fx, fy, fk, tipo] = dec.foto;
-    const [color, grueso] = MARCOS[tipo] || MARCOS.madera;
+    const tipo = dec.foto[3];
+    const [color] = MARCOS[tipo] || MARCOS.madera;
     ft.marco.setAttribute("fill", color);
     ft.marco.setAttribute("stroke", OUT); ft.marco.setAttribute("stroke-width", "8");
     const q = lim(dt / 0.4, 0, 1);
-    const k = fk * (0.7 + 0.3 * salida(q) + Math.sin(q * Math.PI) * 0.05);
+    const k = FOTO_K * (0.7 + 0.3 * salida(q) + Math.sin(q * Math.PI) * 0.05);
     const rot = tipo === "madera" ? (i % 2 ? 1.5 : -1.5) : 0;
-    ft.caja.setAttribute("transform", `translate(${fx} ${fy}) rotate(${rot}) scale(${f(k * 100) / 100})`);
+    ft.caja.setAttribute("transform", `translate(540 ${FOTO_Y}) rotate(${rot}) scale(${f(k * 100) / 100})`);
     const z = 1.04 + 0.08 * lim(dt / Math.max(1, x.hasta - x.desde), 0, 1);
     ft.img.setAttribute("transform", `scale(${f(z * 100) / 100}) translate(${f((i % 2 ? -1 : 1) * dt * 6)} 0)`);
   }
   // el chico
-  const p = personaje(t, accion, x.emocion, dt, b);
-  document.getElementById("actor").innerHTML =
-    `<g transform="translate(540 ${SUELO + 330}) scale(0.95)">${p.s}${efectos(accion, t, dt, p.cabeza, p.mano)}</g>`;
-  document.getElementById("acento").innerHTML =        // la corbata, lo único en color
-    `<g transform="translate(540 ${SUELO + 330}) scale(0.95)"><g transform="${p.postura}"><path d="M-14 -438 L14 -438 L24 -330 L0 -292 L-24 -330 Z" fill="${CORBATA}" stroke="${OUT}" stroke-width="5"/><path d="M-10 -438 L10 -438 L6 -412 L-6 -412 Z" fill="#8E0B20"/></g></g>`;
+  let A = { cabeza: [540, OJOS_Y], arriba: OJOS_Y - 300, brasa: null, billetes: null };
+  if (CHICO) A = moverChico(t, accion, elegirPose(accion, x, i, dt), b, dt);
+  document.getElementById("detras").innerHTML = efectosDetras(accion, t);
+  document.getElementById("efectos").innerHTML = efectos(accion, t, dt, A);
   document.getElementById("foco").setAttribute("opacity", f(0.85 + 0.15 * Math.sin(t * 7) * Math.sin(t * 3.1)));
-  // el texto que salta (p. ej. «x20»)
+  // el texto que salta (p. ej. «x20»), al lado de la cara
   let pop = "";
   if (x.pop) {
     const q = lim(dt / 0.35, 0, 1), k = salida(q) * (1 + Math.sin(q * Math.PI) * 0.25);
-    pop = `<g transform="translate(830 1180) rotate(-8) scale(${f(k * 100) / 100})"><text x="0" y="0" text-anchor="middle" font-size="150" font-weight="900" font-family="${FUENTE}" fill="#C8102E" transform="translate(10 10)">${String(x.pop).replace(/[<&]/g, "")}</text><text x="0" y="0" text-anchor="middle" font-size="150" font-weight="900" font-family="${FUENTE}" fill="#FFFFFF" stroke="${OUT}" stroke-width="16" paint-order="stroke">${String(x.pop).replace(/[<&]/g, "")}</text></g>`;
+    const txt = String(x.pop).replace(/[<&]/g, "");
+    pop = `<g transform="translate(860 1060) rotate(-8) scale(${f(k * 100) / 100})"><text x="0" y="0" text-anchor="middle" font-size="140" font-weight="900" font-family="${FUENTE}" fill="#C8102E" transform="translate(10 10)">${txt}</text><text x="0" y="0" text-anchor="middle" font-size="140" font-weight="900" font-family="${FUENTE}" fill="#FFFFFF" stroke="${OUT}" stroke-width="16" paint-order="stroke">${txt}</text></g>`;
   }
   document.getElementById("pop").innerHTML = pop;
 };

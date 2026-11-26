@@ -23,6 +23,16 @@ def cuantos(clave):
         return 0
 
 
+def mirar(clave):
+    """El siguiente guion a mano de la cuenta SIN quitarlo (para una muestra de prueba que no se publica), o None."""
+    try:
+        d = privado.leer(_ruta(clave), {}) or {}
+        guiones = [g for g in d.get("guiones") or [] if isinstance(g, dict) and g.get("escenas")]
+        return dict(guiones[0], cerebro="claude (a mano)") if guiones else None
+    except Exception:
+        return None
+
+
 def tomar(clave):
     """El siguiente guion a mano de la cuenta (y lo quita de la lista), o None."""
     try:
