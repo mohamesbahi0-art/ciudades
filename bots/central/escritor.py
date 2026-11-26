@@ -34,13 +34,21 @@ REGLAS_TIPO = {
 }
 
 REGLAS_TIPO["biografias"] = (
-    "- UNA persona real por vídeo, conocida por el público de la cuenta (de su país, o mundial). No repitas persona.\n"
-    "- Empieza por su nombre y TRES adjetivos de su carácter («Nombre: obsesivo, frío e implacable.») y, enseguida, el "
-    "hecho más chocante de su vida. Después, su historia en orden: de dónde viene, qué arriesgó, sus golpes y fracasos, "
-    "cómo llegó arriba y qué dice eso de su carácter. Cierra con una frase que vuelva a los tres adjetivos y una "
-    "pregunta a quien lo ve.\n"
+    "- UNA persona real por vídeo, conocida por el público de la cuenta (de su país, o mundial). No repitas persona. "
+    "El público quiere EMPRENDER: el vídeo es «personalidades de las que deberías aprender si eres emprendedor».\n"
+    "- Estructura fija (así lo hace el creador al que copia el dueño, contado a nuestra manera):\n"
+    "  1) Gancho: 3 o 4 datos locos y concretos de su vida, uno detrás de otro, sin decir aún quién es.\n"
+    "  2) Tres adjetivos de su carácter y un «y aun así» con su mayor logro (en neerlandés: «… en tóch …»).\n"
+    "  3) La promesa: hay algo que todo emprendedor debería aprender de esta persona; y su nombre («Vandaag: …»).\n"
+    "  4) La historia en orden, rápida, con cifras, fechas y alguna frase suya real: de dónde viene, qué arriesgó, "
+    "cómo llegó arriba.\n"
+    "  5) El lado malo, sin blanquear nada: «lo malo de una personalidad así es que…» (lo que le costó o hizo mal).\n"
+    "  6) DOS lecciones para el negocio del que mira, cada una en su escena: lo que hizo esa persona → la regla "
+    "→ cómo aplicarla tú («Als jij…»). Escena con \"leccion\": la lección en 3-6 palabras para la pizarra.\n"
+    "  7) Cierre: una frase de veredicto («X is het bewijs dat… maar…») y una pregunta para comentar (¿genio o caradura?).\n"
+    "- Habla en primera persona y con opinión («voor mij…», «ik zou dit kopiëren…»), cercano, como un amigo que te lo cuenta.\n"
     "- Solo hechos ciertos y conocidos (fechas, cifras, nombres): si no estás seguro de un dato, no lo pongas. Nada de "
-    "insultos ni de acusar de delitos que no estén probados.\n"
+    "insultos ni de acusar de delitos que no estén probados (si hubo condena, dila tal cual).\n"
     "- OJO con «dibujo»: aquí NO es una descripción. Es lo que hay que BUSCAR en Wikimedia Commons para la foto de esa "
     "escena: de 1 a 4 palabras con el nombre real de la persona, la empresa, el lugar o el objeto (por ejemplo «Freddy "
     "Heineken», «Heineken brewery Amsterdam», «Wall Street»). La primera escena, siempre la persona.\n"
@@ -53,11 +61,7 @@ REGLAS_TIPO["biografias"] = (
     "\"emocion\" (serio, enfadado, sorprendido, contento, triste o pensativo), \"accion\" si la frase la pide (fumar, "
     "balon, trofeo, dinero, telefono, correr o senala), \"fondo\" (habitacion, oficina, estadio, calle, banco, hospital "
     "o plato) y, en los momentos fuertes, \"pop\": un texto de 1-6 caracteres que salta en grande (x20, 3x, STOP!, "
-    "35M). Que actúe lo que se dice (si fuma 20 cigarros al día, sale fumando como una chimenea) y que cambie a menudo.\n"
-    "- LO MÁS IMPORTANTE: el vídeo deja 2 o 3 LECCIONES que el espectador puede aplicar a su vida (lo que se aprende de "
-    "esta persona). Van después de la historia y antes de la pregunta final, cada una en su escena: la voz la dice como "
-    "un consejo directo («Les één: …») y la escena lleva \"leccion\": la lección en 3-6 palabras para la pizarra "
-    "(«Elk nadeel heeft een voordeel», «Stop als het slecht voor je is»).")
+    "35M). Que actúe lo que se dice (si fuma 20 cigarros al día, sale fumando como una chimenea) y que cambie a menudo.")
 
 IDIOMAS = {"es": "español de España", "nl": "neerlandés (de los Países Bajos)", "en": "inglés"}
 
