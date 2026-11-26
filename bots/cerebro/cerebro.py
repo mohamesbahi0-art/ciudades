@@ -574,7 +574,7 @@ class Cerebro:
         privado.escribir(MEMORIA, self.m)
         privado.escribir(RECETAS, self.recetas)
         privado.escribir(AJUSTES, self.ajustes)
-        privado.escribir(DIRECTO, {"actualizado": _iso(), "meta": META, "lee_charla": True, "minutos": [10, 40],
+        privado.escribir(DIRECTO, {"actualizado": _iso(), "meta": META, "lee_charla": True, "minutos": [10, 25, 40, 55],
                                    "pasos": self.directo[-DIRECTO_GUARDA:],
                                    "cuentas": resumen, "saber": self.m["saber"][:12],
                                    "ordenes_del_dueno": self.m.get("ordenes_del_dueno", [])[-ORDENES_GUARDA:],
