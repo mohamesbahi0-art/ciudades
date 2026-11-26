@@ -11,7 +11,7 @@ permissions:
 jobs:
   traer:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -30,7 +30,11 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install -q -U yt-dlp
           nombre=$(python -c "import json;print(json.load(open('peticiones/traer-referencias.json'))['nombre'])" | tr -cd 'a-z0-9_-')
-          python herramientas/traer_referencias.py "$nombre" 4
+          cuantos=$(python -c "import json;print(int(json.load(open('peticiones/traer-referencias.json')).get('cuantos',4)))")
+          if python -c "import json,sys;sys.exit(0 if json.load(open('peticiones/traer-referencias.json')).get('transcribir') else 1)"; then
+            pip install -q faster-whisper && export TRANSCRIBIR=1
+          fi
+          python herramientas/traer_referencias.py "$nombre" "$cuantos"
       - name: Guardar
         if: always()
         env:

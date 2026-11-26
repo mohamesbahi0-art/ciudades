@@ -52,7 +52,18 @@ def main(nombre, cuantos=4):
             almacen.guardar("referencias", ruta, os.path.basename(ruta))
         except Exception:
             pass
-        datos.append({"n": n, "url": u, "titulo": e.get("title"), "visitas": e.get("view_count"), "segundos": round(dur, 1)})
+        texto = ""
+        if os.environ.get("TRANSCRIBIR"):          # lo que dice en voz (para fijarse en lo que transmite)
+            try:
+                from faster_whisper import WhisperModel
+                global _MODELO
+                _MODELO = globals().get("_MODELO") or WhisperModel("small", device="cpu", compute_type="int8")
+                segs, _ = _MODELO.transcribe(ruta, vad_filter=True)
+                texto = " ".join(x.text.strip() for x in segs)
+            except Exception as ex:
+                texto = f"(no se pudo transcribir: {type(ex).__name__})"
+        datos.append({"n": n, "url": u, "titulo": e.get("title"), "descripcion": e.get("description"),
+                      "visitas": e.get("view_count"), "segundos": round(dur, 1), "texto": texto})
     json.dump({"url": url, "videos": datos}, open(os.path.join(carpeta, "datos.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print(f"traídos: {len(datos)}")
