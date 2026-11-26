@@ -225,7 +225,7 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
                             "imagen.mp4"], cwd=tmp, check=True)
         subtitulos.escribir_ass(palabras_voz, os.path.join(tmp, "s.ass"), mayus=True,
                                 altura=900 if es_show else 820 if guion.get("narrador") else 560,
-                                resalte="&H3A2AE8&" if es_show else None)      # cine negro: la palabra que suena, en rojo      # con muñeco, encima de su cabeza
+                                resalte=None)      # con muñeco, encima de su cabeza
         # Una línea por drawtext: con varias líneas en un mismo texto, el ffmpeg nuevo pinta un cuadradito en el salto.
         fuente = f":fontfile={FUENTE}" if os.path.exists(FUENTE) else ""
         mov = narrador(guion, palabras_voz, durs, total, tmp) if guion.get("narrador") and not es_show else None

@@ -19,13 +19,13 @@
      xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <linearGradient id="traje" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2B2B2E"/><stop offset="1" stop-color="#0C0C0E"/>
+      <stop offset="0" stop-color="#2F3A55"/><stop offset="1" stop-color="#1A2236"/>
     </linearGradient>
     <radialGradient id="cara" cx="0.42" cy="0.38" r="0.75">
       <stop offset="0" stop-color="#FFD9B8"/><stop offset="1" stop-color="#EDB48A"/>
     </radialGradient>
     <linearGradient id="pelo" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#C9A55A"/><stop offset="1" stop-color="#6E5220"/>
+      <stop offset="0" stop-color="#FFE38A"/><stop offset="1" stop-color="#D89A2A"/>
     </linearGradient>
     <linearGradient id="oro" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#FFE680"/><stop offset="0.5" stop-color="#F2B705"/><stop offset="1" stop-color="#B07800"/>
@@ -37,8 +37,7 @@
       <stop offset="0" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
     </linearGradient>
     <clipPath id="recorte"><rect x="-430" y="-330" width="860" height="660" rx="10"/></clipPath>
-    <!-- Cine negro (26 nov, lo pidió el dueño): todo en blanco y negro con contraste, grano y viñeta; solo la corbata
-         va en rojo. -->
+    <!-- Probado el cine negro (26 nov) y el dueño prefiere color: queda el filtro «bn» por si algún día se quiere. -->
     <filter id="bn" color-interpolation-filters="sRGB">
       <feColorMatrix type="saturate" values="0"/>
       <feComponentTransfer><feFuncR type="linear" slope="1.28" intercept="-0.1"/><feFuncG type="linear" slope="1.28" intercept="-0.1"/><feFuncB type="linear" slope="1.28" intercept="-0.1"/></feComponentTransfer>
@@ -55,7 +54,7 @@
     </linearGradient>
   </defs>
   <g id="camara">
-    <g filter="url(#bn)">
+    <g>
       <g id="decorado"></g>
       <g id="tarjeta"></g>
       <g id="pizarra"></g>
@@ -65,8 +64,8 @@
     </g>
     <g id="acento"></g>
   </g>
-  <rect width="1080" height="1920" fill="url(#vineta)"/>
-  <rect id="granoCapa" width="1080" height="1920" filter="url(#grano)" opacity="0.09"/>
+  <rect width="1080" height="1920" fill="url(#vineta)" opacity="0.45"/>
+  
   <g id="pop"></g>
 </svg>
 <script>
@@ -484,7 +483,6 @@ window.pintar = function (t) {
     `<g transform="translate(540 ${SUELO + 330}) scale(0.95)">${p.s}${efectos(accion, t, dt, p.cabeza, p.mano)}</g>`;
   document.getElementById("acento").innerHTML =        // la corbata, lo único en color
     `<g transform="translate(540 ${SUELO + 330}) scale(0.95)"><g transform="${p.postura}"><path d="M-14 -438 L14 -438 L24 -330 L0 -292 L-24 -330 Z" fill="${CORBATA}" stroke="${OUT}" stroke-width="5"/><path d="M-10 -438 L10 -438 L6 -412 L-6 -412 Z" fill="#8E0B20"/></g></g>`;
-  document.getElementById("ruido").setAttribute("seed", String(Math.floor(t * 24) % 97 + 1));
   document.getElementById("foco").setAttribute("opacity", f(0.85 + 0.15 * Math.sin(t * 7) * Math.sin(t * 3.1)));
   // el texto que salta (p. ej. «x20»)
   let pop = "";
