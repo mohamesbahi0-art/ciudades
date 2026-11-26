@@ -171,7 +171,10 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
         fuente = f":fontfile={FUENTE}" if os.path.exists(FUENTE) else ""
         mov = narrador(guion, palabras_voz, durs, total, tmp) if guion.get("narrador") else None
         filtro = "[N:v]scale=iw*1.25:-1[nar];[0:v][nar]overlay=x=0:y=main_h-overlay_h:eof_action=pass,ass=s.ass" if mov else "[0:v]ass=s.ass"
-        rotulo = _gancho(guion.get("texto_pantalla") or guion["titulo"])
+        texto_rotulo = str(guion.get("texto_pantalla") or guion["titulo"])
+        rotulo = _gancho(texto_rotulo)
+        if rotulo.count("\n") >= 3 and ":" in texto_rotulo:     # muy largo: solo lo de antes de los dos puntos
+            rotulo = _gancho(texto_rotulo.split(":", 1)[0])
         if _repite_voz(rotulo, palabras_voz):     # el rótulo diría lo mismo que el subtítulo a la vez: los jueces lo ven doble
             rotulo = ""
         for n, linea in enumerate(rotulo.split("\n") if rotulo else []):
