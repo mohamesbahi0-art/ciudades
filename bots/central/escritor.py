@@ -48,7 +48,10 @@ REGLAS_TIPO["biografias"] = (
     "neerlandeses y flamencos fotografiados por la prensa entre 1945 y 1989 (deportistas, empresarios, artistas y "
     "políticos de esa época), figuras históricas anteriores a 1950 y personas con fotos oficiales del gobierno de "
     "Estados Unidos o de la NASA. De famosos de hoy casi nunca hay.\n"
-    "- Añade al JSON (también en cada idea) \"persona\": \"nombre y apellidos\".")
+    "- Añade al JSON (también en cada idea) \"persona\": \"nombre y apellidos\".\n"
+    "- Un muñeco cuenta la historia y pone caras: añade a cada escena \"emocion\": una de serio, enfadado, sorprendido, "
+    "contento, triste o pensativo, la que pida esa frase (enfadado en las injusticias y los golpes, sorprendido en las "
+    "cifras locas, contento en los triunfos). Que cambie a menudo: es lo que da vida al vídeo.")
 
 IDIOMAS = {"es": "español de España", "nl": "neerlandés (de los Países Bajos)", "en": "inglés"}
 

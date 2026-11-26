@@ -98,6 +98,38 @@ def _repite_voz(rotulo, palabras_voz, segundos=2.5):
     return bool(del_rotulo) and len(del_rotulo & dichas) * 2 >= len(del_rotulo)
 
 
+EMOCIONES = ("serio", "enfadado", "sorprendido", "contento", "triste", "pensativo")
+
+
+def _emocion(escena):
+    e = str(escena.get("emocion") or "").strip().lower()
+    if e in EMOCIONES:
+        return e
+    t = str(escena.get("texto") or "")
+    return "sorprendido" if "!" in t else "pensativo" if "?" in t else "serio"
+
+
+def narrador(guion, palabras_voz, durs, total, carpeta):
+    """Graba el muñeco narrador (bots/estudio/narrador.html) con la boca al ritmo de la voz y la cara de cada escena.
+    Devuelve la ruta del .mov con transparencia, o None si no se ha podido (el vídeo sale entonces sin muñeco)."""
+    tramos, t = [], 0.0
+    for e, d in zip(guion["escenas"], durs):
+        tramos.append({"desde": round(t, 2), "hasta": round(t + d, 2), "emocion": _emocion(e)})
+        t += d
+    datos = os.path.join(carpeta, "narrador.json")
+    with open(datos, "w", encoding="utf-8") as f:
+        json.dump({"duracion": total, "tramos": tramos,
+                   "palabras": [{"i": w["i"], "f": w["f"]} for w in palabras_voz]}, f)
+    salida = os.path.join(carpeta, "narrador.mov")
+    try:
+        subprocess.run(["node", os.path.join(RAIZ, "bots", "estudio", "narrador.js"), datos, salida, "15"],
+                       check=True, timeout=1200)
+        return salida if os.path.exists(salida) else None
+    except Exception as e:
+        print(f"montador: el muñeco narrador no ha podido salir ({type(e).__name__}); va sin él", flush=True)
+        return None
+
+
 def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
     tmp = tempfile.mkdtemp()
     try:
@@ -133,10 +165,12 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
             f.writelines(f"file '{c}'\n" for c in clips)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "lista.txt", "-c", "copy",
                         "imagen.mp4"], cwd=tmp, check=True)
-        subtitulos.escribir_ass(palabras_voz, os.path.join(tmp, "s.ass"), mayus=True)
+        subtitulos.escribir_ass(palabras_voz, os.path.join(tmp, "s.ass"), mayus=True,
+                                altura=820 if guion.get("narrador") else 560)      # con muñeco, encima de su cabeza
         # Una línea por drawtext: con varias líneas en un mismo texto, el ffmpeg nuevo pinta un cuadradito en el salto.
         fuente = f":fontfile={FUENTE}" if os.path.exists(FUENTE) else ""
-        filtro = "[0:v]ass=s.ass"
+        mov = narrador(guion, palabras_voz, durs, total, tmp) if guion.get("narrador") else None
+        filtro = "[N:v]scale=iw*1.25:-1[nar];[0:v][nar]overlay=x=0:y=main_h-overlay_h:eof_action=pass,ass=s.ass" if mov else "[0:v]ass=s.ass"
         rotulo = _gancho(guion.get("texto_pantalla") or guion["titulo"])
         if _repite_voz(rotulo, palabras_voz):     # el rótulo diría lo mismo que el subtítulo a la vez: los jueces lo ven doble
             rotulo = ""
@@ -154,6 +188,9 @@ def montar(guion, imagenes, voz, palabras_json, salida, ambiente=None):
             entradas += ["-i", pista]
             filtro += ";[2:a]volume=0.35[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
             audio = "[a]"
+        if mov:                                      # el muñeco va como última entrada
+            filtro = filtro.replace("[N:v]", f"[{len(entradas) // 2}:v]", 1)
+            entradas += ["-i", mov]
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *entradas,
                         "-filter_complex", filtro, "-map", "[v]", "-map", audio, "-c:v", "libx264", "-preset", "veryfast",
                         "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-t", f"{total:.2f}",

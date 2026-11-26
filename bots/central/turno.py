@@ -951,6 +951,8 @@ def main(argv=None):
                 paso("dibujante", f"{len(imagenes) - faltan}/{len(imagenes)} dibujos hechos en {minutos} min")
 
             paso("montador", "montando el vídeo")
+            if canal.get("narrador"):          # el muñeco que cuenta la historia encima de las fotos
+                g["narrador"] = True
             video = montador.montar(g, imagenes, os.path.join(trabajo, "voz.mp3"), os.path.join(trabajo, "palabras.json"),
                                     os.path.join(trabajo, f"{hoy}-{clave}.mp4"),  # nombre único: el registro lo usa
                                     ambiente=None if juez_guardia.sin_musica(canal)     # el dueño pone su música
