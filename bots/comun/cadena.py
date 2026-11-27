@@ -4,6 +4,11 @@ esta a la otra»). gemini.preguntar() la llama sola cuando Gemini falla: nadie m
 
 - Cada servicio se enciende solo cuando su llave está en los secretos de GitHub (una cuenta por servicio; nada de
   multiplicar cuentas). Sin llave, ese eslabón no existe y la cadena sigue con los demás.
+- Los servicios SIN llave (los que su documentación deja usar sin cuenta: OVH y AI Horde) van siempre al final, detrás de
+  todos los de llave, y con su tope por minuto contado aquí (por máquina, que es por dirección de internet). Se apagan
+  todos con config/fabrica.json → "cadena": {"sin_llave": false} o, en las pruebas, con CADENA_SIN_LLAVE=0.
+- El Explorador de IA gratis (bots/mecanicos/explorador.py) deja cada semana en estado/explorador/modelos.json qué
+  modelos del catálogo ya no existen y cuáles nuevos ha probado: la cadena lo aplica al leer, sin tocar el código.
 - Hay dos cadenas: la de texto (guiones, ideas, votos) y la de los que ven imágenes (los jueces miran fotogramas).
 - Si un servicio dice que ya no le queda cupo hoy, se apunta en estado/cadena.json (privado) hasta cuándo, y ni esta
   ronda ni las otras líneas vuelven a llamarle antes: no se pierde tiempo ni se le molesta.
@@ -17,6 +22,7 @@ import datetime as dt
 import json
 import os
 import re
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -26,6 +32,10 @@ ESTADO = os.path.join("estado", "cadena.json")
 TOPE_SEGUNDOS = 240            # una pregunta no pasa de esto recorriendo la cadena
 ESPERA_CORTA = 20              # si un servicio pide esperar menos que esto (límite por minuto), se espera y se repite
 MAX_SALIDA = 8000              # tokens de respuesta que se piden como mucho
+CORRECCIONES = os.path.join("estado", "explorador", "modelos.json")   # lo que deja el Explorador (privado)
+# las peticiones de cada minuto a los servicios con tope de peticiones (las cuenta la máquina entera: el tope de los sin
+# llave es por dirección de internet, y en una máquina de GitHub todos los procesos salen por la misma)
+MINUTO = os.path.join(tempfile.gettempdir(), "ciudades_cadena_minuto.json")
 
 # Cada servicio: su secreto (la llave), su dirección y sus modelos gratis. «texto» y «vision» van por orden de
 # preferencia dentro del servicio. Todos hablan el formato «chat/completions». Lo que puede cada uno:
@@ -35,6 +45,14 @@ MAX_SALIDA = 8000              # tokens de respuesta que se piden como mucho
 #   max_salida     tokens de respuesta que se le piden
 #   cupo_comun     todos sus modelos gastan del mismo cupo del día
 #   cuenta         secreto con el número de cuenta que va dentro de la dirección
+#   sin_llave      su documentación deja usarlo sin cuenta: no lleva secreto («llave_fija» si pide una de pega)
+#   peticiones_minuto  su tope de peticiones por minuto (por modelo si «tope_por_modelo»); se cuenta por máquina
+#   sin_cupo_diario    no tiene cupo del día: un 429 suyo es del minuto, nunca «hasta mañana»
+#   max_pregunta   caracteres de pregunta como mucho (solo trabajos pequeños)
+#   espera         segundos que se le espera la respuesta; espera_minima: si queda menos tiempo, ni se le llama
+#   json_nunca     no entiende «response_format»: el JSON lo pide la propia pregunta
+#   lista_viva     sus modelos cambian cada día: si el catálogo no tiene, se usan los de su lista oficial de hoy
+#   lista_modelos  dirección de su lista oficial de modelos, si no es «/models»
 # Solo están los que dejan usarlo así (automático, para publicar) con una cuenta gratis y sin tarjeta. Fuera se quedan
 # los que ya no son gratis o los que solo dejan «probar» (ver bots/mecanicos/MANUAL.md → La cadena de IA gratis).
 SERVICIOS = {
@@ -57,13 +75,36 @@ SERVICIOS = {
         "url": "https://api.cloudflare.com/client/v4/accounts/{cuenta}/ai/v1",
         "texto": ["@cf/google/gemma-4-26b-a4b-it", "@cf/openai/gpt-oss-120b"],
         "vision": ["@cf/google/gemma-4-26b-a4b-it"], "cupo_comun": True, "max_salida": 4000,
+        "lista_modelos": "https://api.cloudflare.com/client/v4/accounts/{cuenta}/ai/models/search?per_page=1000"
+                         "&task=Text%20Generation",
+    },
+    # --- los SIN llave: van detrás de todos los de llave ---
+    "ovh": {
+        # OVHcloud AI Endpoints: acceso anónimo documentado, 2 peticiones por minuto por dirección y por modelo (en la
+        # práctica, más estricto entre modelos: aquí se cuentan 2 por minuto para todo el servicio). Sin cupo del día.
+        "nombre": "OVH", "secreto": None, "sin_llave": True, "url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        "texto": ["gpt-oss-120b", "Meta-Llama-3_3-70B-Instruct"], "vision": [],
+        "peticiones_minuto": 2, "sin_cupo_diario": True, "max_salida": 3000, "espera": 120,
+        "extra_modelo": {"gpt-oss-120b": {"reasoning_effort": "low"}},
+    },
+    "horde": {
+        # AI Horde (texto): voluntarios, anónimo con la llave de pega «0000000000» y la prioridad más baja de la cola. Su
+        # puerta OpenAI (oai.aihorde.net, en pruebas) espera a que un voluntario conteste: lento. Solo trabajos
+        # pequeños, con respuesta corta y un tiempo máximo; los modelos cambian según quién esté conectado.
+        "nombre": "AI Horde", "secreto": None, "sin_llave": True, "llave_fija": "0000000000",
+        "url": "https://oai.aihorde.net/v1", "texto": [], "vision": [], "lista_viva": True,
+        "cabeceras": {"Client-Agent": "ciudades:1:anon"}, "peticiones_minuto": 2, "sin_cupo_diario": True,
+        "max_pregunta": 6000, "max_salida": 400, "espera": 170, "espera_minima": 60, "json_nunca": True,
     },
 }
 # El orden. Texto: Groq para lo pequeño (lo grande no le cabe y se lo salta solo), OpenRouter para lo grande (no tiene
 # tope por minuto) y Cloudflare. Imágenes: Groq (su cupo de imágenes es aparte), Cloudflare y, lo último, OpenRouter,
-# porque sus 50 preguntas al día rinden más en guiones.
-ORDEN_TEXTO = ["groq", "openrouter", "cloudflare"]
-ORDEN_VISION = ["groq", "cloudflare", "openrouter"]
+# porque sus 50 preguntas al día rinden más en guiones. Detrás, siempre, los sin llave (OVH y, lo último, AI Horde).
+ORDEN_TEXTO = ["groq", "openrouter", "cloudflare", "ovh", "horde"]
+ORDEN_VISION = ["groq", "cloudflare", "openrouter", "ovh", "horde"]
+CORREGIR = True                # aplicar lo que deja el Explorador (él mismo lo quita para ver el catálogo de verdad)
+VIVOS = {}                     # {servicio: [modelos de su lista de hoy]} para los de «lista_viva», en esta ronda
+VIVA = "(lista de hoy)"
 
 APAGADOS = {}                  # {(servicio, modelo o "*"): hasta cuándo (epoch)} en esta ronda
 USO = {}                       # {servicio: {"bien": n, "sin_cupo": n, "fallos": n}} en esta ronda
@@ -96,28 +137,126 @@ def _estado():
         return {}
 
 
+def sin_llave_permitidos(ajustes=None):
+    """¿Entran hoy los servicios sin llave? Sí, salvo que el dueño los apague en config o una prueba sin red lo pida."""
+    if os.environ.get("CADENA_SIN_LLAVE", "1").strip() in ("0", "no", "false"):
+        return False
+    return (ajustes if ajustes is not None else _ajustes()).get("sin_llave", True) is not False
+
+
 def encendidos():
-    """Los servicios que tienen su llave puesta (los que de verdad forman la cadena ahora)."""
-    apagados = set(_ajustes().get("apagados") or [])
-    return [k for k, s in SERVICIOS.items() if os.environ.get(s["secreto"]) and k not in apagados
-            and (not s.get("cuenta") or os.environ.get(s["cuenta"]))]
+    """Los servicios que forman la cadena ahora: los que tienen su llave puesta y, detrás, los que no necesitan llave."""
+    a = _ajustes()
+    apagados = set(a.get("apagados") or [])
+    con = [k for k, s in SERVICIOS.items() if not s.get("sin_llave") and s.get("secreto") and os.environ.get(s["secreto"])
+           and k not in apagados and (not s.get("cuenta") or os.environ.get(s["cuenta"]))]
+    sin = [k for k, s in SERVICIOS.items() if s.get("sin_llave") and k not in apagados] if sin_llave_permitidos(a) else []
+    return con + sin
 
 
 def _url(s):
     return s["url"].replace("{cuenta}", os.environ.get(s.get("cuenta") or "", "")).rstrip("/")
 
 
+def _llave(s):
+    """La llave que se manda (la del secreto, la de pega de un servicio anónimo o ninguna)."""
+    if s.get("sin_llave"):
+        return s.get("llave_fija")
+    return (os.environ.get(s.get("secreto") or "") or "").strip() or None
+
+
+def cabeceras(s):
+    h = {"Content-Type": "application/json", "User-Agent": AGENTE}
+    llave = _llave(s)
+    if llave:
+        h["Authorization"] = "Bearer " + llave
+    h.update(s.get("cabeceras") or {})
+    return h
+
+
+def _correcciones():
+    """Lo que el Explorador ha visto en las listas oficiales: {servicio: {"quitados": [...], "nuevos": {"texto": [...],
+    "vision": [...]}}}. Solo cuenta para los servicios que ya están en el catálogo: nunca mete uno nuevo."""
+    if not CORREGIR:
+        return {}
+    try:
+        return (_privado().leer(CORRECCIONES, {}) or {}).get("servicios") or {}
+    except Exception:
+        return {}
+
+
+def lista_oficial(servicio, tiempo=30):
+    """Los modelos que ofrece hoy un servicio según su lista oficial: [ids]. Lanza la excepción si no contesta."""
+    s = SERVICIOS[servicio]
+    url = (s.get("lista_modelos") or (s["url"] + "/models")).replace(
+        "{cuenta}", os.environ.get(s.get("cuenta") or "", "")).rstrip("/")
+    h = cabeceras(s)
+    h.pop("Content-Type", None)
+    with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=tiempo) as r:
+        lista = json.load(r)
+    if isinstance(lista, dict):
+        filas = lista.get("data") or lista.get("result") or lista.get("models") or []
+    else:
+        filas = lista
+    ids = []
+    for m in filas or []:
+        i = (m.get("id") or m.get("name")) if isinstance(m, dict) else m
+        if i:
+            ids.append(str(i))
+    return ids
+
+
+def _lista_viva(servicio):
+    """Para los servicios cuyos modelos cambian cada día (AI Horde): los de su lista de hoy, una vez por ronda."""
+    if servicio not in VIVOS:
+        try:
+            ids = [i for i in lista_oficial(servicio, tiempo=20)
+                   if not re.search(r"nsfw|erot|lewd|porn|uncensor|abliterat", i, re.I)]
+        except Exception:
+            ids = []
+        VIVOS[servicio] = ids[:2]
+    return VIVOS[servicio]
+
+
+def modelos(servicio, clase="texto"):
+    """Los modelos de un servicio para esa clase («texto» o «vision»): los del catálogo, sin los que el Explorador ha
+    visto que ya no existen, más los nuevos que ha probado; y, si es de lista viva y no tiene, los de su lista de hoy."""
+    s = SERVICIOS[servicio]
+    base = list(s.get(clase) or [])
+    c = _correcciones().get(servicio) or {}
+    quitados = set(c.get("quitados") or [])
+    lista = [m for m in base if m not in quitados]
+    lista += [m for m in ((c.get("nuevos") or {}).get(clase) or []) if m not in lista and m not in quitados]
+    if not lista and s.get("lista_viva") and clase == "texto":
+        lista = [VIVA]                   # su lista de hoy se pide solo si de verdad se llega a él (_expandir)
+    return lista
+
+
+def _expandir(lista):
+    """Cambia el «(lista de hoy)» de un servicio de lista viva por sus modelos de hoy, solo cuando se llega a él."""
+    for servicio, modelo in lista:
+        if modelo != VIVA:
+            yield servicio, modelo
+            continue
+        quitados = set((_correcciones().get(servicio) or {}).get("quitados") or [])
+        for m in _lista_viva(servicio):
+            if m not in quitados and APAGADOS.get((servicio, m), 0) <= time.time():
+                yield servicio, m
+
+
 def eslabones(vision=False):
-    """[(servicio, modelo)] por orden de la cadena, sin los que hoy ya han dicho que no les queda cupo."""
+    """[(servicio, modelo)] por orden de la cadena, sin los que hoy ya han dicho que no les queda cupo. Los de llave
+    siempre delante de los que no la necesitan."""
     a = _ajustes()
     orden = a.get("orden_vision" if vision else "orden_texto") or (ORDEN_VISION if vision else ORDEN_TEXTO)
     vivos = encendidos()
     orden = [k for k in orden if k in vivos] + [k for k in vivos if k not in orden]
+    orden = [k for k in orden if not SERVICIOS[k].get("sin_llave")] + [k for k in orden if SERVICIOS[k].get("sin_llave")]
     agotados = (_estado().get("agotados") or {})
     ahora, iso = time.time(), _ahora().strftime("%Y-%m-%dT%H:%M:%SZ")
     salida = []
     for k in orden:
-        for modelo in SERVICIOS[k].get("vision" if vision else "texto") or []:
+        for modelo in modelos(k, "vision" if vision else "texto"):
             if APAGADOS.get((k, "*"), 0) > ahora or APAGADOS.get((k, modelo), 0) > ahora:
                 continue
             if str(agotados.get(f"{k}:{modelo}") or agotados.get(f"{k}:*") or "") > iso:
@@ -189,9 +328,56 @@ def _fotos(servicio, imagenes):
     return datos, False
 
 
-def _cabe(servicio, texto, n_imagenes):
-    """¿Le cabe la pregunta a ese servicio en su tope de tokens por minuto? (Cuenta por lo alto: más vale saltárselo.)"""
+def _minuto_leer():
+    try:
+        with open(MINUTO, encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _clave_minuto(servicio, modelo):
+    return f"{servicio}:{modelo if SERVICIOS[servicio].get('tope_por_modelo') else '*'}"
+
+
+def espera_turno(servicio, modelo):
+    """Segundos que faltan para que ese servicio admita otra petición sin pasar de su tope por minuto (0 = ya)."""
+    tope = SERVICIOS[servicio].get("peticiones_minuto")
+    if not tope:
+        return 0
+    ahora = time.time()
+    hechas = sorted(t for t in _minuto_leer().get(_clave_minuto(servicio, modelo), []) if t > ahora - 60)
+    if len(hechas) < tope:
+        return 0
+    return max(0.0, hechas[-tope] + 60 - ahora) + 0.5
+
+
+def apuntar_turno(servicio, modelo):
+    """Cuenta una petición hecha a un servicio con tope por minuto (en un fichero de la máquina: lo comparten todos sus
+    procesos, que salen por la misma dirección de internet)."""
+    if not SERVICIOS.get(servicio, {}).get("peticiones_minuto"):
+        return
+    ahora = time.time()
+    d = {k: [t for t in v if t > ahora - 60] for k, v in _minuto_leer().items() if isinstance(v, list)}
+    d.setdefault(_clave_minuto(servicio, modelo), []).append(ahora)
+    try:
+        with open(MINUTO + ".tmp", "w", encoding="utf-8") as f:
+            json.dump({k: v for k, v in d.items() if v}, f)
+        os.replace(MINUTO + ".tmp", MINUTO)
+    except OSError:
+        pass
+
+
+def _cabe(servicio, texto, n_imagenes, modelo=None):
+    """¿Le cabe la pregunta a ese servicio ahora? Por tamaño (trabajos pequeños), por su tope de peticiones por minuto
+    (si hay que esperar más que un respiro, se le salta) y por su tope de tokens por minuto (cuenta por lo alto: más vale
+    saltárselo)."""
     s = SERVICIOS[servicio]
+    if s.get("max_pregunta") and len(texto) > s["max_pregunta"]:
+        return False
+    if s.get("peticiones_minuto") and espera_turno(servicio, modelo) > ESPERA_CORTA:
+        return False
     tope = s.get("tokens_minuto")
     if not tope:
         return True
@@ -222,7 +408,7 @@ def _cuerpo(servicio, modelo, texto, imagenes, json_salida, temperatura, sencill
     if sencillo:                 # la pregunta pelada, por si el servicio no entiende alguna de las opciones
         return cuerpo
     cuerpo["temperature"] = min(1.0, temperatura)
-    if json_salida and modelo not in (s.get("sin_json") or ()):
+    if json_salida and not s.get("json_nunca") and modelo not in (s.get("sin_json") or ()):
         cuerpo["response_format"] = {"type": "json_object"}
     cuerpo.update(s.get("extra") or {})
     cuerpo.update((s.get("extra_modelo") or {}).get(modelo) or {})
@@ -291,28 +477,36 @@ def preguntar(texto, imagenes=(), json_salida=True, temperatura=0.9, vision=Fals
     if not lista:
         raise SinCadena("no hay ningún servicio gratis de reserva con llave y con cupo")
     empezo, ultimo = time.monotonic(), "sin intentar"
-    for servicio, modelo in lista:
+    for servicio, modelo in _expandir(lista):
         s = SERVICIOS[servicio]
         if APAGADOS.get((servicio, "*"), 0) > time.time():
             continue
-        if not _cabe(servicio, texto, len(imagenes)):            # no le cabe en su tope por minuto: ni se le llama
+        if not _cabe(servicio, texto, len(imagenes), modelo):    # no le cabe (tamaño o tope por minuto): ni se le llama
             ultimo = f"{servicio}: la pregunta no le cabe"
+            continue
+        if s.get("espera_minima") and tope - (time.monotonic() - empezo) < s["espera_minima"]:
+            ultimo = f"{servicio}: no queda tiempo para esperarle"
             continue
         sencillo = False
         for intento in (1, 2, 3):
             if time.monotonic() - empezo > tope:
                 raise SinCadena(f"la cadena no contesta a tiempo: {ultimo}")
+            turno = espera_turno(servicio, modelo)
+            if turno > ESPERA_CORTA:                             # su tope por minuto ya está lleno: el siguiente
+                ultimo = f"{servicio}: tope por minuto lleno"
+                break
+            if turno:
+                time.sleep(turno)
             try:
                 cuerpo = _cuerpo(servicio, modelo, texto, imagenes, json_salida, temperatura, sencillo=sencillo)
             except Exception as e:                               # una imagen que no se puede abrir, p. ej.
                 ultimo = f"{servicio}: no he podido preparar la pregunta ({type(e).__name__})"
                 break
-            req = urllib.request.Request(
-                _url(s) + "/chat/completions", method="POST", data=json.dumps(cuerpo).encode(),
-                headers=dict({"Content-Type": "application/json", "User-Agent": AGENTE,
-                              "Authorization": "Bearer " + os.environ[s["secreto"]]}, **(s.get("cabeceras") or {})))
+            req = urllib.request.Request(_url(s) + "/chat/completions", method="POST", data=json.dumps(cuerpo).encode(),
+                                         headers=cabeceras(s))
+            apuntar_turno(servicio, modelo)
             try:
-                with urllib.request.urlopen(req, timeout=150) as r:
+                with urllib.request.urlopen(req, timeout=s.get("espera", 150)) as r:
                     datos = json.load(r)
                 contenido = datos["choices"][0]["message"]["content"]
                 if isinstance(contenido, list):                  # algunos lo devuelven por trozos
@@ -328,6 +522,10 @@ def preguntar(texto, imagenes=(), json_salida=True, temperatura=0.9, vision=Fals
                 except Exception:
                     detalle = ""
                 ultimo = f"{servicio}: HTTP {e.code}"
+                if e.code in (401, 403) and s.get("sin_llave"):  # sin llave no hay llave mala: hoy no deja (carga alta)
+                    _contar(servicio, "fallos")
+                    _apuntar_agotado(servicio, "*", _ahora() + dt.timedelta(hours=6))
+                    break
                 if e.code in (401, 403):                         # la llave no vale (o el servicio no deja): fuera hoy
                     _contar(servicio, "fallos")
                     _avisar_llave(servicio, e.code)
@@ -340,7 +538,9 @@ def preguntar(texto, imagenes=(), json_salida=True, temperatura=0.9, vision=Fals
                     if espera is not None and espera <= ESPERA_CORTA and intento == 1 and not del_dia:
                         time.sleep(espera + 1)                   # límite por minuto: un respiro y se repite
                         continue
-                    if espera is not None and espera > 3600:     # el servicio dice cuándo vuelve: se le cree
+                    if s.get("sin_cupo_diario") and not (espera and espera > 3600):   # solo tiene tope por minuto
+                        hasta = _ahora() + dt.timedelta(seconds=max(120, espera or 0))
+                    elif espera is not None and espera > 3600:   # el servicio dice cuándo vuelve: se le cree
                         hasta = _ahora() + dt.timedelta(seconds=min(espera, 26 * 3600))
                     elif del_dia or espera is None:              # (antes, cerca de medianoche, «mañana» eran minutos)
                         hasta = _hasta_manana()
@@ -410,13 +610,68 @@ def apuntar_uso():
         pass
 
 
+def probar_modelo(servicio, modelo, clase="texto", foto=None, tiempo=None):
+    """Una pregunta cortita a un modelo de un servicio del catálogo, para saber si sirve: devuelve (veredicto, código).
+    Veredictos: «bien», «contesta_mal» (contesta, pero no lo pedido), «no_existe» (404/410, o 400/422 que habla del
+    modelo), «sin_cupo» (429/402), «no_deja» (401/403), «falla» (otro código) o «no_contesta». Nunca enseña el texto."""
+    s = SERVICIOS[servicio]
+    vision = clase == "vision" and foto
+    texto = 'Contesta solo con JSON: {"color": "el color que ves, o ninguno"}' if vision else \
+        'Contesta solo con JSON: {"ok": true}'
+    for intento in (1, 2):
+        turno = espera_turno(servicio, modelo)
+        if turno:
+            time.sleep(min(turno, 65))
+        cuerpo = _cuerpo(servicio, modelo, texto, [foto] if vision else (), True, 0.2, sencillo=intento == 2)
+        cuerpo[s.get("campo_salida", "max_tokens")] = min(300, s.get("max_salida", MAX_SALIDA))
+        req = urllib.request.Request(_url(s) + "/chat/completions", method="POST", data=json.dumps(cuerpo).encode(),
+                                     headers=cabeceras(s))
+        apuntar_turno(servicio, modelo)
+        try:
+            with urllib.request.urlopen(req, timeout=tiempo or s.get("espera", 90)) as r:
+                datos = json.load(r)
+            contenido = datos["choices"][0]["message"]["content"]
+            if isinstance(contenido, list):
+                contenido = "".join(str(x.get("text", "")) for x in contenido if isinstance(x, dict))
+            try:
+                r = _json(contenido)
+            except ValueError:
+                return "contesta_mal", 200
+            if vision and not re.search(r"roj|red", json.dumps(r, ensure_ascii=False), re.I):
+                return "contesta_mal", 200
+            return ("bien" if isinstance(r, dict) else "contesta_mal"), 200
+        except urllib.error.HTTPError as e:
+            try:
+                detalle = e.read().decode("utf-8", "replace")[:600]
+            except Exception:
+                detalle = ""
+            if e.code in (400, 422) and intento == 1 and not re.search(r"model", detalle, re.I):
+                continue                                   # alguna opción que no entiende: la pregunta pelada
+            if e.code in (404, 410) or (e.code in (400, 422) and re.search(
+                    r"model.{0,40}(not (found|exist|available|supported)|does ?n.t exist|unknown|invalid|decommission|deprecat)"
+                    r"|(unknown|invalid|no such) model", detalle, re.I | re.S)):
+                return "no_existe", e.code
+            if e.code in (429, 402):
+                return "sin_cupo", e.code
+            if e.code in (401, 403):
+                return "no_deja", e.code
+            return "falla", e.code
+        except (KeyError, IndexError, ValueError, TypeError):
+            return "contesta_mal", 200
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return "no_contesta", 0
+    return "falla", 400
+
+
 def probar():
-    """La prueba de la cadena (turno «Probar la cadena»): qué servicios tienen llave, qué modelos del catálogo existen y
-    si contestan. Solo enseña nombres de servicio y de modelo y el código de respuesta: nunca llaves ni textos."""
+    """La prueba de la cadena (turno «Probar la cadena»): qué servicios tienen llave y cuáles van sin ella, qué modelos
+    del catálogo existen y si contestan. Solo enseña nombres de servicio y de modelo y el código de respuesta: nunca
+    llaves ni textos."""
     vivos = encendidos()
-    print("CADENA con llave:", ", ".join(vivos) or "ninguno", flush=True)
-    print("CADENA sin llave:", ", ".join(k for k in SERVICIOS if k not in vivos) or "ninguno", flush=True)
-    foto = os.path.join(os.environ.get("RUNNER_TEMP") or ".", "prueba_cadena.jpg")
+    print("CADENA con llave:", ", ".join(k for k in vivos if not SERVICIOS[k].get("sin_llave")) or "ninguno", flush=True)
+    print("CADENA sin llave:", ", ".join(k for k in vivos if SERVICIOS[k].get("sin_llave")) or "ninguno", flush=True)
+    print("CADENA apagados o sin su llave:", ", ".join(k for k in SERVICIOS if k not in vivos) or "ninguno", flush=True)
+    foto = os.path.join(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir(), "prueba_cadena.jpg")
     try:
         from PIL import Image
         Image.new("RGB", (96, 96), (220, 20, 20)).save(foto, "JPEG")
@@ -425,55 +680,31 @@ def probar():
     FORMA = {"groq": "gsk_", "openrouter": "sk-or-"}
     for k in vivos:
         s = SERVICIOS[k]
-        llave = os.environ[s["secreto"]]
+        llave = "" if s.get("sin_llave") else os.environ[s["secreto"]]
         cuenta = os.environ.get(s.get("cuenta") or "", "")
-        print(f"CADENA {k} llave: mide {len(llave)}"
-              + (f", {'empieza' if llave.strip().startswith(FORMA[k]) else 'NO empieza'} por {FORMA[k]}" if k in FORMA else "")
-              + (", lleva espacios o saltos de línea" if llave != llave.strip() or " " in llave else "")
-              + (f"; el número de cuenta mide {len(cuenta)} (tiene que medir 32)"
-                 + ("" if re.fullmatch(r"[0-9a-f]{32}", cuenta.strip()) else " y NO tiene forma de número de cuenta")
-                 if s.get("cuenta") else ""), flush=True)
-        try:                                        # qué dice el servicio de la llave (sin enseñarla)
-            req = urllib.request.Request(_url(s) + "/chat/completions", method="POST",
-                                         data=json.dumps(_cuerpo(k, (s.get("texto") or [""])[0], "Di hola", (), False, 0.5)).encode(),
-                                         headers={"Content-Type": "application/json", "User-Agent": AGENTE,
-                                                  "Authorization": "Bearer " + llave.strip()})
-            with urllib.request.urlopen(req, timeout=60):
-                print(f"CADENA {k} llave: vale", flush=True)
-        except urllib.error.HTTPError as e:
-            texto = e.read().decode("utf-8", "replace")[:260].replace(llave.strip(), "***").replace(cuenta.strip() or "§", "***")
-            print(f"CADENA {k} dice {e.code}: {' '.join(texto.split())}", flush=True)
-        except Exception as e:
-            print(f"CADENA {k}: no contesta ({type(e).__name__})", flush=True)
+        if not s.get("sin_llave"):
+            print(f"CADENA {k} llave: mide {len(llave)}"
+                  + (f", {'empieza' if llave.strip().startswith(FORMA[k]) else 'NO empieza'} por {FORMA[k]}" if k in FORMA else "")
+                  + (", lleva espacios o saltos de línea" if llave != llave.strip() or " " in llave else "")
+                  + (f"; el número de cuenta mide {len(cuenta)} (tiene que medir 32)"
+                     + ("" if re.fullmatch(r"[0-9a-f]{32}", cuenta.strip()) else " y NO tiene forma de número de cuenta")
+                     if s.get("cuenta") else ""), flush=True)
+        else:
+            print(f"CADENA {k}: sin llave; tope {s.get('peticiones_minuto') or '-'} peticiones por minuto", flush=True)
         try:                                        # qué modelos ofrece hoy (para corregir el catálogo si cambian)
-            req = urllib.request.Request(_url(s) + "/models", headers={
-                "User-Agent": AGENTE, "Authorization": "Bearer " + os.environ[s["secreto"]]})
-            with urllib.request.urlopen(req, timeout=60) as r:
-                lista = json.load(r)
-            ids = [str(m.get("id") or m.get("name")) for m in (lista.get("data") or lista.get("result") or [])]
+            ids = lista_oficial(k, tiempo=60)
             gratis = [i for i in ids if ":free" in i] if k == "openrouter" else ids
             print(f"CADENA {k}: ofrece {len(ids)} modelos; del catálogo faltan: "
                   + (", ".join(m for m in s.get("texto", []) + s.get("vision", []) if m not in ids) or "ninguno"), flush=True)
             print(f"CADENA {k} lista: " + ", ".join(sorted(gratis)[:60]), flush=True)
         except Exception as e:
             print(f"CADENA {k}: no deja ver su lista ({type(e).__name__} {getattr(e, 'code', '')})", flush=True)
-        for clase, modelos in (("texto", s.get("texto") or []), ("vision", s.get("vision") or [])):
-            for modelo in modelos:
-                ORDEN = (k, modelo)
-                copia = (dict(SERVICIOS), list(ORDEN_TEXTO), list(ORDEN_VISION))
-                try:
-                    SERVICIOS.clear()
-                    SERVICIOS[k] = dict(s, texto=[modelo] if clase == "texto" else [], vision=[modelo] if clase == "vision" else [])
-                    APAGADOS.clear()
-                    r, _ = preguntar('Contesta solo con JSON: {"color": "el color que ves, o ninguno"}',
-                                     imagenes=[foto] if clase == "vision" and foto else (), vision=clase == "vision", tope=90)
-                    bien = isinstance(r, dict) and (clase == "texto" or "roj" in str(r).lower() or "red" in str(r).lower())
-                    print(f"CADENA {ORDEN[0]} {clase} {ORDEN[1]}: {'BIEN' if bien else 'contesta, pero no lo pedido'}", flush=True)
-                except SinCadena as e:
-                    print(f"CADENA {ORDEN[0]} {clase} {ORDEN[1]}: NO ({str(e).split(': ', 1)[-1][:60]})", flush=True)
-                finally:
-                    SERVICIOS.clear()
-                    SERVICIOS.update(copia[0])
+        for clase in ("texto", "vision"):
+            for _, modelo in _expandir([(k, m) for m in modelos(k, clase)]):
+                veredicto, codigo = probar_modelo(k, modelo, clase, foto=foto if clase == "vision" else None)
+                print(f"CADENA {k} {clase} {modelo}: "
+                      + {"bien": "BIEN", "contesta_mal": "contesta, pero no lo pedido"}.get(veredicto, f"NO ({veredicto} {codigo})"),
+                      flush=True)
 
 
 if __name__ == "__main__":

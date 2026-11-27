@@ -1,0 +1,55 @@
+# El Explorador de IA gratis (ciudad de los Mecánicos): una vez por semana pone al día los modelos de los servicios que
+# ya están en la cadena de IA gratis (los que ya no existen se apagan; los nuevos se prueban con una pregunta cortita) y
+# busca servicios nuevos en dos listas públicas, que deja apuntados para que Claude o el dueño decidan. Sin Claude y sin
+# gastar dinero. También con peticiones/explorador.json. En el registro solo salen nombres de servicio y cifras.
+name: Explorador de IA gratis
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  push:
+    paths:
+      - "peticiones/explorador.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: explorador
+  cancel-in-progress: false
+jobs:
+  explorar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Herramientas
+        run: |
+          pip install -q -r requirements.txt
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Explorar
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # los servicios de la cadena que ya tienen su llave (OVH y AI Horde van sin llave)
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python bots/mecanicos/explorador.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('explorador de IA gratis') else 1)"

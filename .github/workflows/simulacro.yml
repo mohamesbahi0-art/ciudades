@@ -15,6 +15,8 @@ jobs:
   simulacro:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CADENA_SIN_LLAVE: "0"        # sin red: los servicios de IA gratis sin llave no entran (el de la cadena los prueba de mentira)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -76,6 +78,8 @@ jobs:
         run: |
           python pruebas/simulacro_cadena.py
           python pruebas/simulacro_espera.py
+      - name: Explorador de IA gratis (modelos que ya no existen, nuevos probados antes de usarlos y novedades una sola vez)
+        run: python pruebas/simulacro_explorador.py
       - name: Investigador de webs (portero, cola, elegir y guardar sin red; la caja, su vigilante, el turno y capturas.yml)
         run: |
           python pruebas/simulacro_capturas.py

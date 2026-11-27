@@ -7,8 +7,9 @@ popular → voz → dibujos o clips → montaje → Juzgado (90 o más) → Coli
 - Guiones e ideas: Claude de pago, con un tope al día repartido por horas; si no puede, la IA gratis.
 - La IA gratis es una cadena que salta sola de un eslabón al siguiente (`bots/comun/gemini.py` y `bots/comun/cadena.py`):
   Gemini de primera → su segunda fila con la misma llave (el pequeño de la familia nueva y los modelos Gemma, con mucho
-  más cupo al día) → los servicios de reserva que tengan llave puesta (Groq, OpenRouter, Cloudflare). Lo que cada
-  servicio dice que ya no le queda hoy se apunta en `estado/cadena.json` y no se le vuelve a llamar hasta que le toca.
+  más cupo al día) → los servicios de reserva que tengan llave puesta (Groq y Cloudflare) → al final, los que van SIN
+  llave (OVH AI Endpoints y el texto de AI Horde). Lo que cada servicio dice que ya no le queda hoy se apunta en
+  `estado/cadena.json` y no se le vuelve a llamar hasta que le toca.
 - Jueces: Gemini de primera; si no le queda cupo, un juez SUPLENTE (la segunda fila o la cadena) y, si tampoco, Claude.
   Un suplente puede suspender y mandar arreglar, pero su aprobado no publica nada: lo confirma un juez de primera
   (Gemini de primera o Claude) en el momento o, si no hay ninguno, el vídeo espera en la Sala de espera
@@ -20,12 +21,43 @@ popular → voz → dibujos o clips → montaje → Juzgado (90 o más) → Coli
 - Dentro solo están los servicios que dejan usarlo así (automático y para publicar) con UNA cuenta gratis y sin
   tarjeta. Fuera (mirado el 25-nov-2026): Mistral y Together (ya no hay API gratis), Cerebras (pide tarjeta), Hugging
   Face (quitó el cupo gratis), GitHub Models (cerrado), Cohere y NVIDIA (su cuenta gratis prohíbe usarlo «en
-  producción») y SambaNova (20 preguntas al día y solo «para probar»). Nunca se multiplican cuentas para tener más cupo.
-- Una llave nueva: el dueño la crea y la guarda como secreto de GitHub (`GROQ_API_KEY`, `OPENROUTER_API_KEY`,
+  producción»), SambaNova (20 preguntas al día y solo «para probar») y OpenRouter (ya es de pago: apagado en
+  `config/fabrica.json` → `cadena.apagados`). Nunca se multiplican cuentas para tener más cupo. (La misma lista está en
+  `bots/mecanicos/explorador.py` → `DESCARTADOS`: si cambia aquí, cambiarla allí.)
+- Sin llave (desde el 27-nov-2026), siempre detrás de los de llave:
+  · OVH AI Endpoints (`oai.endpoints.kepler.ai.cloud.ovh.net/v1`, formato OpenAI): su documentación deja usarlo sin
+    cuenta con 2 peticiones por minuto por dirección y por modelo; la cadena cuenta 2 por minuto para todo el servicio y
+    por máquina (`cadena.MINUTO`). Su 429 es del minuto: vuelve a los 2 minutos, no mañana.
+  · AI Horde, texto (`oai.aihorde.net/v1`, en pruebas): voluntarios, anónimo con la llave de pega «0000000000» y la
+    prioridad más baja; espera a que conteste un voluntario. Solo preguntas pequeñas (6.000 caracteres), respuestas
+    cortas (400) y 170 s como mucho. Sus modelos cambian cada día: se usan los 2 primeros de su lista de hoy.
+  · Un 401/403 de un sin llave no es «llave mala» (no hay llave que cambiar): se le aparta 6 horas.
+  · Apagarlos todos: `config/fabrica.json` → `"cadena": {"sin_llave": false}`; en las pruebas sin red,
+    `CADENA_SIN_LLAVE=0` (lo pone `simulacro.yml`).
+- Una llave nueva: el dueño la crea y la guarda como secreto de GitHub (`GROQ_API_KEY`,
   `CLOUDFLARE_AI_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`). Ese eslabón se enciende solo. Para comprobarlo: escribir
   `peticiones/cadena.json` (turno «Probar la cadena»), que dice qué modelos del catálogo existen y contestan.
-- Los modelos gratis cambian a menudo. Si «Probar la cadena» dice que falta alguno del catálogo, se cambia en
-  `cadena.SERVICIOS` (la prueba enseña la lista que ofrece hoy cada servicio). Los de Google, con `peticiones/gemini.json`.
+- Los modelos gratis cambian a menudo. Los pone al día solo el Explorador de IA gratis (abajo). Si «Probar la cadena»
+  dice que falta alguno del catálogo, se puede cambiar también en `cadena.SERVICIOS` (la prueba enseña la lista que
+  ofrece hoy cada servicio y prueba también los sin llave). Los de Google, con `peticiones/gemini.json`.
+
+## El Explorador de IA gratis (`explorador.yml`, los lunes a las 5:41 UTC, o con `peticiones/explorador.json`)
+`bots/mecanicos/explorador.py`, sin Claude y sin gastar nada:
+- Pide a cada servicio de la cadena su lista oficial de modelos (Gemini, Groq, Cloudflare y, si la dan, OVH y AI Horde).
+  El del catálogo que ya no sale y, al preguntarle, dice «no existe» se apaga; el que vuelve a salir, vuelve. Los nuevos
+  que sirven para lo mismo (texto o ver imágenes, de 20B o más si lo dice el nombre; nada de voz, dibujos ni adultos) se
+  prueban con una pregunta cortita: el que contesta bien entra detrás de los del catálogo (2 por clase y servicio). Lo
+  deja en `estado/explorador/modelos.json`, que `cadena.py` aplica al leer (y `gemini.py`, solo los quitados). Los nuevos
+  de Google solo los propone (`propuestos`): un juez de primera lo eligen Claude o el dueño. Nunca cambia de servicio
+  ni mete uno nuevo. (Un 400/404 en plena ronda lo sigue apartando la cadena 3 horas, como siempre.)
+- Lee el catálogo y la revisión de condiciones de FreeLLMAPI y la lista awesome-freellm-apis (raw.githubusercontent.com)
+  y apunta en `estado/explorador/novedades.json` → `candidatos` los servicios que podrían cumplir las normas, con lo que
+  haría falta (una cuenta y su llave, o nada si va sin llave). Lo que pide tarjeta o pago, solo deja probar o sus
+  condiciones lo prohíben va a `descartados` con su porqué, igual que los del MANUAL. Cada novedad, una sola vez; lo
+  descartado no se vuelve a proponer. Para descartar un candidato, pasarlo a `descartados` con su motivo.
+- «fuente …: no contesta» o «… no deja ver su lista»: no es avería; lo apunta y sigue. Lo de la otra semana se queda.
+- Un candidato NO entra solo en la cadena: hay que leer sus condiciones, que el dueño cree UNA cuenta si hace falta y
+  añadirlo a `cadena.SERVICIOS` con su secreto.
 - Reordenar o apagar un servicio sin tocar código: `config/fabrica.json` → `"cadena": {"orden_texto", "orden_vision",
   "apagados"}`. Vídeos por cuenta en la Sala de espera: `juzgado.espera_por_cuenta` (2).
 

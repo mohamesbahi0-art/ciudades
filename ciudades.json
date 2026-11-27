@@ -950,6 +950,18 @@
    "tipo": "bot"
   },
   {
+   "id": "explorador_ia",
+   "nombre": "Explorador de IA gratis",
+   "ciudad": "taller",
+   "donde": "ciudad",
+   "grupo": "Mecánicos",
+   "hace": "Cada lunes pone al día los modelos de las IA gratis que ya usa la fábrica (apaga los que ya no existen y prueba los nuevos antes de usarlos) y busca en listas públicas servicios gratis nuevos, que deja apuntados para que Claude o el dueño decidan. Sin gastar nada.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
    "id": "publico_cine",
    "nombre": "El Público",
    "ciudad": "cine",

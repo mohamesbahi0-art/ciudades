@@ -32,7 +32,8 @@ SIN_RONDA_MINUTOS = 150
 DESCANSO_HORAS, DIBUJOS_HORAS, COLGADO_HORAS = 12, 3, 3
 PREPARAR = ("herramientas", "sacar el repositorio", "checkout", "setup-python", "set up job")
 REPETIBLES = ("Fábrica", "Revisar canales", "Ojeador de redes", "Estudio de los Influencers", "Radar de nichos",
-              "Recolector de clips", "Derechos Sociales", "Cartero", "Juzga mi vídeo", "Directos de la semana")
+              "Recolector de clips", "Derechos Sociales", "Cartero", "Juzga mi vídeo", "Directos de la semana",
+              "Explorador de IA gratis")
 MENU = ("esperar", "descansar_canal", "avisar_dueno", "para_claude")
 
 DIAGNOSTICO = """Eres el Jefe de taller de una fábrica de vídeos que trabaja sola en GitHub. Este es su manual:

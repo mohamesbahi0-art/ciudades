@@ -144,6 +144,23 @@ def primera_agotada():
         return False
 
 
+_QUITADOS = []
+
+
+def _quitados():
+    """Los modelos de Google que el Explorador de IA gratis ha visto que ya no existen (no salen en la lista oficial y
+    contestan «no existe»): no se les llama. Los nuevos de Google solo los propone: elegir un juez de primera no es cosa
+    suya."""
+    if not _QUITADOS:
+        try:
+            from bots.comun import privado
+            c = ((privado.leer(os.path.join("estado", "explorador", "modelos.json"), {}) or {}).get("servicios") or {})
+            _QUITADOS.append(set((c.get("gemini") or {}).get("quitados") or []))
+        except Exception:
+            _QUITADOS.append(set())
+    return _QUITADOS[0]
+
+
 def _pequenas(imagenes, lado=896):
     """Las mismas imágenes, más pequeñas: la segunda fila tiene pocos tokens por minuto y cada imagen grande gasta más."""
     salida = []
@@ -207,6 +224,8 @@ def _solo_gemini(texto, imagenes=(), json_salida=True, solo_bueno=False, tempera
         orden = (LIGEROS + BUENOS if ligero_primero else BUENOS + LIGEROS) + ([] if fila == "primera" else suplentes)
     else:
         orden = LIGEROS + ([] if fila == "primera" else suplentes) + BUENOS
+    quitados = _quitados()
+    orden = [m for m in orden if m not in quitados] or orden     # los que Google ya no tiene (lo vio el Explorador)
     paciencia = PACIENCIA if paciencia is None else max(0, int(paciencia))
     empezo, raros = time.monotonic(), 0
     for vuelta in range(paciencia + 1):
