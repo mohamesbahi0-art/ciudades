@@ -78,6 +78,31 @@ BUENO = textwrap.dedent('''\
         print(json.dumps(libros()))
     ''')
 comprobar("un programa limpio pasa la revisión", caja.revisar_cliente(BUENO, BASE) is None)
+# books.toscrape.com es solo HTML: un HTMLParser propio necesita super().__init__(), y las rutas largas de la web
+# (/catalogue/category/books_1/index.html) no son llaves
+PARSER = textwrap.dedent('''\
+    import json
+    from html.parser import HTMLParser
+    import requests
+    class Libros(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.titulos = []
+        def handle_starttag(self, tag, attrs):
+            if tag == "a" and dict(attrs).get("title"):
+                self.titulos.append(dict(attrs)["title"])
+    def libros():
+        r = requests.get("https://books.toscrape.com/catalogue/category/books/travel_2/index.html", timeout=20)
+        p = Libros()
+        p.feed(r.text)
+        return [{"titulo": t} for t in p.titulos]
+    if __name__ == "__main__":
+        print(json.dumps(libros()))
+    ''')
+comprobar("un cliente con html.parser (super().__init__) y rutas largas de la web pasa la revisión",
+          caja.revisar_cliente(PARSER, BASE) is None)
+comprobar("pero lo demás con «__» sigue prohibido", caja.revisar_cliente("f = (lambda: 0).__init__.__globals__\n", BASE)
+          == "llamada_prohibida")
 for codigo, esperado in {
         "import subprocess\n": "import_prohibido", "import os\n": "import_prohibido", "from . import x\n": "import_prohibido",
         "import requests\nrequests.get('https://otra.com/x')\n": "otro_dominio",
@@ -212,6 +237,10 @@ comprobar("navegador nuevo y sin sesiones, sin WebMCP, versiones fijas y todo po
           env["PLAYWRIGHT_MCP_ISOLATED"] == "true" and env["PLAYWRIGHT_MCP_WEBMCP"] == "false"
           and env["RAE_OPENCODE_PACKAGE"] == "opencode-ai@1.18.31" and env["npm_config_offline"] == "true"
           and env["HTTPS_PROXY"] == env["PLAYWRIGHT_MCP_PROXY_SERVER"] == caja.FILTRO_URL)
+# Playwright MCP solo lee PLAYWRIGHT_MCP_SANDBOX (no …_NO_SANDBOX); con Chrome en Linux deja su sandbox puesto, y
+# dentro de la caja (sin user namespaces y con no-new-privileges) Chrome no arranca: la barrera es el contenedor
+comprobar("Chrome sin su propio sandbox (la variable que de verdad lee Playwright MCP)",
+          env.get("PLAYWRIGHT_MCP_SANDBOX") == "false" and "PLAYWRIGHT_MCP_NO_SANDBOX" not in env)
 comprobar("el entorno de rae no lleva ninguna llave (solo la contraseña propia de su OpenCode)",
           [k for k in caja.llaves_a_la_vista(env) if k != "OPENCODE_SERVER_PASSWORD"
            and not k.startswith("OPENCODE_")] == [] and "GITHUB_TOKEN" not in env and "GH_SECRETOS" not in env)
@@ -633,6 +662,67 @@ if yaml:
                                                "GITHUB_TOKEN", "github.token")))
 else:
     print("(sin PyYAML en esta máquina: no se mira capturas.yml)")
+
+# El juez y el filtro con ssl-bump: squid dice «200» también a lo que corta y enseña su 403 DENTRO del túnel con su
+# certificado «caja» (lo vio la prueba de verdad del 27 nov). Un filtro de mentira en esta máquina lo imita.
+import socket  # noqa: E402
+import ssl  # noqa: E402
+import threading  # noqa: E402
+OPENSSL = shutil.which("openssl")
+
+
+def filtro_falso(nombre, corta):
+    pem = os.path.join(TMP, f"cert-{nombre}.pem")
+    subprocess.run([OPENSSL, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", f"/CN={nombre}",
+                    "-keyout", pem, "-out", pem], check=True, capture_output=True)
+    servidor = socket.socket()
+    servidor.bind(("127.0.0.1", 0))
+    servidor.listen(5)
+    contexto = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    contexto.load_cert_chain(pem)
+    pedidos = []
+
+    def atender():
+        while True:
+            try:
+                c, _ = servidor.accept()
+            except OSError:
+                return
+            with c:
+                datos = b""
+                while b"\r\n\r\n" not in datos:
+                    trozo = c.recv(4096)
+                    if not trozo:
+                        break
+                    datos += trozo
+                c.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+                try:
+                    with contexto.wrap_socket(c, server_side=True) as t:
+                        pedido = t.recv(4096)
+                        pedidos.append(pedido)
+                        t.sendall(b"HTTP/1.1 403 Forbidden\r\nX-Squid-Error: ERR_ACCESS_DENIED 0\r\nContent-Length: 0\r\n\r\n"
+                                  if corta else b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                except (ssl.SSLError, OSError):
+                    pass
+    threading.Thread(target=atender, daemon=True).start()
+    return servidor, pedidos
+
+
+if OPENSSL:
+    antes = (caja.FILTRO_IP, caja.FILTRO_PUERTO)
+    servidor, _ = filtro_falso("caja", True)
+    caja.FILTRO_IP, caja.FILTRO_PUERTO = servidor.getsockname()
+    comprobar("un «200» del filtro con su 403 dentro (ssl-bump) cuenta como cortado",
+              caja._connect("prueba.tiktok.com") == 403 and caja._connect("169.254.169.254") == 403)
+    servidor.close()
+    servidor, pedidos = filtro_falso("otra", False)
+    caja.FILTRO_IP, caja.FILTRO_PUERTO = servidor.getsockname()
+    comprobar("si contesta otro que no es el filtro, el túnel es de verdad (filtro roto) y no se le pide nada",
+              caja._connect("prueba.tiktok.com") == 200 and not any(p.startswith(b"GET") for p in pedidos))
+    servidor.close()
+    caja.FILTRO_IP, caja.FILTRO_PUERTO = antes
+else:
+    print("(sin openssl en esta máquina: no se prueba el filtro de mentira)")
 
 # El filtro listo: con ssl-bump squid dice «Accepting SSL bumped HTTP Socket connections» (la prueba de verdad del
 # 27 nov se quedó esperando la frase sin «SSL bumped» y dio el filtro por roto); y filtro.conf apaga el pinger
