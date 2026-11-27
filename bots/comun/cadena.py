@@ -340,8 +340,12 @@ def preguntar(texto, imagenes=(), json_salida=True, temperatura=0.9, vision=Fals
                     if espera is not None and espera <= ESPERA_CORTA and intento == 1 and not del_dia:
                         time.sleep(espera + 1)                   # límite por minuto: un respiro y se repite
                         continue
-                    hasta = _hasta_manana() if (del_dia or espera is None or espera > 3600) else \
-                        _ahora() + dt.timedelta(seconds=max(60, espera))
+                    if espera is not None and espera > 3600:     # el servicio dice cuándo vuelve: se le cree
+                        hasta = _ahora() + dt.timedelta(seconds=min(espera, 26 * 3600))
+                    elif del_dia or espera is None:              # (antes, cerca de medianoche, «mañana» eran minutos)
+                        hasta = _hasta_manana()
+                    else:
+                        hasta = _ahora() + dt.timedelta(seconds=max(60, espera))
                     _apuntar_agotado(servicio, modelo, hasta)
                     break
                 if e.code == 402:                                # la cuenta no tiene saldo: hoy no cuenta con él
