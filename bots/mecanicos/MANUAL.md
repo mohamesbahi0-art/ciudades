@@ -49,6 +49,43 @@ popular → voz → dibujos o clips → montaje → Juzgado (90 o más) → Coli
 - Un vídeo colgado más de 3 horas en «Ahora en la fábrica»: la ronda se cortó. Limpiarlo.
 - Notas bajas (menos de 90): no es una avería; el Juzgado manda. Los formatos que no pasan de 80 descansan solos.
 
+## El Investigador de webs (`capturas.yml`, 7:21 y 19:21 UTC)
+Saca los datos públicos de una web sin API con reverse-api-engineer y un modelo GRATIS de OpenCode, dentro de una caja
+desechable (`herramientas/caja_capturas/`: `turno.py` en la máquina de GitHub, `caja.py` dentro del contenedor). Sin
+llaves, navegador nuevo sin sesiones, red solo por el filtro (squid) y 2 capturas al día y 5 a la semana. En el registro
+público solo salen «cap-N» y cifras; el detalle de un fallo del programa va a `estado/capturas/fallo_turno.json` (privado).
+Lo que no es avería (sale en verde y no se toca):
+- «sin_modelo_gratis»: hoy OpenCode no tiene ningún modelo con coste 0 (o «no serving provider»). Esperar: el pedido se
+  repite otro día. Si dura más de 3 días, mirarlo con la prueba (`peticiones/capturas.json` con `{"probar": true}`).
+  NUNCA poner una llave de OpenCode ni de nadie para arreglarlo.
+- «vetada · captcha / cloudflare / datadome / perimeterx / bloqueo_401 / bloqueo_403 / bloqueo_429»: la web no quiere
+  robots. No se insiste: el dominio queda fuera 30 días (a la segunda, para siempre).
+- «vetada · web_prohibida»: el navegador intentó ir a una red o a una página de entrar; el filtro lo cortó y la captura
+  se tira. Si se repite con la misma web, dejarla.
+- «fallida · pide_sesion, clave_dentro, disfraz, otro_dominio, import_prohibido, llamada_prohibida, programa_roto,
+  cliente_grande, cliente_enlace»: el programa que escribió la IA no pasa la revisión y no se ejecuta. Normal con un
+  modelo gratis; el pedido no se repite solo.
+- «fallida · sin_datos» (el programa no sacó nada), «sin_har» (no quedó grabación), «sin_cliente» (rae no lo escribió):
+  la web no se dejó o el modelo no supo. «colgada»: rae pasó de 20 min y se cortó.
+- «fallida · sin_coste» (rae no dijo cuánto costó) y «de_pago» (costó más de 0 $): se tira todo; con «de_pago» el modelo
+  queda vetado para siempre en la cola. Avisar a Claude (para_claude) una vez.
+Lo que sí es avería (el turno sale en ROJO): para_claude siempre, sin repetir a ciegas.
+- «filtro_roto»: la caja podía salir por donde no debía (sin el filtro, DNS de fuera o el filtro dejó pasar una prueba
+  prohibida). No se ha capturado nada. Mirar `turno.py` (cortafuegos, redes) y `filtro.conf`.
+- «filtro_caido»: el filtro no contestaba a la caja. Repetir una vez; si sigue, para_claude.
+- «llave_en_la_caja»: alguien ha metido una variable con llave (…_KEY, …_TOKEN, …_SECRET, OPENCODE_…) donde no debe.
+  Quitarla de `capturas.yml`/`Dockerfile`: la caja no lleva ninguna. «proveedor_extra»: OpenCode ve conectado otro
+  proveedor además del gratis (eso solo pasa con una llave): lo mismo, buscarla y quitarla.
+- «error_caja» o «caja_sin_resultado»: el programa de la caja se rompió o el contenedor murió (memoria, tiempo).
+- «opencode_no_arranca» / «opencode_no_para»: OpenCode no arranca sin npm (la caché de npx de la imagen) o no se apagó.
+  Repetir una vez; si sigue, revisar en el `Dockerfile` las versiones fijas (opencode-ai@1.18.31,
+  rae-playwright-mcp@0.0.9) y el calentado de npx.
+- «no he podido preparar la imagen…»: falló `docker build` (red de GitHub, o Google cambió su Chrome). Repetir una vez.
+  Las demás versiones están fijadas con su huella (`rae.lock`, `cliente.lock`, Node): no se cambian sin probar.
+- «capturas.py elegir/guardar ha fallado»: fallo de `bots/cerebro/capturas.py`; el detalle, en `fallo_turno.json`.
+Nunca: quitar el filtro o el cortafuegos, dar llaves o secretos a la caja, guardar el HAR, las cookies o los registros de
+rae, subir artefactos, imprimir la web en el registro ni subir los topes sin que lo pida el dueño.
+
 ## Lo que un mecánico NO hace
 No toca el código, no borra vídeos ni cuentas, no sube nada sin juicio, no cambia llaves ni permisos y no se salta
 bloqueos de ninguna plataforma. Si duda, deja el parte para Claude.

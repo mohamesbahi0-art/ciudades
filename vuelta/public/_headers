@@ -1,0 +1,6 @@
+# Cabeceras de las páginas fijas del Buzón de vuelta (las de functions/ ponen las suyas).
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'

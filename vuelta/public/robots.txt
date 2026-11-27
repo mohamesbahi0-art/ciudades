@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /vuelta/
+Disallow: /recoger
+Disallow: /meta/

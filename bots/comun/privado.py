@@ -213,12 +213,86 @@ def _por_id(*listas, clave="id"):
     return salida
 
 
+def _fusionar_capturas(suyo, nuestro):
+    """La cola del Investigador de webs (estado/capturas/cola.json): el Cerebro apunta pedidos y el turno de capturas
+    cambia su estado y sus cuentas. De cada pedido gana la versión más avanzada: un estado final no vuelve atrás; si no,
+    la de más intentos (así lo colgado que vuelve a «pendiente» gana a la copia vieja «en_curso»), después la tocada más
+    tarde y después la del estado más avanzado. Dominios: el mayor castigo y el mayor número de fallos. Uso: el máximo
+    de cada cifra de cada día («capturas» y «devueltas»: solo se suman, nunca se restan, así que el máximo no pierde
+    nada; solo lo cuenta el turno, uno a la vez)."""
+    rango = {"pendiente": 0, "en_curso": 1}             # los demás estados son finales
+
+    def peso(p):
+        final = p.get("estado") not in rango
+        return final, int(p.get("intentos") or 0), str(p.get("cambiado") or ""), 2 if final else rango[p.get("estado")]
+
+    pedidos = {}
+    for p in (suyo.get("pedidos") or []) + (nuestro.get("pedidos") or []):
+        if not isinstance(p, dict) or not p.get("id"):
+            continue
+        antes = pedidos.get(p["id"])
+        mas, menos = (p, antes or {}) if antes is None or peso(p) >= peso(antes) else (antes, p)
+        pedidos[p["id"]] = dict(menos, **mas)
+    dominios = {}
+    for lado in (suyo, nuestro):
+        for d, v in (lado.get("dominios") or {}).items():
+            if not isinstance(v, dict):
+                continue
+            a = dominios.get(d) or {}
+            junto = dict(a, **v)
+            junto["fallos"] = max(int(a.get("fallos") or 0), int(v.get("fallos") or 0))
+            for k in ("vetado_hasta", "ultima"):
+                junto[k] = max(str(a.get(k) or ""), str(v.get(k) or "")) or None
+            if a and str(a.get("vetado_hasta") or "") > str(v.get("vetado_hasta") or ""):
+                junto["motivo"] = a.get("motivo")
+            if a.get("del_dueno") or v.get("del_dueno"):
+                junto["del_dueno"] = True
+            dominios[d] = junto
+    uso = {}
+    for lado in (suyo, nuestro):
+        for dia, cuentas in (lado.get("uso") or {}).items():
+            for k, n_ in (cuentas or {}).items():
+                uso.setdefault(dia, {})[k] = max(uso.get(dia, {}).get(k, 0), n_)
+    junto = dict(suyo, **nuestro)
+
+    def numero(p):
+        cifras = str(p.get("id"))[4:]
+        return int(cifras) if cifras.isdigit() else 0
+    junto.update(pedidos=sorted(pedidos.values(), key=numero), dominios=dominios, uso=uso,
+                 modelos_vetados=dict(suyo.get("modelos_vetados") or {}, **(nuestro.get("modelos_vetados") or {})),
+                 ultimo=max(int(suyo.get("ultimo") or 0), int(nuestro.get("ultimo") or 0)),
+                 actualizado=max(str(suyo.get("actualizado") or ""), str(nuestro.get("actualizado") or "")))
+    return junto
+
+
+def _fusionar_conexiones(suyo, nuestro):
+    """Las conexiones de redes (estado/redes/conexiones.json): las tocan «Conectar redes» y la lectura de Instagram, que
+    no van en la misma cola. De cada cuenta y red gana la entrada cambiada más tarde («cambiado»); con empate, la
+    nuestra. Las cuentas que solo están en una versión se quedan."""
+    junto = dict(suyo, **nuestro)
+    for clave in set(suyo) & set(nuestro):
+        a, b = suyo[clave], nuestro[clave]
+        if not (isinstance(a, dict) and isinstance(b, dict)):
+            continue
+        fila = dict(a, **b)
+        for red in set(a) & set(b):
+            if isinstance(a[red], dict) and isinstance(b[red], dict) and \
+                    str(a[red].get("cambiado") or "") > str(b[red].get("cambiado") or ""):
+                fila[red] = a[red]
+        junto[clave] = fila
+    return junto
+
+
 def fusionar(ruta, suyo, nuestro):
     """Junta dos versiones del mismo JSON cuando dos robots lo han tocado a la vez, sin perder lo de ninguno."""
     if suyo is None:
         return nuestro
     if nuestro is None:
         return suyo
+    if ruta == "estado/capturas/cola.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        return _fusionar_capturas(suyo, nuestro)
+    if ruta == "estado/redes/conexiones.json" and isinstance(suyo, dict) and isinstance(nuestro, dict):
+        return _fusionar_conexiones(suyo, nuestro)
     if ruta.startswith("memoria/") and isinstance(suyo, dict) and isinstance(nuestro, dict):
         junto = dict(suyo, **nuestro)
         for k in ("diario", "lecciones", "experimentos"):

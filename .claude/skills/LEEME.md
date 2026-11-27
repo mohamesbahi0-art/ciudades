@@ -10,7 +10,7 @@ Sirven para que los vídeos animados (bots/estudio) y las páginas queden cada v
 | `threejs-*` (13) | escenas 3D en el navegador: geometría, luces, materiales, sombras, animación, posproceso | github.com/cloudai-x/threejs-skills (0e18186) |
 | `find-skills` | busca skills nuevas en el catálogo abierto (skills.sh) cuando hace falta algo que no sabemos hacer | github.com/vercel-labs/skills (57217cf) |
 | `design-dna` | sacar el «ADN» visual de una referencia (colores, letra, espacios, efectos) y aplicarlo con medidas | github.com/zanwei/design-dna (593e39b) |
-| `reverse-api-engineer` | convertir lo que hace una web en el navegador en un programa que la llama directamente (con el programa «rae», que se instala solo si el dueño lo aprueba) | github.com/kalil0321/reverse-api-engineer (a1c79a9) |
+| `reverse-api-engineer` | convertir lo que hace una web en el navegador en un programa que la llama directamente (con el programa «rae»; el Cerebro lo usa solo, gratis, dentro de `capturas.yml`, y cualquier otro uso se instala solo si el dueño lo aprueba) | github.com/kalil0321/reverse-api-engineer (a1c79a9) |
 
 Copiadas sin pruebas, imágenes ni documentación para que pesen poco. Para actualizarlas, se vuelven a copiar desde su
 repositorio con el mismo nombre de carpeta.
@@ -24,5 +24,15 @@ programas) y pide permiso antes de instalar nada. En Las Ciudades, además:
   límites): esas redes solo se miran como hasta ahora (lo público y sin saltarse nada) o con su API oficial.
 - Las grabaciones de tráfico (HAR) y los programas que genera llevan cookies y llaves: no se suben al repositorio
   público (están en .gitignore) ni se pegan en chats o en la app. Las llaves van a los secretos de GitHub.
-- El programa «rae» gasta dinero de IA en cada captura: antes de usarlo, se le dice al dueño cuánto puede costar.
+- Autorizado por el dueño el 26 nov: el Cerebro puede pedir capturas él solo, sin preguntar, pero SOLO dentro de
+  `capturas.yml` (el Investigador de webs, `bots/cerebro/capturas.py`) y en caja cerrada: gratis (el modelo gratis de
+  OpenCode, sin ninguna llave de pago; si una captura cobra algo, se tira y ese modelo no se vuelve a usar), un
+  navegador nuevo sin sesiones y sin pantalla, solo webs públicas (nunca TikTok, Instagram, YouTube ni otras redes, ni
+  páginas de entrar con cuenta), sin saltarse captchas ni bloqueos, y como mucho 2 capturas al día y 5 a la semana.
+  Versiones fijas (reverse-api-engineer==0.16.0 y opencode-ai@1.18.31), instaladas solo en la máquina de GitHub, que
+  se borra al acabar. El dueño lo apaga con `capturas.encendido` en config/fabrica.json (repositorio privado). Para
+  ese uso no hace falta avisar del coste: es 0 o no se hace.
+- Para cualquier otro uso (Claude a mano, otro modelo o uno de pago) sigue la regla de siempre: el programa «rae» puede
+  gastar dinero de IA en cada captura, así que antes de usarlo se le dice al dueño cuánto puede costar y se espera su
+  permiso.
 

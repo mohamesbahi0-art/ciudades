@@ -1,0 +1,61 @@
+# El Investigador de webs: dos veces al día saca los datos PÚBLICOS de una web que no tiene API (lo que pidió el
+# Cerebro o el dueño), con reverse-api-engineer y un modelo GRATIS de OpenCode, en una caja desechable: sin ninguna
+# llave, con un navegador nuevo y sin sesiones, y con la red filtrada (nunca TikTok, Instagram, YouTube, redes, páginas
+# de entrar ni la red de la máquina; nunca se salta un captcha ni un bloqueo). Topes: 2 al día y 5 a la semana.
+# La web vive solo en el repositorio privado (estado/capturas/cola.json): en este registro PÚBLICO solo salen «cap-N» y
+# cifras, y nada de artefactos ni caché. La llave del privado solo está en los pasos «Elegir» y «Guardar», y «Guardar»
+# no la usa mientras quede vivo algo de la caja. Prueba: peticiones/capturas.json con {"probar": true} en main (una
+# web de práctica fija, sin pedido en la cola pero gastando de los mismos topes). Todo el turno:
+# herramientas/caja_capturas/ (turno.py, caja.py y el Dockerfile). Los topes de los pasos (5+12+28+3+5 = 53 min)
+# caben en el del trabajo (60), para que «Guardar» nunca se quede a medias.
+name: Investigador de webs
+on:
+  schedule:
+    - cron: "21 7,19 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "peticiones/capturas.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: capturas
+  cancel-in-progress: false
+jobs:
+  investigar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Fuera de la caja solo hace falta la biblioteca estándar de Python (turno.py, capturas.py y privado.py): nada
+      # que instalar en los pasos que llevan la llave
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Elegir
+        id: elegir
+        timeout-minutes: 5
+        env:
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: python herramientas/caja_capturas/turno.py elegir
+      - name: Preparar la caja
+        if: steps.elegir.outputs.hay == '1'
+        timeout-minutes: 12
+        run: python herramientas/caja_capturas/turno.py preparar
+      - name: Capturar en la caja
+        if: steps.elegir.outputs.hay == '1'
+        timeout-minutes: 28
+        run: python herramientas/caja_capturas/turno.py capturar
+      - name: Desmontar la caja
+        if: always() && steps.elegir.outputs.hay == '1'
+        timeout-minutes: 3
+        run: python herramientas/caja_capturas/turno.py desmontar
+      - name: Guardar
+        if: always() && steps.elegir.outputs.hay == '1'
+        timeout-minutes: 5
+        env:
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: python herramientas/caja_capturas/turno.py guardar

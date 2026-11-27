@@ -121,3 +121,55 @@ jobs:
           git config user.email "ciudades-bot@users.noreply.github.com"
           cd ..
           python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('revisión de canales') else 1)"
+  # La Contable de Instagram: lee por la vía oficial de Meta las cifras de los reels de las cuentas conectadas (solo
+  # leer), renueva sus permisos una vez por semana y comprueba los avisos de Meta (baja o borrado) que dejó el Buzón de
+  # vuelta. Va en su propio trabajo, después del de arriba. NO comparte cola con «Conectar redes»: GitHub cancela lo que
+  # espera en una cola cuando llega otro, y se perdería la petición del dueño. En su lugar, la Contable deja en paz la
+  # cuenta que se esté conectando (estado/conexion_redes.json «esperando») y las dos versiones de
+  # estado/redes/conexiones.json se juntan por cuenta (privado.fusionar). Sin cuentas conectadas, termina en segundos.
+  instagram:
+    needs: revisar
+    if: ${{ !cancelled() && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Herramientas
+        run: |
+          pip install -q pynacl
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: La Contable de Instagram lee las cifras de los reels y renueva los permisos
+        # renovar no necesita IG_APP_ID ni IG_APP_SECRET: aquí no están
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+          VUELTA_LLAVE: ${{ secrets.VUELTA_LLAVE }}
+          IG_TOKEN_1: ${{ secrets.IG_TOKEN_1 }}
+          IG_TOKEN_2: ${{ secrets.IG_TOKEN_2 }}
+          IG_TOKEN_3: ${{ secrets.IG_TOKEN_3 }}
+          IG_TOKEN_4: ${{ secrets.IG_TOKEN_4 }}
+          IG_TOKEN_5: ${{ secrets.IG_TOKEN_5 }}
+          IG_TOKEN_6: ${{ secrets.IG_TOKEN_6 }}
+          IG_TOKEN_7: ${{ secrets.IG_TOKEN_7 }}
+          IG_TOKEN_8: ${{ secrets.IG_TOKEN_8 }}
+          IG_TOKEN_9: ${{ secrets.IG_TOKEN_9 }}
+          IG_TOKEN_10: ${{ secrets.IG_TOKEN_10 }}
+        run: python herramientas/estadisticas_instagram.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('cifras de instagram') else 1)"

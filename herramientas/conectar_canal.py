@@ -12,7 +12,6 @@ Para cada canal que falta:
 Necesita los secretos YT_CLIENT_ID y YT_CLIENT_SECRET (cliente de Google del tipo «TVs y dispositivos de entrada
 limitada») y GH_SECRETOS (llave de GitHub con permiso solo para escribir secretos de este repositorio).
 """
-import base64
 import datetime as dt
 import hashlib
 import json
@@ -24,7 +23,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from nacl import encoding, public
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from secretos import github, guardar_secreto  # noqa: E402  (herramientas/secretos.py, compartido con el Buzón de vuelta)
 
 PETICION = "peticiones/conectar.json"
 ESTADO = "estado/conexion.json"
@@ -56,25 +56,6 @@ def post(url, datos):
 def huella(texto):
     """Huella corta de un id: sirve para saber qué canal es sin escribir su id en el repositorio."""
     return hashlib.sha256(texto.encode()).hexdigest()[:16]
-
-
-def github(metodo, ruta, llave, datos=None):
-    repo = os.environ["GITHUB_REPOSITORY"]
-    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/{ruta}", method=metodo,
-                                 data=json.dumps(datos).encode() if datos is not None else None,
-                                 headers={"Authorization": f"Bearer {llave}", "Accept": "application/vnd.github+json",
-                                          "X-GitHub-Api-Version": "2022-11-28"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        cuerpo = r.read()
-        return json.loads(cuerpo) if cuerpo else {}
-
-
-def guardar_secreto(nombre, valor, llave):
-    """Cierra el valor con la llave pública del repositorio y lo guarda como secreto de GitHub Actions."""
-    clave_publica = github("GET", "actions/secrets/public-key", llave)
-    caja = public.SealedBox(public.PublicKey(clave_publica["key"].encode(), encoding.Base64Encoder()))
-    cifrado = base64.b64encode(caja.encrypt(valor.encode())).decode()
-    github("PUT", f"actions/secrets/{nombre}", llave, {"encrypted_value": cifrado, "key_id": clave_publica["key_id"]})
 
 
 def mis_canales(token):

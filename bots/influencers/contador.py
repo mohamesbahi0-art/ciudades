@@ -34,6 +34,7 @@ NAVEGADOR = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Ge
 DESCANSO_HORAS = 12           # si una red no deja mirar, no se le vuelve a preguntar en este tiempo
 CADA_HORAS = 5                # las cifras de una cuenta no se leen más a menudo que esto
 DIAS = 90                     # días de historia que se guardan
+OFICIAL_DIAS = 3              # si hay cifras oficiales (auto «api») de estos días, no se mira la página pública
 VIDEOS = 30                   # vídeos por cuenta que se guardan con sus visitas
 
 
@@ -152,6 +153,8 @@ def contar(paso=print):
             leida = _fecha(antes.get("fecha"))
             if leida and (ahora - leida).total_seconds() < CADA_HORAS * 3600:
                 continue
+            if antes.get("auto") == "api" and leida and ahora - leida < dt.timedelta(days=OFICIAL_DIAS):
+                continue            # la lee la vía oficial (herramientas/estadisticas_instagram.py): esa manda
             cifras = leer(b["cuenta"])
             if not cifras:
                 fuente.update(estado="no_deja", fecha=iso,
@@ -221,8 +224,11 @@ def para_app(contado=None):
                 "suscriptores": x.get("suscriptores"), "visitas": x.get("visitas")}
     barrios = {}
     for clave, redes in (contado.get("cuentas") or {}).items():
-        barrios[clave] = {"cifrasPorRed": {red: dict(c, auto=True) for red, c in redes.items()},
+        barrios[clave] = {"cifrasPorRed": {red: dict(c, auto=c.get("auto") or True) for red, c in redes.items()},
                           "videos": (contado.get("videos") or {}).get(clave, [])[:12]}
+        reels = (contado.get("videos_instagram") or {}).get(clave)       # los reels de la vía oficial de Meta
+        if reels:
+            barrios[clave]["reelsInstagram"] = reels[:12]
     ultima = {}                      # la última cifra conocida de cada red de cada cuenta: se arrastra si un día falta
     for dia, cuentas in sorted((contado.get("dias") or {}).items()):
         for clave, redes in cuentas.items():

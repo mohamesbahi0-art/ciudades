@@ -1,0 +1,17 @@
+# Buzón de vuelta del «Panel de cifras»: web gratis en Cloudflare Pages (+ Functions + KV).
+# Lo despliega solo el turno .github/workflows/vuelta.yml (con vuelta/desplegar.py); nadie tiene que tocar esto a mano.
+#
+# - public/: las páginas (/, /privacidad, /condiciones, /borrado y el icono). Pages las sirve sin «.html» y con 200,
+#   sin redirecciones: no hace falta _redirects.
+# - functions/: /vuelta/instagram (adonde vuelve Instagram), /recoger (lo usa el turno de conectar, con VUELTA_LLAVE)
+#   y /meta/baja y /meta/borrado (los avisos de Meta).
+# - El id del KV NO va aquí: el turno de despliegue crea el KV si no existe y pone su id al desplegar (en una copia).
+# - VUELTA_LLAVE es un secreto del proyecto de Cloudflare (y de GitHub): tampoco va aquí. IG_APP_SECRET también lo es,
+#   solo para comprobar la firma de los avisos de Meta (lo pone el despliegue si ya está en GitHub).
+name = "cifras-vuelta-wh56"
+pages_build_output_dir = "./public"
+compatibility_date = "2025-03-01"
+
+[[kv_namespaces]]
+binding = "VUELTA"
+id = "ID_DEL_KV"

@@ -7,6 +7,7 @@ on:
       - "bots/**"
       - "herramientas/**"
       - "pruebas/**"
+      - "vuelta/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -74,3 +75,11 @@ jobs:
         run: |
           python pruebas/simulacro_cadena.py
           python pruebas/simulacro_espera.py
+      - name: Investigador de webs (portero, cola, elegir y guardar sin red; la caja, su vigilante, el turno y capturas.yml)
+        run: |
+          python pruebas/simulacro_capturas.py
+          python pruebas/simulacro_caja.py
+      - name: Cifras de Instagram (solo leer) y el buzón de vuelta del permiso
+        run: |
+          python pruebas/simulacro_instagram.py
+          node pruebas/simulacro_vuelta.mjs

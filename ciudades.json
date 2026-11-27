@@ -602,6 +602,18 @@
    "tipo": "bot"
   },
   {
+   "id": "investigador_webs",
+   "nombre": "Investigador de webs",
+   "ciudad": "influencers",
+   "donde": "ciudad",
+   "grupo": "Nuevos",
+   "hace": "Cuando al Cerebro (o al dueño) le falta un dato público de una web que no tiene API, lo saca él solo, gratis y con un navegador nuevo sin sesiones: como mucho 2 al día y 5 a la semana. Nunca TikTok, Instagram, YouTube ni otras redes, ni páginas de entrar con cuenta, y nunca se salta un captcha ni un bloqueo. Lo que trae, el Cerebro lo usa como información para el plan de esa cuenta.",
+   "origen": "nuevo",
+   "lote": 3,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
    "id": "investigador",
    "nombre": "Investigador",
    "ciudad": "influencers",

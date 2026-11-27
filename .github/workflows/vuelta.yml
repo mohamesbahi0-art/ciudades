@@ -1,0 +1,96 @@
+# El Buzón de vuelta del «Panel de cifras»: la web gratis (Cloudflare Pages) adonde vuelve el dueño desde Instagram
+# cuando da permiso para LEER las cifras de sus reels. Guarda la respuesta 15 minutos para que el turno de conectar la
+# recoja con su llave (VUELTA_LLAVE); también tiene las páginas de privacidad, condiciones y borrado que pide Meta.
+# Se despliega solo cuando cambia vuelta/ o a mano desde Actions. La primera vez crea el proyecto, el KV y VUELTA_LLAVE.
+# Cuando el dueño ponga IG_APP_SECRET, hay que lanzarlo otra vez a mano: así el buzón comprueba la firma de los avisos
+# de Meta y tira los falsos sin gastar escrituras del KV.
+# Este registro es PÚBLICO: solo salen pasos, códigos de estado y la dirección del buzón (neutra y pública a propósito).
+name: Buzón de vuelta
+on:
+  push:
+    paths:
+      - "vuelta/**"
+      - ".github/workflows/vuelta.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vuelta
+  cancel-in-progress: false
+jobs:
+  desplegar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Herramientas
+        # wrangler a versión fija (la segunda solo si npm no encontrara la primera)
+        run: |
+          pip install -q pynacl
+          npm install -g --silent wrangler@4.20.0 || npm install -g --silent wrangler@4.0.0
+          wrangler --version
+      - name: Desplegar el buzón
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+          VUELTA_LLAVE: ${{ secrets.VUELTA_LLAVE }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+          # solo para que el buzón compruebe la firma de los avisos de Meta (si aún no está, se apuntan sin comprobar)
+          IG_APP_SECRET: ${{ secrets.IG_APP_SECRET }}
+          WRANGLER_SEND_METRICS: "false"
+        run: python vuelta/desplegar.py desplegar
+      - name: Comprobar que cada dirección da 200 sin redirección
+        run: |
+          fallo=""
+          for ruta in / /privacidad /condiciones /borrado /icono.png /vuelta/instagram; do
+            linea=""
+            for intento in $(seq 1 20); do
+              linea=$(curl -sS -o /dev/null -I -w '%{http_code} %{redirect_url}' "$VUELTA_WEB$ruta" 2>/dev/null || true)
+              [ "$linea" = "200 " ] && break
+              sleep 15
+            done
+            echo "$ruta: ${linea:-sin respuesta}"
+            [ "$linea" = "200 " ] || fallo=1
+          done
+          if [ -n "$fallo" ]; then
+            echo "::error::Alguna dirección del buzón no da 200 o redirige: Instagram exige que la de vuelta sea exacta."
+            exit 1
+          fi
+      # El privado se saca AQUÍ, después de wrangler y del curl: actions/checkout deja la llave GH_SECRETOS en
+      # privado/.git/config, y así ni wrangler ni sus dependencias (instaladas con npm) la tienen a mano.
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - name: Apuntar las direcciones en el privado
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python vuelta/desplegar.py apuntar
+      - name: Resumen
+        run: |
+          {
+            echo "### Buzón de vuelta listo"
+            echo "- Web: $VUELTA_WEB"
+            echo "- Dirección de vuelta de Instagram (OAuth redirect URI): $VUELTA_WEB/vuelta/instagram"
+            echo "- Privacidad: $VUELTA_WEB/privacidad"
+            echo "- Condiciones: $VUELTA_WEB/condiciones"
+            echo "- Borrado de datos (instrucciones): $VUELTA_WEB/borrado"
+            echo "- Deauthorize callback URL: $VUELTA_WEB/meta/baja"
+            echo "- Data deletion request URL: $VUELTA_WEB/meta/borrado"
+            echo "- Icono (1024x1024): $VUELTA_WEB/icono.png"
+          } >> "$GITHUB_STEP_SUMMARY"

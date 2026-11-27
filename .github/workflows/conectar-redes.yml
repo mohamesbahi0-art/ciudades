@@ -1,0 +1,56 @@
+# Conecta las cuentas de Instagram del dueño por la vía oficial de Meta, SOLO PARA LEER sus cifras (nunca publica).
+# Se pone en marcha cuando Claude deja peticiones/conectar_redes.json ({"red": "instagram", "barrios": ["barrio-2"]},
+# solo alias) o a mano desde Actions. El enlace para el dueño va SOLO al repositorio privado
+# (estado/conexion_redes.json); los permisos van directos a los secretos IG_TOKEN_<n>: nunca pasan por el repositorio
+# ni por este registro, que es público. La cola «redes-llaves» es SOLO de este turno: GitHub deja uno en marcha y uno
+# esperando, y cancela sin avisar el que espera si llega otro. Por eso todas las cuentas van en UNA petición, y no se
+# deja otra mientras estado/conexion_redes.json no diga «terminado». La lectura de «Revisar canales» ya no va en esta
+# cola: deja en paz la cuenta que se esté conectando.
+name: Conectar redes
+on:
+  push:
+    paths:
+      - "peticiones/conectar_redes.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: redes-llaves
+  cancel-in-progress: false
+jobs:
+  conectar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Herramientas
+        run: |
+          pip install -q pynacl
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Conectar las cuentas de Instagram
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          IG_APP_ID: ${{ secrets.IG_APP_ID }}
+          IG_APP_SECRET: ${{ secrets.IG_APP_SECRET }}
+          VUELTA_LLAVE: ${{ secrets.VUELTA_LLAVE }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+        run: python herramientas/conectar_redes.py
+      - name: Guardar en el repositorio privado
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('conexión de redes') else 1)"

@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Buzón de vuelta del Panel de cifras (Cloudflare Pages + Functions + KV). Sin dependencias."
+}
