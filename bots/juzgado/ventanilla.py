@@ -113,6 +113,15 @@ def sacar(rama, carpeta):
     return destino, peticion
 
 
+def _reciente(minutos):
+    """¿El último commit de la rama que se acaba de sacar (FETCH_HEAD) es de hace menos de `minutos`?"""
+    r = _git("log", "-1", "--format=%ct", "FETCH_HEAD", texto=True)
+    try:
+        return dt.datetime.now(dt.timezone.utc).timestamp() - int(r.stdout.strip()) < minutos * 60
+    except ValueError:
+        return False
+
+
 def borrar_rama(rama):
     return _git("push", "-q", "origin", "--delete", rama).returncode == 0
 
@@ -350,6 +359,11 @@ def main(argv=None):
             continue
         with tempfile.TemporaryDirectory() as t:
             original, peticion = sacar(rama, t)
+            if original and not peticion and _reciente(20):
+                # el portero de la app sube el vídeo y el Comisario automático le pone la petición (la cuenta) en
+                # 1 o 2 minutos: sin ella no se sabe de qué cuenta es, así que se espera un poco
+                paso(ROBOT, f"{codigo}: espero a su petición (llega enseguida)")
+                continue
             if original and not tomar(codigo):
                 paso(ROBOT, f"{codigo}: ya lo está juzgando otro turno")
                 continue

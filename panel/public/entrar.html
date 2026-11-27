@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>Entrar</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d5fa8'/%3E%3Cpath d='M9 22V12l7-4 7 4v10h-5v-6h-4v6z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{--fondo:#f4f6f8;--caja:#fff;--texto:#1c2733;--suave:#5b6b7b;--borde:#c9d3dd;--azul:#1d5fa8;--mal:#b3261e}
+@media (prefers-color-scheme:dark){:root{--fondo:#121a22;--caja:#1b2631;--texto:#e5ebf0;--suave:#9fb0c0;--borde:#33424f;--azul:#7fb6ff;--mal:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;
+  font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fondo);color:var(--texto)}
+main{width:100%;max-width:22rem;background:var(--caja);border:1px solid var(--borde);border-radius:16px;padding:1.5rem}
+h1{font-size:1.4rem;margin:0 0 .25rem}
+p{margin:0 0 1.25rem;color:var(--suave)}
+label{display:block;font-weight:600;margin-bottom:.4rem}
+input{width:100%;font:inherit;padding:.8rem .9rem;border:1px solid var(--borde);border-radius:10px;background:transparent;color:inherit}
+input:focus{outline:2px solid var(--azul);outline-offset:1px}
+button{width:100%;margin-top:1rem;font:inherit;font-weight:600;padding:.85rem;border:0;border-radius:10px;
+  background:var(--azul);color:#fff;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#0b1520}}
+button:disabled{opacity:.6;cursor:wait}
+#aviso{min-height:1.5em;margin:.9rem 0 0;color:var(--mal)}
+#aviso.bien{color:var(--suave)}
+</style>
+</head>
+<body>
+<main>
+  <h1>La fábrica</h1>
+  <p>Escribe tu contraseña para entrar.</p>
+  <form id="f" autocomplete="on">
+    <label for="clave">Contraseña</label>
+    <input id="clave" name="clave" type="password" autocomplete="current-password" required autofocus>
+    <button id="b" type="submit">Entrar</button>
+    <p id="aviso" role="status" aria-live="polite"></p>
+  </form>
+</main>
+<script>
+(function () {
+  var f = document.getElementById("f"), b = document.getElementById("b"), aviso = document.getElementById("aviso");
+  var MENSAJES = {
+    clave: "Esa no es la contraseña. Prueba otra vez.",
+    demasiados: "Demasiados intentos. Espera una hora y vuelve a probar.",
+    sin_preparar: "La app todavía se está preparando. Prueba dentro de un rato.",
+    ocupado: "Ahora mismo no se puede. Prueba dentro de un minuto."
+  };
+  function decir(t, bien) { aviso.textContent = t; aviso.className = bien ? "bien" : ""; }
+  f.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var clave = f.elements.clave.value;
+    if (!clave) return;
+    b.disabled = true; decir("Entrando…", true);
+    fetch("/api/entrar", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clave: clave }), credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return [r.ok, d]; }); })
+      .then(function (x) {
+        if (x[0]) { decir("Dentro ✓", true); location.replace("/"); return; }
+        decir(MENSAJES[x[1].error] || "No se ha podido entrar. Prueba otra vez.");
+        f.elements.clave.select();
+      }, function () { decir("Sin conexión. Mira el internet del móvil y prueba otra vez."); })
+      .then(function () { b.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

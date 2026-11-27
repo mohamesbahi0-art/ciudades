@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   cerebro:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'   # el Comisario automático sí puede arrancarlo
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

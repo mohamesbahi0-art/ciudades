@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "El portero de la app de la fábrica (Cloudflare Pages + Functions + KV). Sin dependencias."
+}

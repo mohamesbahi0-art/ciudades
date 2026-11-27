@@ -1,0 +1,96 @@
+# El portero de la app: la app de la fábrica en Cloudflare Pages (gratis), con la contraseña del dueño y sin Claude.
+# Despliega panel/ (las Functions que guardan la llave de GitHub y la contraseña) con la app que vive en el
+# repositorio PRIVADO (app/panel/): la app se copia en una carpeta aparte y nunca pasa por este repositorio.
+# Se lanza cuando cambia panel/, con peticiones/panel.json (lo escriben el Comisario o el chat de la app cuando cambia
+# la app), una vez al día y a mano. La primera vez crea el proyecto, el KV y PANEL_FIRMA.
+# Si faltan CLOUDFLARE_PAGES_TOKEN, PANEL_GH_TOKEN o PANEL_CLAVE, termina en verde con un aviso y lo apunta en el
+# privado (estado/app/panel.json).
+# Este registro es PÚBLICO: solo salen pasos y códigos de estado (ni llaves, ni el dueño, ni la dirección).
+name: Portero de la app
+on:
+  push:
+    paths:
+      - "panel/**"
+      - ".github/workflows/panel.yml"
+      - "peticiones/panel.json"
+  schedule:
+    - cron: "43 4 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: panel
+  cancel-in-progress: false
+jobs:
+  desplegar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Herramientas
+        # wrangler a versión fija (la segunda solo si npm no encontrara la primera)
+        run: |
+          pip install -q pynacl
+          npm install -g --silent wrangler@4.20.0 || npm install -g --silent wrangler@4.0.0
+          wrangler --version
+      # Solo la carpeta de la app y SIN dejar la llave en disco (persist-credentials: false): así ni wrangler ni sus
+      # dependencias tienen GH_SECRETOS a mano.
+      - name: Sacar la app del repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: app_privada
+          persist-credentials: false
+          sparse-checkout: app/panel
+      - name: Desplegar el portero
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+          PANEL_GH_TOKEN: ${{ secrets.PANEL_GH_TOKEN }}
+          PANEL_CLAVE: ${{ secrets.PANEL_CLAVE }}
+          PANEL_FIRMA: ${{ secrets.PANEL_FIRMA }}
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
+          PANEL_APP: app_privada/app/panel
+          WRANGLER_SEND_METRICS: "false"
+        run: python panel/desplegar.py desplegar
+      - name: Quitar la copia de la app
+        if: always()
+        run: rm -rf app_privada
+      # El privado entero se saca AQUÍ, después de wrangler: actions/checkout deja la llave en privado/.git/config.
+      - name: Sacar el repositorio privado
+        if: env.PANEL_ESTADO != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - name: Apuntar el estado en el privado
+        if: env.PANEL_ESTADO != ''
+        env:
+          PRIVADO: privado
+        run: |
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+          cd ..
+          python panel/desplegar.py apuntar
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "### Portero de la app"
+            case "$PANEL_ESTADO" in
+              listo) echo "- Desplegado y comprobado (/entrar da 200 y /api/yo sin sesión da 401). La dirección está en el privado: estado/app/panel.json." ;;
+              faltan_llaves) echo "- Faltan llaves: $PANEL_FALTAN. Están en Para casa («La app sin Claude»)." ;;
+              *) echo "- No ha terminado: mira los pasos de arriba." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

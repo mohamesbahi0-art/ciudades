@@ -1,0 +1,69 @@
+# El Comisario automático: prepara los datos que lee la app (app/datos/todo.json y juicios.json del repositorio privado)
+# y aplica lo que el dueño hace en ella (entrada/*.json, que deja el portero de panel/, y los vídeos que sube, que
+# deja en la estantería «buzon-app» y aquí pasan a su rama juicio/ o buzon/). Sin IA y sin dinero: hace lo que
+# hacían las rondas de Claude (RONDA.md del privado). Cada 15 minutos, con peticiones/app.json (el portero lo toca tras
+# cada cosa del dueño) y a mano. Si el dueño le ha escrito al Cerebro, lo arranca al momento (y a «Juzga mi vídeo» si ha
+# subido un vídeo suyo).
+name: App
+on:
+  schedule:
+    - cron: "4,19,34,49 * * * *"
+  push:
+    paths:
+      - "peticiones/app.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write          # solo para arrancar el Cerebro y «Juzga mi vídeo» (gh workflow run)
+concurrency:
+  group: app
+  cancel-in-progress: false
+jobs:
+  comisario:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sacar el repositorio privado
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ciudades-memoria
+          token: ${{ secrets.GH_SECRETOS }}
+          path: privado
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq || true   # un almacén ajeno de la máquina de GitHub caído no para el turno
+          sudo apt-get install -y -qq ffmpeg  # ffprobe: comprobar los vídeos que sube el dueño
+          cd privado
+          git config user.name "ciudades-bot"
+          git config user.email "ciudades-bot@users.noreply.github.com"
+      - name: Aplicar lo del dueño y hacer la foto de la app
+        id: comisario
+        env:
+          PRIVADO: privado
+          MEMORIA_DIR: privado/memoria
+          GH_SECRETOS: ${{ secrets.GH_SECRETOS }}   # la estantería «buzon-app» del privado (bots/comun/almacen.py)
+        run: python bots/app/comisario.py
+      - name: Guardar en el repositorio privado
+        id: guardar
+        if: always()
+        env:
+          PRIVADO: privado
+        run: |
+          python -c "from bots.comun import privado; import sys; sys.exit(0 if privado.git_guardar('app: comisario automático') else 1)"
+      - name: Arrancar el Cerebro y «Juzga mi vídeo» si hace falta
+        if: steps.guardar.outcome == 'success' && steps.comisario.outputs.lanzar != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LANZAR: ${{ steps.comisario.outputs.lanzar }}
+        run: |
+          for t in $LANZAR; do
+            case "$t" in
+              cerebro) gh workflow run cerebro.yml -R "$GITHUB_REPOSITORY" && echo "arrancado: cerebro" ;;
+              ventanilla) gh workflow run ventanilla.yml -R "$GITHUB_REPOSITORY" && echo "arrancado: ventanilla" ;;
+            esac
+          done

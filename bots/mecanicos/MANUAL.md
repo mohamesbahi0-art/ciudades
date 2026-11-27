@@ -82,6 +82,11 @@ popular → voz → dibujos o clips → montaje → Juzgado (90 o más) → Coli
   de código o de formato. descansar_canal y para_claude.
 - Un vídeo colgado más de 3 horas en «Ahora en la fábrica»: la ronda se cortó. Limpiarlo.
 - Notas bajas (menos de 90): no es una avería; el Juzgado manda. Los formatos que no pasan de 80 descansan solos.
+- Comisario automático (`app.yml`, cada 15 min; `bots/app/comisario.py`): «comisario: <colección>: fallo X; se queda lo de
+  antes» = un fichero de estado roto (la app enseña la foto anterior de esa colección; arreglar el fichero o el código:
+  para_claude). Una entrada «pendiente» de `propios`/`clips` es que su rama `juicio/`/`buzon/` aún no ha llegado (a la
+  hora se rechaza sola: «súbelo otra vez»). «rechazada» = el portero dejó pasar algo fuera de la lista cerrada (mirar
+  `entrada/hechas/` y panel/). Si la app no se actualiza: mirar que `app.yml` corre y que `git_guardar` no falla.
 
 ## El Investigador de webs (`capturas.yml`, 7:21 y 19:21 UTC)
 Saca los datos públicos de una web sin API con reverse-api-engineer y un modelo GRATIS de OpenCode, dentro de una caja

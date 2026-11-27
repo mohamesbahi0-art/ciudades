@@ -8,6 +8,7 @@ on:
       - "herramientas/**"
       - "pruebas/**"
       - "vuelta/**"
+      - "panel/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -84,7 +85,11 @@ jobs:
         run: |
           python pruebas/simulacro_capturas.py
           python pruebas/simulacro_caja.py
+      - name: Comisario automático (entradas de la app, las no permitidas fuera, la foto, lo del dueño manda y charla → Cerebro)
+        run: python pruebas/simulacro_comisario.py
       - name: Cifras de Instagram (solo leer) y el buzón de vuelta del permiso
         run: |
           python pruebas/simulacro_instagram.py
           node pruebas/simulacro_vuelta.mjs
+      - name: El portero de la app (contraseña, lista cerrada y subidas)
+        run: node pruebas/simulacro_panel.mjs

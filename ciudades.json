@@ -518,6 +518,18 @@
    "tipo": "bot"
   },
   {
+   "id": "comisario_automatico",
+   "nombre": "Comisario automático",
+   "ciudad": "central",
+   "donde": "ciudad",
+   "grupo": "Servicios de la ciudad",
+   "hace": "Cada 15 minutos, sin IA y sin dinero, prepara los datos que ve la app y aplica lo que el dueño hace en ella (mensajes al Cerebro, órdenes, vídeos para juzgar, clips grabados, «Para subir», cifras y avisos). Lo que solo puede arreglar Claude lo deja apuntado.",
+   "origen": "nuevo",
+   "lote": 2,
+   "codigo": "nuevo",
+   "tipo": "bot"
+  },
+  {
    "id": "comisaria_videos",
    "nombre": "Comisaria de vídeos",
    "ciudad": "policia",

@@ -1,0 +1,16 @@
+# El portero de la app de la fábrica: web gratis en Cloudflare Pages (+ Functions + KV), con la contraseña del dueño.
+# Lo despliega solo el turno .github/workflows/panel.yml (con panel/desplegar.py); nadie tiene que tocar esto a mano.
+#
+# - public/: la página de entrar y la de «la app nueva todavía no está». La app de verdad viene del repositorio
+#   PRIVADO (app/panel/) y el despliegue la copia en una carpeta aparte: nunca pasa por este repositorio.
+# - functions/: el portero (_middleware.js) y la API de panel/API.md. lib/: lo común (sesión, GitHub, lista cerrada).
+# - El id del KV NO va aquí, ni quién es el dueño ni cómo se llaman los repositorios: el despliegue los pone en una copia.
+# - PANEL_GH_TOKEN, PANEL_CLAVE y PANEL_FIRMA son secretos del proyecto de Cloudflare: tampoco van aquí.
+name = "panel-fabrica-k4tz"
+pages_build_output_dir = "./public"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "PANEL"
+id = "ID_DEL_KV"
