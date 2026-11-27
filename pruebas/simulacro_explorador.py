@@ -186,16 +186,22 @@ LISTA_UNO.append("uno-viejo-70b")
 turno()
 comprobar("y si vuelve a salir en su lista, vuelve a la cadena", not privado.leer(explorador.MODELOS, {})["servicios"]["uno"]["quitados"])
 
-# El turno y su sitio
-import yaml  # noqa: E402
-w = yaml.safe_load(open(os.path.join(RAIZ, ".github", "workflows", "explorador.yml"), encoding="utf-8"))
-disparos = w.get("on") or w.get(True)
-paso = [p for p in w["jobs"]["explorar"]["steps"] if p.get("name") == "Explorar"][0]
-comprobar("explorador.yml: los lunes a las 05:41 UTC, a mano con peticiones/explorador.json, y guarda en el privado",
-          disparos["schedule"][0]["cron"] == "41 5 * * 1" and "peticiones/explorador.json" in disparos["push"]["paths"]
-          and any("git_guardar" in (p.get("run") or "") for p in w["jobs"]["explorar"]["steps"]))
-comprobar("y solo con las llaves que ya existen", set(paso["env"]) == {"PRIVADO", "MEMORIA_DIR", "GEMINI_API_KEY", "GROQ_API_KEY",
-                                                                       "CLOUDFLARE_AI_TOKEN", "CLOUDFLARE_ACCOUNT_ID"})
+# El turno y su sitio (si esta máquina no tiene PyYAML, como la de GitHub, no se mira el workflow)
+try:
+    import yaml  # noqa: E402
+except ImportError:
+    yaml = None
+if yaml:
+    w = yaml.safe_load(open(os.path.join(RAIZ, ".github", "workflows", "explorador.yml"), encoding="utf-8"))
+    disparos = w.get("on") or w.get(True)
+    paso = [p for p in w["jobs"]["explorar"]["steps"] if p.get("name") == "Explorar"][0]
+    comprobar("explorador.yml: los lunes a las 05:41 UTC, a mano con peticiones/explorador.json, y guarda en el privado",
+              disparos["schedule"][0]["cron"] == "41 5 * * 1" and "peticiones/explorador.json" in disparos["push"]["paths"]
+              and any("git_guardar" in (p.get("run") or "") for p in w["jobs"]["explorar"]["steps"]))
+    comprobar("y solo con las llaves que ya existen", set(paso["env"]) == {"PRIVADO", "MEMORIA_DIR", "GEMINI_API_KEY", "GROQ_API_KEY",
+                                                                           "CLOUDFLARE_AI_TOKEN", "CLOUDFLARE_ACCOUNT_ID"})
+else:
+    print("(sin PyYAML en esta máquina: no se mira explorador.yml)")
 bots = json.load(open(os.path.join(RAIZ, "ciudades.json"), encoding="utf-8"))["bots"]
 comprobar("está en la ciudad de los Mecánicos", any(b.get("id") == "explorador_ia" and b.get("ciudad") == "taller" for b in bots))
 

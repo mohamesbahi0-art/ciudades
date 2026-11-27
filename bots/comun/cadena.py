@@ -200,7 +200,11 @@ def lista_oficial(servicio, tiempo=30):
         filas = lista
     ids = []
     for m in filas or []:
-        i = (m.get("id") or m.get("name")) if isinstance(m, dict) else m
+        if isinstance(m, dict):              # Cloudflare da en «id» un número interno; su nombre de uso va en «name»
+            nombre = str(m.get("name") or "")
+            i = nombre if nombre.startswith("@") else (m.get("id") or m.get("name"))
+        else:
+            i = m
         if i:
             ids.append(str(i))
     return ids
