@@ -38,6 +38,8 @@ popular → voz → dibujos o clips → montaje → Juzgado (90 o más) → Coli
   solo cuando vuelve un juez de primera (a las 36 horas se quita).
 - La ronda no arranca (GitHub se retrasa o se salta el horario): arrancarla a mano.
 - Un turno falla en «Herramientas» o al sacar el repositorio: fallo de GitHub; repetirlo una vez.
+  (Si es «packages.microsoft.com … 403 Forbidden» al hacer apt-get update: es un almacén ajeno de la máquina de
+  GitHub; desde el 27 nov los turnos siguen sin él, `apt-get update || true`.)
 - «permiso», «invalid_grant», «unauthorized» en la subida a YouTube: el permiso del canal ha caducado. Solo lo arregla
   el dueño (pulsar «Permitir»): avisar_dueno.
 - «quotaExceeded», «uploadLimitExceeded»: tope de YouTube por hoy. Esperar.
@@ -83,6 +85,15 @@ Lo que sí es avería (el turno sale en ROJO): para_claude siempre, sin repetir 
 - «no he podido preparar la imagen…»: falló `docker build` (red de GitHub, o Google cambió su Chrome). Repetir una vez.
   Las demás versiones están fijadas con su huella (`rae.lock`, `cliente.lock`, Node): no se cambian sin probar.
 - «capturas.py elegir/guardar ha fallado»: fallo de `bots/cerebro/capturas.py`; el detalle, en `fallo_turno.json`.
+- Ya arreglados en las primeras pruebas de verdad (27 nov), por si vuelven tras un cambio de squid o de Playwright:
+  · «no he podido preparar el filtro» con squid funcionando: squid con ssl-bump escribe «Accepting SSL bumped HTTP
+    Socket connections», no «Accepting HTTP Socket connections» (`turno.FILTRO_LISTO` acepta las dos).
+  · «filtro_roto» con el filtro bien: con ssl-bump squid contesta «200» también a lo que corta y enseña su 403 dentro
+    del túnel; `caja._connect` mira dentro, solo si contesta el propio filtro (su certificado «caja»).
+  · Chrome no arranca en la caja: Playwright MCP solo lee `PLAYWRIGHT_MCP_SANDBOX=false` (no `…_NO_SANDBOX`).
+  · Clientes buenos tirados por «llamada_prohibida» o «clave_dentro»: un HTMLParser propio (`__init__` vale) y las
+    rutas largas de la web (la «/» no cuenta como parte de una llave).
+  Así quedó bien la primera captura (web de práctica: 20 filas, 0 $, minuto y medio).
 Nunca: quitar el filtro o el cortafuegos, dar llaves o secretos a la caja, guardar el HAR, las cookies o los registros de
 rae, subir artefactos, imprimir la web en el registro ni subir los topes sin que lo pida el dueño.
 
