@@ -634,6 +634,16 @@ if yaml:
 else:
     print("(sin PyYAML en esta máquina: no se mira capturas.yml)")
 
+# El filtro listo: con ssl-bump squid dice «Accepting SSL bumped HTTP Socket connections» (la prueba de verdad del
+# 27 nov se quedó esperando la frase sin «SSL bumped» y dio el filtro por roto); y filtro.conf apaga el pinger
+comprobar("el filtro se da por listo con la frase de squid con ssl-bump (y con la de sin él)",
+          bool(turno.FILTRO_LISTO.search("2026/11/27 04:31:42| Accepting SSL bumped HTTP Socket connections at conn2"))
+          and bool(turno.FILTRO_LISTO.search("Accepting HTTP Socket connections at local=0.0.0.0:3128"))
+          and not turno.FILTRO_LISTO.search("FATAL: Bungled squid.conf line 3"))
+with open(os.path.join(RAIZ, "herramientas", "caja_capturas", "filtro.conf"), encoding="utf-8") as f:
+    conf = f.read()
+comprobar("el filtro no arranca el pinger (no le hace falta y ensucia el registro)", "\npinger_enable off" in conf)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"\nSimulacro de la caja del Investigador: {'TODO BIEN' if not FALLOS[0] else f'{FALLOS[0]} FALLO(S)'}")
 sys.exit(1 if FALLOS[0] else 0)

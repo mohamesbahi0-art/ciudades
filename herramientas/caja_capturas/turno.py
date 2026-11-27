@@ -465,6 +465,12 @@ def redes():
             and ejecutar(["docker", "network", "create", "--subnet", RED_FUERA, "caja-salida"], "docker.log") == 0)
 
 
+# Lo que dice squid cuando ya escucha. Con ssl-bump en el puerto escribe «Accepting SSL bumped HTTP Socket
+# connections» (sin ssl-bump, «Accepting HTTP Socket connections»): la prueba de verdad del 27 nov se quedó esperando
+# la frase sin «SSL bumped» y dio el filtro por roto estando bien.
+FILTRO_LISTO = re.compile(r"Accepting (?:SSL bumped )?HTTP Socket connections")
+
+
 def arrancar_filtro():
     orden = ["docker", "run", "-d", "--name", "caja-filtro", "--network", "caja-salida", "--cap-drop", "ALL",
              "--security-opt", "no-new-privileges", "--pids-limit", "256", "--memory", "512m", "--read-only",
@@ -475,8 +481,12 @@ def arrancar_filtro():
         return False
     for _ in range(60):
         r = subprocess.run(["docker", "logs", "caja-filtro"], capture_output=True, text=True)
-        if "Accepting HTTP Socket connections" in r.stdout + r.stderr:
+        if FILTRO_LISTO.search(r.stdout + r.stderr):
             return True
+        estado = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", "caja-filtro"],
+                                capture_output=True, text=True).stdout.strip()
+        if estado == "false":                      # squid se paró (configuración mala): no hace falta esperar más
+            break
         time.sleep(1)
     return False
 
