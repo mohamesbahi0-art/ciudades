@@ -152,6 +152,12 @@ b = {"gastos": [{"id": "x2", "dia": hoy, "fecha": "2", "usd": 0.2}], "dias": {ho
      "aviso": "nuevo"}
 j = privado.fusionar("estado/claude.json", a, b)
 comprobar(len(j["gastos"]) == 2 and abs(j["dias"][hoy] - 0.3) < 1e-9 and j["aviso"] == "nuevo", "se juntan los gastos")
+# (de paso) el registro de subidas: la marca que puso otro turno no la borra una copia vieja que trae un vídeo nuevo
+suyo = [{"id": "v1", "titulo": "uno", "aviso_ia_quitado": True}, {"id": "v2", "titulo": "dos"}]
+nuestro = [{"id": "v1", "titulo": "uno"}, {"id": "v2", "titulo": "dos", "ia": False}, {"id": "v3", "titulo": "tres"}]
+j = privado.fusionar("registro/subidas.json", suyo, nuestro)
+comprobar([x["id"] for x in j] == ["v1", "v2", "v3"] and j[0].get("aviso_ia_quitado") is True and j[1].get("ia") is False,
+          "registro de subidas: se juntan los vídeos y no se pierde la marca del aviso de IA")
 
 # 10. Sin llave: ni se intenta
 os.environ.pop("ANTHROPIC_API_KEY")

@@ -303,6 +303,11 @@ def fusionar(ruta, suyo, nuestro):
         return suyo if suyo.get("estado") in ("subido", "descartado") else nuestro   # lo que marca el dueño manda
     if isinstance(suyo, list) and isinstance(nuestro, list):
         if ruta.startswith("registro/"):
+            # cada vídeo, con lo que sepan los dos: si uno le puso una marca (p. ej. «aviso_ia_quitado») y el otro
+            # traía una copia vieja sin ella, la marca no se pierde; en lo que digan distinto, gana la nuestra
+            previos = {x.get("id"): x for x in suyo if isinstance(x, dict) and x.get("id")}
+            nuestro = [dict(previos[x["id"]], **x) if isinstance(x, dict) and x.get("id") in previos else x
+                       for x in nuestro]
             return _por_id(suyo, nuestro, clave="id")
         if ruta.startswith("estado/historial/"):
             return sorted(_por_id(suyo, nuestro, clave="fecha"), key=lambda x: x.get("fecha", ""))

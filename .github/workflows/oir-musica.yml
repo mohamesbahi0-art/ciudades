@@ -20,7 +20,8 @@ jobs:
           python-version: "3.12"
       - name: Preparar
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          sudo apt-get update -qq || true   # un almacén ajeno de la máquina de GitHub caído no para el turno
+          sudo apt-get install -y -qq ffmpeg
           pip install -q numpy
       - name: Escuchar
         env:

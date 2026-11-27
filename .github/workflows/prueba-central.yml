@@ -30,7 +30,8 @@ jobs:
           cache: pip
       - name: Herramientas
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-inter fonts-noto-color-emoji
+          sudo apt-get update -qq || true   # un almacén ajeno de la máquina de GitHub caído no para el turno
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-inter fonts-noto-color-emoji
           pip install -q -r requirements.txt
           npm install --no-save --silent playwright@1.63.0 && npx playwright install --with-deps chromium > /dev/null
       - name: Hacer el vídeo de prueba

@@ -27,7 +27,8 @@ jobs:
           PRIVADO: privado
           GH_SECRETOS: ${{ secrets.GH_SECRETOS }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          sudo apt-get update -qq || true   # un almacén ajeno de la máquina de GitHub caído no para el turno
+          sudo apt-get install -y -qq ffmpeg
           pip install -q -U yt-dlp
           nombre=$(python -c "import json;print(json.load(open('peticiones/traer-referencias.json'))['nombre'])" | tr -cd 'a-z0-9_-')
           cuantos=$(python -c "import json;print(int(json.load(open('peticiones/traer-referencias.json')).get('cuantos',4)))")
