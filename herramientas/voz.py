@@ -67,6 +67,15 @@ def _eleven(texto, voz_id, velocidad, carpeta, modelo=None):
     return palabras
 
 
+def _mover(velocidad, puntos):
+    """«+10%» movido unos puntos («+5%»); si no se entiende, tal cual."""
+    try:
+        n = int(str(velocidad).strip().rstrip("%")) + puntos
+    except ValueError:
+        return velocidad
+    return f"{n:+d}%"
+
+
 async def _edge(texto, voz, velocidad, tono, carpeta, proxy):
     com = edge_tts.Communicate(texto, voz, rate=velocidad, pitch=tono, boundary="WordBoundary", proxy=proxy)
     palabras = []
@@ -105,16 +114,23 @@ async def generar(texto, voz, velocidad, tono, carpeta, modelo=None):
     except edge_tts.exceptions.NoAudioReceived:
         # algunas voces (p. ej. nl-NL-MaartenNeural) a veces no devuelven nada con ciertas frases, velocidades o tonos:
         # primero a ritmo normal y, si no, la voz de reserva; mejor eso que quedarse sin vídeo
+        # (27 nov: también falla a ratos con cualquier voz, porque el servicio no contesta: tumbó 3 turnos en 15 h)
         palabras = None
-        for v, r, t in ((voz, "+0%", "+0Hz"), (reserva, velocidad, tono), (reserva, "+0%", "+0Hz")):
-            if not v or (v == voz and (velocidad, tono) == (r, t)):
+        intentos = [(voz, velocidad, tono, 3), (voz, "+0%", "+0Hz", 0), (voz, _mover(velocidad, -5), tono, 6),
+                    (voz, _mover(velocidad, 5), tono, 0), (reserva, velocidad, tono, 0), (reserva, "+0%", "+0Hz", 0)]
+        vistos = {(voz, velocidad, tono)}
+        for v, r, t, espera in intentos:
+            if not v or ((v, r, t) in vistos and espera == 0):
                 continue
+            vistos.add((v, r, t))
+            if espera:
+                await asyncio.sleep(espera)
             try:
                 palabras = await _edge(texto, v, r, t, carpeta, proxy)
             except edge_tts.exceptions.NoAudioReceived:
                 continue
             MOTOR["aviso"] = f"{voz} no ha podido con «{texto[:40]}»; uso {v} {r}"
-            print("voz: la primera voz no ha contestado; va la de reserva", flush=True)       # el detalle, en privado
+            print("voz: el servicio no contestaba a la primera; lo ha hecho al repetir", flush=True)       # el detalle, en privado
             break
         if palabras is None:
             raise
